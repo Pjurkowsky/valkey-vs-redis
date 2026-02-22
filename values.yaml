@@ -1,0 +1,17 @@
+cluster:
+  enabled: true
+  shards: 3
+  replicasPerShard: 1
+  persistence:
+    size: 5Gi
+
+valkeyConfig: |
+  maxmemory 1gb
+  maxmemory-policy allkeys-lru
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    extraLabels:
+      release: monitoring
