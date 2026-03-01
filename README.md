@@ -74,9 +74,10 @@ helm install valkey ../valkey-helm/valkey -n vk -f ./src/values.yaml --create-na
  minikube image load memtier_k8s:1      
  ```
 
- ```bash kubectl run memtier-shell -n vk --rm -it --restart=Never \
-  --image=memtier_k8s:1 -- bash
-    ```
+
+```md
+kubectl run memtier-shell -n vk --rm -it --restart=Never --image=memtier_k8s:1 -- bash
+```
 
 #### Run python script
 ```bash
