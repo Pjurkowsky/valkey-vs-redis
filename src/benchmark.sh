@@ -29,6 +29,13 @@ for cpu in "${CPUs[@]}"; do
 
   echo "==> Waiting for rollout..."
   kubectl rollout status "sts/${STS}" -n "${NS}"
+
+  actual=$(kubectl get sts/"${STS}" -n "${NS}" -o jsonpath='{.spec.template.spec.containers[0].resources.limits.cpu}')
+  if [ "$actual" != "$cpu" ]; then
+    echo "ERROR: expected cpu=$cpu but got cpu=$actual"
+    exit 1
+  fi
+  echo "INFO: cpu=$cpu set successfully"
     
     for payload in "${PAYLOADS[@]}"; do
       data_size_bytes=$((payload * 1024))  
