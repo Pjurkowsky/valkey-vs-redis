@@ -16,6 +16,9 @@ CLIENTS=16
 TEST_TIME=10
 KEYS=100000
 
+STATSD_HOST="statsd-exporter.monitoring.svc.cluster.local"
+STATSD_PORT=9125
+
 OUTDIR="./results_memtier"
 mkdir -p "${OUTDIR}"
 
@@ -46,7 +49,10 @@ for cpu in "${CPUs[@]}"; do
           --json-out-file "${BASE}.json" \
           --run-count "${N}" \
           --print-all-runs \
-          --print-percentiles="50,95,99,99.9"
+          --print-percentiles="50,95,99,99.9" \
+          --statsd-host="${STATSD_HOST}" \
+          --statsd-port="${STATSD_PORT}" \
+          --statsd-run-label="${TAG}" 
 
     done
   done

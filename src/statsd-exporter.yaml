@@ -1,0 +1,78 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: statsd-exporter-mapping
+  namespace: monitoring
+data:
+  mappings.yml: |
+    mappings:
+      - match: "memtier.*.*"
+        name: "memtier_metric"
+        labels:
+          run: "$1"
+          metric: "$2"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statsd-exporter
+  namespace: monitoring
+  labels:
+    app: statsd-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: statsd-exporter
+  template:
+    metadata:
+      labels:
+        app: statsd-exporter
+    spec:
+      containers:
+        - name: statsd-exporter
+          image: prom/statsd-exporter:latest
+          args:
+            - "--statsd.mapping-config=/etc/statsd-exporter/mappings.yml"
+          ports:
+            - name: statsd-udp
+              containerPort: 9125
+              protocol: UDP
+            - name: http
+              containerPort: 9102
+              protocol: TCP
+          volumeMounts:
+            - name: mapping-config
+              mountPath: /etc/statsd-exporter
+      volumes:
+        - name: mapping-config
+          configMap:
+            name: statsd-exporter-mapping
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: statsd-exporter
+  namespace: monitoring
+  labels:
+    app: statsd-exporter
+spec:
+  selector:
+    app: statsd-exporter
+  ports:
+    - name: statsd-udp
+      port: 9125
+      targetPort: 9125
+      protocol: UDP
+    - name: http
+      port: 9102
+      targetPort: 9102
+      protocol: TCP
