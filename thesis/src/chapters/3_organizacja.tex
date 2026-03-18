@@ -1,0 +1,108 @@
+\chapter[Założenia metodologiczne i organizacja badań]{Założenia metodologiczne \\i organizacja badań}\label{ch:organizacja}
+Politechnika Wrocławska to państwowa uczelnia techniczna we Wrocławiu. Figure~\ref{fig:logo} przedstawia logo uczelni. 
+ 
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.9\textwidth]{images/LogoPWr.png}
+\caption{Logo Politechniki Wrocławskiej}\label{fig:logo}
+\end{figure}
+
+Pamiętaj by nie zostawiać pustych miejsc pod tytułem rozdziału. Należy pamiętać o wprowadzeniu. Dopiero później powinny zostać przedstawione podrozdziały.
+
+\section{Organizacja badań}
+Praca może zawierać także tabele, które powinny być czytelne i dobrze opisane. Do wszystkich tabel i rysunków powinny pojawić się odwołania w tekście (oraz komentarze). Podpisy rysunków mają znaleźć się pod rysunkami, a podpisy tabel – nad tabelami. Tabela~\ref{tab:tab_example} stanowi przykład. 
+
+\begin{table}[H]
+    \centering
+        \caption{Krótki ale treściwy opis tabeli} \label{tab:tab_example} 
+        \begin{tabular}{lrrrr}
+        \toprule
+        Method &  anger &   joy &  optimism &  sadness \\
+        \midrule
+        model1 & 0.772 & \textbf{0.751} & \textbf{0.532} & 0.673 \\
+        model2 & 0.727 & 0.661 & 0.307 & 0.629 \\
+        model3 & 0.761 & 0.739 & 0.498 & \textbf{0.679} \\
+        model4 & \textbf{0.782} & 0.740 & 0.470 & 0.672 \\
+        \bottomrule
+        \end{tabular}
+\end{table}
+
+Warto także użyć gotowych generatorów do tabel (np. \url{https://www.tablesgenerator.com/}), niż formatować je samodzielnie. Mistrzem formatowania był Wojtek. Tabela~\ref{tab:main_results_sentence} o nieco zmienionej treści pochodzi z jego pracy. 
+
+\begin{table}[H]
+\centering
+\renewcommand*{\arraystretch}{1.3}
+\caption{Comparison of the compression methods considered for MultiEmo for the sentence level in the mixed domain scenario. The results are averaged on 5 repetitions. The best results are in \textbf{bold}.}
+\label{tab:main_results_sentence}
+\begin{tabular}{@{}
+l
+R{1.3cm}R{0.7cm}@{\hspace{0.1cm}}L{1.1cm}@{\hspace{8pt}}
+R{1.3cm}c@{\hspace{12pt}}
+cccc
+@{}} 
+\toprule
+\multicolumn{1}{c}{\textbf{Method}} &
+\multicolumn{1}{c}{\textbf{$\boldsymbol{\#}$Par.}} & 
+\multicolumn{2}{c@{\hspace{12pt}}}{
+\begin{tabular}[c]{@{}c@{}}\textbf{Mem.}\\\textbf{ [MB]}\end{tabular}} &
+\begin{tabular}[c]{@{}c@{}}\textbf{Train.}\\\textbf{ [min]}\end{tabular} & 
+\textbf{Eval [s]} & 
+\textbf{Acc.} &
+\textbf{F1}& 
+\textbf{Rec.}&
+\textbf{Prec.} \\ 
+\midrule
+Model$_\mathrm{BASE}$ & 109M & \multicolumn{2}{c@{\hspace{10pt}}}{418} & 26.0 & 13.9 & 78.8 & 74.7 & 74.1 & 75.8 \\ 
+\midrule
+Model1 & 67M & 255 & (1.6x) & 14.1 & 7.0 (2.0x) & 77.9 & 73.9 & 73.3 & \bftab{74.8} \\
+Model2 & \bftab{13M} & \bftab{49} & \bftab{(8.6x)} & 6.5 & 2.3 (6.2x) & 76.7 & 72.4 & 71.7 & 73.9 \\
+Model3$_{6, \mathrm{TA}}$ & 67M & 255 & (1.6x) & 14.1 & 7.2 (1.9x) & 77.7 & 73.8 & 73.5 & 74.3 \\
+Model3$_{6, \mathrm{TS}}$ & 68M & 258 & (1.6x) & 62.9 & 7.2 (1.9x) & \bftab{78.2} & \bftab{74.4} & \bftab{74.1} & 74.7 \\
+Model3$_{4, \mathrm{TA}}$ & 14M & 55 & (7.6x) & \bftab{5.5} & 2.1 (6.6x) & 76.3 & 72.0 & 71.1 & 73.7 \\
+Model3$_{4, \mathrm{TS}}$ & 15M & 56 & (7.5x) & 38.3 & \bftab{2.0 (6.9x)} & 76.3 & 72.2 & 71.5 & 73.4 \\
+Model4 & 67M & 255 & (1.6x) & 19.1 & 7.8 (1.8x) & 76.6 & 72.5 & 72.1 & 73.2 \\
+Model5 & 14M & 55 & (7.6x) & 121.5 & 3.4 (4.1x) & 77.5 & 72.9 & 72.2 & 74.9 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Opis właściwości przedmiotu badań}
+Studia zapewniają podstawową wiedzę z zakresu sztucznej inteligencji i nauki o danych (data science). Rozwijają zarówno umiejętności matematyczne, programistyczne, obliczeniowe, analityczne, jak i umiejętności pracy projektowej w grupie, z nastawieniem na identyfikowanie problemów (naukowych, biznesowych, społecznych) i ich rozwiązywanie z wykorzystaniem technik i metod inteligentnych.
+
+\section{Selekcja metod} 
+Społeczeństwo w swoim rozwoju wchodzi w czwartą rewolucję przemysłową, określaną często terminem ,,Przemysł 4.0''. Jest on oparty na systemach łączności piątej i wyższych generacji oraz Internecie Rzeczy (IoT), wspieranych sztuczną inteligencją.
+
+Przemysł 4.0 zmienia nie tylko technologie, ale przede wszystkim model biznesu i wymagania stawiane pracownikom. Rewolucja oprze się na danych, które będą zbierane, gromadzone i przetwarzane na każdym etapie prowadzenia biznesu. W firmach wykorzystywane będą nowoczesne technologie, chmury obliczeniowe, wielkie zbiory danych, Internet Rzeczy, rozszerzona rzeczywistość, sztuczna inteligencja czy druk 3D.
+
+Technologia powinna uwzględniać właściwe współdziałanie z człowiekiem. Dlatego należy badać aspekty komunikacji i interakcji człowiek – komputer czy szerzej: człowiek i rozbudowane środowiska robotyczne. Bariery rozwoju Przemysłu 4.0 mają związek przede wszystkim z dostępem do wykształconych kadr. To zrozumiałe w obliczu dużych oczekiwań co do interdyscyplinarnych kompetencji stawianych inżynierom.
+
+Nauka przed wyzwaniami
+Przyszłość stawia przed europejską nauką trzy kluczowe wyzwania:
+
+\begin{itemize}
+    \item Rozwój innowacji zakłócających – innowacje przełomowe, takie które zmienią istniejący porządek na rynku, wprowadzając coś zupełnie nowego.
+    \item Biologizacja techniki – zastosowanie praw biologicznych, rządzących procesami zachodzącymi w organizmach żywych, do innych dziedzin.
+    \item Bezpieczeństwo publiczne – nowe rozwiązania jakościowe i innowacje dotyczące: bezpieczeństwa w zakresie IT (m.in. w kontekście ataków cybernetycznych), bezpieczeństwa systemów transportu drogowego, kolejowego i lotniczego, bezpieczeństwa infrastrukturalnego miast i zaopatrzenia w wodę i elektryczność.
+\end{itemize}
+
+Badania i dydaktyka na wysokim poziomie
+Szczególna rola w przełamywaniu barier rozwoju Przemysłu 4.0 przypadnie uniwersytetom, które w swoich zadaniach statutowych mają: badania naukowe i kształcenie na wysokim poziomie.
+Zadania te są równie ważne. Nie ma bowiem wysokiej jakości nauczania bez prowadzenia badań naukowych. Nie ma badań naukowych i rozwoju gospodarki bez odpowiednio wykształconej kadry. To uczelnie będą przełamywały główne bariery czwartej rewolucji przemysłowej. Wśród tych uczelni – biorąc pod uwagę kapitał ludzki i społeczny, infrastrukturę badawczą i dydaktyczną – nie może zabraknąć Politechniki Wrocławskiej, aspirującej do bycia uczelnią badawczą. Te istotne zadania w pokonywaniu barier realizują wydziały. Na nie, a przede wszystkim na nowo powstały Wydział Informatyki i Telekomunikacji, spada odpowiedzialność w tej dziedzinie.
+
+Wydział tworzą katedry pochodzące z wydziałów Politechniki Wrocławskiej: Elektroniki, Informatyki i Zarządzania oraz Podstawowych Problemów Techniki.
+Badania naukowe prowadzone będą w katedrach: Automatyki, Mechatroniki i Systemów Sterowania, Informatyki Technicznej, Systemów i Sieci Komputerowych, Telekomunikacji i Teleinformatyki, Informatyki i Inżynierii Systemów, Informatyki Stosowanej, Inteligencji Obliczeniowej, Podstaw Informatyki.
+
+Oznacza to, że swoim zakresem obejmą większość dziedzin bezpośrednio związanych z Przemysłem 4.0. Realizowane będą zarówno badania podstawowe, jak i wdrożeniowe, skupimy się także na aktywnej współpracy z gospodarką i komercjalizacji wyników. W/w katedry są gwarancją, że badania obejmą większość dziedzin bezpośrednio związanych z Przemysłem 4.0.
+
+Za cel stawiamy sobie przede wszystkim zapewnienie przyjaznych warunków do rozwoju naukowego, zwłaszcza młodym, oraz przejrzystą ścieżkę kariery naukowej. Badania będziemy prowadzić we wszystkich dyscyplinach powiązanych z informatyką.
+
+Kadra ma świadomość, że fundamentem wydziału jest – stojące na wysokim poziomie, nowoczesne, spełniające potrzeby zmieniającego się świata – nauczanie. Odbywać się ono będzie na 12 polsko- i anglojęzycznych kierunkach: Computer Science, Computer Security, Cyberbezpieczeństwo, Informatyczne Systemy Automatyki, Informatyka Algorytmiczna, Informatyka Stosowana, Informatyka Techniczna, Inżynieria Systemów, Sztuczna Inteligencja, Teleinformatyka, Telekomunikacja, Zaufane Systemy Sztucznej Inteligencji. Lista kierunków będzie sukcesywnie modyfikowana w odpowiedzi na wyzwania stawiane przez uwarunkowania społeczno-gospodarcze.
+
+\section{Hipotezy badawcze}
+\dots
+
+\section{Wybór parametrów i miar, określenie założeń} 
+\dots
+
+\section{Plan badań}
+\dots

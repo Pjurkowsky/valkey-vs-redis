@@ -1,0 +1,68 @@
+\documentclass[12pt, twoside]{book}
+\input{latex-settings.tex}
+
+% STRONA TYTULOWA - title_page/pd_mgr_pl.pdf
+\frontmatter
+\begin{document}
+\includepdf[pages={1}]{title_page/pd_mgr_pl.pdf}
+\doublepage
+
+% STRESZCZENIA (PL + ANG) - chapters/abstract.tex
+\pagestyle{tableOfContentStyle}
+\pagenumbering{Roman}
+\input{chapters/0_abstract.tex}
+\doublepage
+
+% SPIS TRESCI
+\tableofcontents
+\doublepage
+
+% ROZDZIALY - chapters/*.tex
+\pagestyle{custom}
+\mainmatter
+\input{chapters/1_wstep.tex}
+\input{chapters/2_przeglad.tex}
+\input{chapters/3_organizacja.tex}
+\input{chapters/4_wyniki.tex}
+\input{chapters/5_podsumowanie.tex}
+\input{chapters/6_zakonczenie.tex}
+
+% BIBLIOGRAFIA - https://www.overleaf.com/learn/latex/Bibliography_management_with_bibtex
+\resetformatting
+\cleardoublepage
+\phantomsection
+\pagestyle{bibliographyStyle}
+\addcontentsline{toc}{chapter}{Bibliografia}
+\bibliographystyle{plabbrv-fixed}
+\bibliography{bibliography}
+
+% SPIS RYSUNKOW
+\cleardoublepage
+\phantomsection
+\pagestyle{custom}
+\pagestyle{ListofFiguresStyle}
+\addcontentsline{toc}{chapter}{Spis rysunków}
+\listoffigures
+
+% SPIS TABEL
+\clearpage
+\phantomsection
+\pagestyle{ListofTablesStyle}
+\addcontentsline{toc}{chapter}{Spis tabel}
+\listoftables
+
+% SPIS ALGORYTMOW
+\clearpage
+\phantomsection
+\pagestyle{ListofAlgorithmsStyle}
+\addcontentsline{toc}{chapter}{Spis algorytmów}
+\listofalgorithms
+
+% SPIS KODOW ZRODLOWYCH
+\clearpage
+\phantomsection
+\pagestyle{ListofListingsStyle}
+\addcontentsline{toc}{chapter}{Spis kodów źródłowych}
+\lstlistoflistings
+
+\end{document}
