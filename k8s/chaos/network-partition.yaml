@@ -1,0 +1,15 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: valkey-network-partition
+  namespace: vk
+spec:
+  action: partition
+  mode: one
+  selector:
+    namespaces:
+      - vk
+    labelSelectors:
+      app.kubernetes.io/component: valkey
+  direction: both
+  duration: "30s"

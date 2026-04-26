@@ -1,0 +1,14 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: valkey-master-kill
+  namespace: vk
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - vk
+    labelSelectors:
+      app.kubernetes.io/component: valkey
+  duration: "1s"

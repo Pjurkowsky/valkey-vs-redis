@@ -1,0 +1,8 @@
+FROM python:3.12-slim
+
+RUN pip install --no-cache-dir "redis[hiredis]"
+
+WORKDIR /work
+COPY consistency_check.py /work/consistency_check.py
+
+ENTRYPOINT ["python", "/work/consistency_check.py"]

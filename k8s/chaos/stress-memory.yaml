@@ -1,0 +1,16 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: valkey-memory-stress
+  namespace: vk
+spec:
+  mode: one
+  selector:
+    namespaces: [vk]
+    labelSelectors:
+      app.kubernetes.io/component: valkey
+  stressors:
+    memory:
+      workers: 1
+      size: "900MB"
+  duration: "60s"

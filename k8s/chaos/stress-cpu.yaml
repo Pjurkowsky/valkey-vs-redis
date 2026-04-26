@@ -1,0 +1,16 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: valkey-cpu-stress
+  namespace: vk
+spec:
+  mode: one
+  selector:
+    namespaces: [vk]
+    labelSelectors:
+      app.kubernetes.io/component: valkey
+  stressors:
+    cpu:
+      workers: 4
+      load: 100
+  duration: "30s"

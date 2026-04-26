@@ -78,27 +78,27 @@ git checkout pr-116
 ```
 
 ```bash
-helm install valkey ../valkey-helm/valkey -n vk -f ./k8s/values.yaml --create-namespace
+helm install valkey ../valkey-helm/valkey -n vk -f ./k8s/manifests/values.yaml --create-namespace
 ```
 
 ### Deploy StatsD exporter
 
 ```bash
-kubectl apply -f ./k8s/statsd-exporter.yaml
-kubectl apply -f ./k8s/statsd-exporter-servicemonitor.yaml
+kubectl apply -f ./k8s/manifests/statsd-exporter.yaml
+kubectl apply -f ./k8s/manifests/statsd-exporter-servicemonitor.yaml
 ```
 
 ### Build and run benchmark
 
 ```bash
-docker build -t memtier_k8s:1 ./k8s
+docker build -t memtier_k8s:1 ./k8s/images/memtier
 minikube image load memtier_k8s:1
 ```
 
 Run the full benchmark and copy results to the host:
 
 ```bash
-./k8s/run_benchmark.sh ./results_memtier
+./k8s/scripts/run_benchmark.sh ./results_memtier
 ```
 
 This launches a pod, executes all benchmark configurations, copies the JSON results back to `./results_memtier/`, and cleans up the pod.
@@ -106,17 +106,262 @@ This launches a pod, executes all benchmark configurations, copies the JSON resu
 To use a different image, set `MEMTIER_IMAGE`:
 
 ```bash
-MEMTIER_IMAGE=memtier_k8s:2 ./k8s/run_benchmark.sh ./results_memtier
+MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/run_benchmark.sh ./results_memtier
 ```
 
 ### Analyse results
 
 ```bash
 # With Prometheus (CPU/memory metrics)
-python main.py --input ./results_memtier --output-dir ./benchmark_plots
+python cli.py benchmark --input ./results_memtier --output-dir ./benchmark_plots
 
 # Without Prometheus (JSON-only metrics)
-python main.py --input ./test_data --no-prometheus --output-dir ./benchmark_plots
+python cli.py benchmark --input ./test_data --no-prometheus --output-dir ./benchmark_plots
+
+# Backwards-compatible shortcut (delegates to cli.py benchmark)
+python main.py --input ./results_memtier --output-dir ./benchmark_plots
 ```
 
 Plots and `summary.csv` are saved to the output directory.
+
+## Failover Testing
+
+Measures how long (in milliseconds and lost ops) it takes for Valkey to recover after a master pod is killed,
+using [Chaos Mesh](https://chaos-mesh.org/) for fault injection.
+
+### Install Chaos Mesh
+
+```bash
+./k8s/scripts/chaos-mesh-install.sh
+```
+
+### Run failover benchmark
+
+Runs memtier_benchmark under sustained load, kills a Valkey master pod at ~30s, and captures
+the per-second ops/latency time series. Repeats N=5 times by default.
+
+```bash
+./k8s/scripts/failover_benchmark.sh ./results_failover
+```
+
+Override the number of runs or image:
+
+```bash
+N=3 MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/failover_benchmark.sh ./results_failover
+```
+
+### Analyse failover results
+
+```bash
+python cli.py failover --input ./results_failover --output-dir ./failover_plots
+```
+
+Produces per-run time series plots (ops/sec and latency with failover window highlighted),
+a comparison bar chart, and `failover_summary.csv` with mean +/- std for:
+failover duration (ms), ops lost, baseline ops/sec, peak p99 during failover.
+
+### Note on `cluster-node-timeout`
+
+Failover time depends on the Valkey `cluster-node-timeout` setting (default: 15000ms).
+The current `k8s/manifests/values.yaml` uses the default. To change it, add to `valkeyConfig`:
+
+```
+cluster-node-timeout 5000
+```
+
+## Resilience Testing
+
+Measures how Valkey behaves under resource starvation (CPU throttling, memory pressure / OOM Kill)
+using Chaos Mesh StressChaos experiments. Requires Chaos Mesh to be installed (see above).
+
+### Run CPU stress test
+
+Saturates CPU on one Valkey pod for 30s during sustained load:
+
+```bash
+./k8s/scripts/resilience_benchmark.sh cpu ./results_resilience
+```
+
+### Run memory stress test
+
+Allocates 900 MB on one Valkey pod for 60s (against the 1 GB maxmemory limit):
+
+```bash
+./k8s/scripts/resilience_benchmark.sh memory ./results_resilience
+```
+
+### Analyse resilience results
+
+```bash
+python cli.py resilience --input ./results_resilience --scenario cpu --output-dir ./resilience_plots
+python cli.py resilience --input ./results_resilience --scenario memory --output-dir ./resilience_plots
+```
+
+Produces per-run time series plots, comparison charts, and `resilience_{scenario}_summary.csv` with:
+degradation duration, ops/sec drop (%), min ops/sec during stress, peak p99/p99.9,
+recovery status, and pod restart detection (OOM).
+
+## Zero-Downtime Upgrade Testing
+
+Measures whether a rolling update of the Valkey StatefulSet causes request errors or latency spikes.
+A `helm upgrade` with a dummy annotation bump forces Kubernetes to restart all 6 pods one-by-one
+(the same mechanism as a real version upgrade). Memtier runs continuous load throughout.
+
+### Run upgrade benchmark
+
+```bash
+./k8s/scripts/upgrade_benchmark.sh ./results_upgrade
+```
+
+Override the Helm chart path, values file, or number of runs:
+
+```bash
+HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 ./k8s/scripts/upgrade_benchmark.sh ./results_upgrade
+```
+
+The script starts a 5-minute memtier load, waits 30s for steady state, triggers the rolling
+upgrade, and waits for both memtier and the rollout to finish before the next iteration.
+
+### Analyse upgrade results
+
+```bash
+python cli.py upgrade --input ./results_upgrade --output-dir ./upgrade_plots
+```
+
+Produces per-run time series plots (ops/sec and latency with all disruption windows highlighted
+in orange), a comparison bar chart, and `upgrade_summary.csv` with mean +/- std for:
+
+- **Total disrupted time (ms)** — sum of all disruption window durations
+- **Number of disruption events** — separate dips during the rolling restart
+- **Total ops lost** — across all disruption windows
+- **Max single disruption (ms)** — longest individual dip
+- **Peak p99 during upgrade** vs baseline
+- **Upgrade clean** — whether all individual disruptions were ≤2s (true zero-downtime)
+
+## Data Consistency Testing
+
+Tests whether acknowledged writes survive a network partition (split-brain scenario).
+Uses a custom Python-based consistency checker instead of memtier -- it writes keys with
+deterministic values, tracks ACKs, injects a Chaos Mesh `NetworkChaos` partition, then
+verifies that every acknowledged key is still present after the partition heals.
+
+### Build the consistency checker image
+
+```bash
+docker build -t consistency_checker:1 ./k8s/images/consistency
+minikube image load consistency_checker:1
+```
+
+### Run consistency benchmark
+
+```bash
+./k8s/scripts/consistency_benchmark.sh ./results_consistency
+```
+
+Override the number of runs or image:
+
+```bash
+N=3 CONSISTENCY_IMAGE=consistency_checker:2 ./k8s/scripts/consistency_benchmark.sh ./results_consistency
+```
+
+Each run writes keys continuously for 120s. At ~30s, a 30s network partition isolates one
+Valkey pod. After the write phase, the checker verifies all ACK'd keys and reports any missing
+(ACK'd by the server but lost after partition recovery).
+
+### Analyse consistency results
+
+```bash
+python cli.py consistency --input ./results_consistency --output-dir ./consistency_plots
+```
+
+Produces per-run write-rate time series (showing partition error windows), a comparison bar
+chart, and `consistency_summary.csv` with mean +/- std for:
+
+- **Keys missing** — acknowledged writes that were lost
+- **Loss rate** — fraction of ACK'd writes that disappeared
+- **Partition errors** — expected write failures during the partition
+- **Write rate mean** — sustained writes/sec outside the partition window
+
+## Horizontal Scaling / Resharding
+
+Measures the operational impact of adding a new shard to the Valkey cluster under continuous load.
+The test scales from 3 to 4 shards via `helm upgrade`, then runs `valkey-cli --cluster rebalance`
+to redistribute hash slots. Memtier captures the traffic impact during slot migration (ASK/MOVED
+redirections, latency spikes). After each run, the cluster is restored to 3 shards.
+
+### Run resharding benchmark
+
+```bash
+./k8s/scripts/reshard_benchmark.sh ./results_reshard
+```
+
+Override the Helm chart path, values file, or number of runs:
+
+```bash
+HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 ./k8s/scripts/reshard_benchmark.sh ./results_reshard
+```
+
+Each run starts a 5-minute memtier load, waits 30s for steady state, scales up to 4 shards,
+rebalances slots, waits for memtier to finish, then restores the cluster to 3 shards.
+
+### Analyse resharding results
+
+```bash
+python cli.py reshard --input ./results_reshard --output-dir ./reshard_plots
+```
+
+Produces per-run time series plots (ops/sec and latency with disruption windows highlighted),
+a comparison bar chart, and `reshard_summary.csv` with mean +/- std for:
+
+- **Rebalance duration (s)** — wall time of slot redistribution
+- **Scale-up duration (s)** — time for new pods to become Ready
+- **Total disrupted time (ms)** — sum of ops/sec dips below 80% of baseline
+- **Ops lost** — total operations lost during the reshard
+- **Peak p99 during reshard** vs baseline
+
+## Backup & Restore Testing
+
+Measures RDB save time and cluster recovery time after a full pod restart, parameterized by
+dataset size. Seeds the cluster with a target amount of data, triggers `BGSAVE` on all masters,
+kills all pods (PVCs are preserved), then measures the time until the cluster is healthy again
+and verifies data integrity.
+
+### Build the backup/restore image
+
+```bash
+docker build -t backup_restore:1 ./k8s/images/backup
+minikube image load backup_restore:1
+```
+
+### Run backup/restore benchmark
+
+Test with different dataset sizes (MB per shard):
+
+```bash
+./k8s/scripts/backup_restore_benchmark.sh 100 ./results_backup     # 100 MB/shard
+./k8s/scripts/backup_restore_benchmark.sh 500 ./results_backup     # 500 MB/shard
+./k8s/scripts/backup_restore_benchmark.sh 1000 ./results_backup    # 1 GB/shard
+```
+
+Override the number of runs or image:
+
+```bash
+N=5 BACKUP_IMAGE=backup_restore:2 ./k8s/scripts/backup_restore_benchmark.sh 100 ./results_backup
+```
+
+Each run seeds data, triggers BGSAVE, deletes all Valkey pods, waits for the cluster to
+recover from RDB, verifies a 10% sample of keys, then cleans up. N=3 by default.
+
+### Analyse backup/restore results
+
+```bash
+python cli.py backup --input ./results_backup --output-dir ./backup_plots
+```
+
+Produces a grouped bar chart (BGSAVE vs restore duration per size), a scatter plot of restore
+time vs dataset size, and `backup_restore_summary.csv` with mean +/- std for:
+
+- **Seed duration (s)** — time to populate the dataset
+- **Save duration (s)** — BGSAVE wall time across all masters
+- **Restore duration (s)** — time from pod deletion to cluster healthy
+- **Data integrity** — whether all sampled keys were found after restore

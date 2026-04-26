@@ -10,5 +10,5 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work
-COPY benchmark.sh /work/run.sh
+COPY entrypoint.sh /work/run.sh
 RUN chmod +x /work/run.sh

@@ -31,4 +31,4 @@ echo "==> Cleaning up pod..."
 kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
 
 echo "==> Done. Run analysis with:"
-echo "    python main.py --input ${LOCAL_OUT} --output-dir ./benchmark_plots"
+echo "    python cli.py benchmark --input ${LOCAL_OUT} --output-dir ./benchmark_plots"
