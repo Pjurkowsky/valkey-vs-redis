@@ -9,11 +9,21 @@ from pathlib import Path
 import pandas as pd
 
 
+PLOTS_DIR = "./plots"
+
+
 def cmd_benchmark(args: argparse.Namespace) -> None:
-    from src.metrics import build_prom, extract_metric, iter_run_results, parse_filename
+    from src.metrics import (
+        build_prom,
+        extract_cpu_util_by_pod,
+        extract_metric,
+        iter_run_results,
+        parse_filename,
+    )
     from src.models import METRIC_COLS
     from src.plots import (
         plot_cpu_mem,
+        plot_cpu_util_per_pod,
         plot_heatmap,
         plot_latency_bars,
         plot_ops_sec_bars,
@@ -35,6 +45,7 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
 
     directory = Path(args.input)
     rows = []
+    pod_cpu_rows = []
     for file in sorted(directory.glob("*.json")):
         config = parse_filename(file)
         print(f"Processing {file.name}  (cpu={config.cpu}, payload={config.payload}KB, ratio={config.ratio})")
@@ -49,8 +60,16 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
                 **asdict(config),
                 **asdict(metric),
             })
+            for pod, cpu_util in extract_cpu_util_by_pod(run_result, prom=prom).items():
+                pod_cpu_rows.append({
+                    "id": run_id,
+                    **asdict(config),
+                    "pod": pod,
+                    "cpu_util": cpu_util,
+                })
 
     df = pd.DataFrame(rows)
+    pod_cpu_df = pd.DataFrame(pod_cpu_rows)
     agg = (
         df.groupby(["cpu", "payload", "ratio"], as_index=False)
         .agg(
@@ -64,6 +83,9 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
     plot_ops_sec_bars(agg, out_dir)
     plot_latency_bars(agg, out_dir)
     plot_cpu_mem(agg, out_dir)
+    if not pod_cpu_df.empty:
+        pod_cpu_df.to_csv(out_dir / "cpu_util_per_pod.csv", index=False)
+        plot_cpu_util_per_pod(pod_cpu_df, out_dir)
     plot_heatmap(agg, out_dir)
     print(f"\nAll plots saved to {out_dir}/")
 
@@ -206,7 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
     # benchmark
     p = sub.add_parser("benchmark", help="Performance benchmark analysis")
     p.add_argument("--input", required=True, help="Directory with benchmark JSON files")
-    p.add_argument("--output-dir", default="./plots", help="Output directory")
+    p.add_argument("--output-dir", default=f"{PLOTS_DIR}/benchmark", help="Output directory")
     p.add_argument("--prometheus-url", default="http://localhost:9090",
                    help="Prometheus base URL")
     p.add_argument("--no-prometheus", action="store_true",
@@ -216,7 +238,7 @@ def build_parser() -> argparse.ArgumentParser:
     # failover
     p = sub.add_parser("failover", help="Failover analysis")
     p.add_argument("--input", required=True, help="Directory with failover_run_*.json files")
-    p.add_argument("--output-dir", default="./failover_plots", help="Output directory")
+    p.add_argument("--output-dir", default=f"{PLOTS_DIR}/failover", help="Output directory")
     p.set_defaults(func=cmd_failover)
 
     # resilience
@@ -224,31 +246,31 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--input", required=True, help="Directory with resilience_*_run_*.json files")
     p.add_argument("--scenario", required=True, choices=["cpu", "memory"],
                    help="Stress scenario to analyse")
-    p.add_argument("--output-dir", default="./resilience_plots", help="Output directory")
+    p.add_argument("--output-dir", default=f"{PLOTS_DIR}/resilience", help="Output directory")
     p.set_defaults(func=cmd_resilience)
 
     # upgrade
     p = sub.add_parser("upgrade", help="Zero-downtime upgrade analysis")
     p.add_argument("--input", required=True, help="Directory with upgrade_run_*.json files")
-    p.add_argument("--output-dir", default="./upgrade_plots", help="Output directory")
+    p.add_argument("--output-dir", default=f"{PLOTS_DIR}/upgrade", help="Output directory")
     p.set_defaults(func=cmd_upgrade)
 
     # consistency
     p = sub.add_parser("consistency", help="Data consistency analysis")
     p.add_argument("--input", required=True, help="Directory with consistency_run_*.json files")
-    p.add_argument("--output-dir", default="./consistency_plots", help="Output directory")
+    p.add_argument("--output-dir", default=f"{PLOTS_DIR}/consistency", help="Output directory")
     p.set_defaults(func=cmd_consistency)
 
     # reshard
     p = sub.add_parser("reshard", help="Horizontal scaling / resharding analysis")
     p.add_argument("--input", required=True, help="Directory with reshard_run/timing_*.json files")
-    p.add_argument("--output-dir", default="./reshard_plots", help="Output directory")
+    p.add_argument("--output-dir", default=f"{PLOTS_DIR}/reshard", help="Output directory")
     p.set_defaults(func=cmd_reshard)
 
     # backup
     p = sub.add_parser("backup", help="Backup & restore analysis")
     p.add_argument("--input", required=True, help="Directory with backup_timing_*.json files")
-    p.add_argument("--output-dir", default="./backup_plots", help="Output directory")
+    p.add_argument("--output-dir", default=f"{PLOTS_DIR}/backup", help="Output directory")
     p.set_defaults(func=cmd_backup)
 
     return parser

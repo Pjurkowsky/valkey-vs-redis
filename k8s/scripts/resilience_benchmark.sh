@@ -2,13 +2,15 @@
 set -euo pipefail
 
 SCENARIO="${1:?Usage: $0 <cpu|memory> [output_dir]}"
-LOCAL_OUT="${2:-./results_resilience}"
+LOCAL_OUT="${2:-./results/resilience}"
 
 N="${N:-5}"
 NS="vk"
 IMAGE="${MEMTIER_IMAGE:-memtier_k8s:1}"
-REMOTE_OUT="/work/results_resilience"
+REMOTE_OUT="/work/results/resilience"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+source "${SCRIPT_DIR}/pod_results.sh"
 
 HOST="valkey.vk.svc.cluster.local"
 PORT=6379
@@ -57,18 +59,25 @@ for i in $(seq 1 "${N}"); do
     --image="${IMAGE}" \
     --restart=Never \
     --command -- \
-    memtier_benchmark \
-      --server="${HOST}" --port="${PORT}" \
-      --protocol=redis \
-      --cluster-mode \
-      --threads="${THREADS}" --clients="${CLIENTS}" \
-      --test-time="${TEST_TIME}" \
-      --key-maximum="${KEYS}" \
-      --data-size="${DATA_SIZE}" \
-      --ratio="${RATIO}" \
-      --json-out-file "${REMOTE_OUT}/${OUT_FILE}" \
-      --run-count 1 \
-      --print-percentiles="50,95,99,99.9"
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      memtier_benchmark \
+        --server='${HOST}' --port='${PORT}' \
+        --protocol=redis \
+        --cluster-mode \
+        --threads='${THREADS}' --clients='${CLIENTS}' \
+        --test-time='${TEST_TIME}' \
+        --key-maximum='${KEYS}' \
+        --data-size='${DATA_SIZE}' \
+        --ratio='${RATIO}' \
+        --json-out-file '${REMOTE_OUT}/${OUT_FILE}' \
+        --run-count 1 \
+        --print-percentiles='50,95,99,99.9'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
 
   echo "[${i}] Waiting for pod to start..."
   kubectl wait pod/"${POD_NAME}" -n "${NS}" \
@@ -81,8 +90,18 @@ for i in $(seq 1 "${N}"); do
   kubectl apply -f "${CHAOS_YAML}"
 
   echo "[${i}] Waiting for memtier to finish..."
-  kubectl wait pod/"${POD_NAME}" -n "${NS}" \
-    --for=jsonpath='{.status.phase}'=Succeeded --timeout=300s
+  if ! wait_for_pod_marker "${NS}" "${POD_NAME}" "${POD_DONE_FILE}" 300; then
+    echo "[${i}] ERROR: memtier pod did not signal completion."
+    print_pod_debug_info "${NS}" "${POD_NAME}"
+    exit 1
+  fi
+
+  exit_code="$(read_pod_exit_code "${NS}" "${POD_NAME}" "${POD_EXIT_CODE_FILE}")"
+  if [[ -z "${exit_code}" || "${exit_code}" != "0" ]]; then
+    echo "[${i}] ERROR: memtier exited with code ${exit_code:-unknown}."
+    print_pod_debug_info "${NS}" "${POD_NAME}"
+    exit 1
+  fi
 
   echo "[${i}] Copying results..."
   kubectl cp "${NS}/${POD_NAME}:${REMOTE_OUT}/${OUT_FILE}" "${LOCAL_OUT}/${OUT_FILE}"
@@ -103,5 +122,5 @@ echo "=========================================="
 echo "  All ${N} resilience [${SCENARIO}] runs complete."
 echo "  Results in: ${LOCAL_OUT}/"
 echo "  Analyse with:"
-echo "    python cli.py resilience --input ${LOCAL_OUT} --scenario ${SCENARIO} --output-dir ./resilience_plots"
+echo "    python cli.py resilience --input ${LOCAL_OUT} --scenario ${SCENARIO} --output-dir ./plots/resilience"
 echo "=========================================="

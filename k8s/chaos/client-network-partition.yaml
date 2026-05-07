@@ -1,16 +1,15 @@
 apiVersion: chaos-mesh.org/v1alpha1
 kind: NetworkChaos
 metadata:
-  name: newtork-partition
-  namespace: chaos-mesh
+  name: valkey-network-partition
+  namespace: vk
 spec:
   action: partition
-  mode: all
+  mode: one
   selector:
-    namespaces:
-      - vk
-    labelSelectors:
-      statefulset.kubernetes.io/pod-name: valkey-1
+    pods:
+      vk:
+        - consistency-checker-1
   direction: both
   target:
     mode: all
@@ -18,4 +17,5 @@ spec:
       namespaces:
         - vk
       labelSelectors:
-        statefulset.kubernetes.io/pod-name: valkey-5
+        app.kubernetes.io/name: valkey
+  duration: "90s"

@@ -32,6 +32,11 @@ Valkey deployed in cluster mode:
 | Payload size    | 1 KB, 10 KB, 1000 KB                                 |
 | Operation ratio | read-only (0:1), write-only (1:0), mixed 50/50 (1:1) |
 | Repetitions     | N=5 per configuration                                |
+| Client threads  | 4                                                    |
+| Clients/thread  | 25                                                   |
+| Pipeline        | 10                                                   |
+| Test time       | 300s per run                                        |
+| Keyspace        | 1,000,000 keys                                      |
 
 
 Metrics collected: ops/sec, latency distribution (p50, p95, p99, p99.9), CPU utilization, memory usage.
@@ -53,6 +58,11 @@ helm install monitoring prometheus-community/kube-prometheus-stack -n monitoring
 kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090
 ```
 
+### Port-forward Grafana
+
+```bash
+kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
+```
 ### Grafana password
 
 ```bash
@@ -95,31 +105,94 @@ docker build -t memtier_k8s:1 ./k8s/images/memtier
 minikube image load memtier_k8s:1
 ```
 
+Grant the benchmark pod permission to update and observe the Valkey StatefulSet during CPU sweep runs:
+
+```bash
+kubectl apply -f ./k8s/memtier_rbac.yaml
+```
+
 Run the full benchmark and copy results to the host:
 
 ```bash
-./k8s/scripts/run_benchmark.sh ./results_memtier
+./k8s/scripts/run_benchmark.sh ./results/memtier
 ```
 
-This launches a pod, executes all benchmark configurations, copies the JSON results back to `./results_memtier/`, and cleans up the pod.
+This launches a pod with the `memtier-sa` service account, executes all benchmark configurations, copies the JSON results back to `./results/memtier/`, and cleans up the pod.
 
 To use a different image, set `MEMTIER_IMAGE`:
 
 ```bash
-MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/run_benchmark.sh ./results_memtier
+MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/run_benchmark.sh ./results/memtier
 ```
+
+### Persistence and TLS benchmark variants
+
+`run_benchmark.sh` can optionally apply Valkey runtime variants before creating the benchmark pod.
+
+Persistence controls Valkey RDB/AOF behavior in `valkey.conf`:
+
+```bash
+# No RDB snapshots, no AOF
+VALKEY_PERSISTENCE=off ./k8s/scripts/run_benchmark.sh ./results/memtier_no_persistence
+
+# RDB snapshots only
+VALKEY_PERSISTENCE=rdb ./k8s/scripts/run_benchmark.sh ./results/memtier_rdb
+
+# AOF only
+VALKEY_PERSISTENCE=aof ./k8s/scripts/run_benchmark.sh ./results/memtier_aof
+
+# RDB + AOF
+VALKEY_PERSISTENCE=both ./k8s/scripts/run_benchmark.sh ./results/memtier_persistence
+```
+
+Supported values:
+
+```text
+off, rdb, aof, both
+```
+
+In cluster mode the Helm chart still creates PVCs for the pods. The flag above controls whether
+Valkey writes RDB/AOF persistence data, not whether the StatefulSet has volumes.
+
+To enable TLS, first create a Kubernetes secret with `server.crt`, `server.key`, and `ca.crt`:
+
+```bash
+kubectl create secret generic valkey-tls-secret -n vk \
+  --from-file=server.crt \
+  --from-file=server.key \
+  --from-file=ca.crt
+```
+
+Then run the benchmark with server-side TLS and memtier TLS enabled:
+
+```bash
+VALKEY_TLS=true \
+VALKEY_TLS_SECRET=valkey-tls-secret \
+MEMTIER_TLS=true \
+MEMTIER_TLS_SKIP_VERIFY=true \
+./k8s/scripts/run_benchmark.sh ./results/memtier_tls
+```
+
+To disable TLS again:
+
+```bash
+VALKEY_TLS=false ./k8s/scripts/run_benchmark.sh ./results/memtier_plain
+```
+
+For a production-like TLS test, prefer using a real CA and set `MEMTIER_TLS_SKIP_VERIFY=false`
+with `MEMTIER_TLS_CACERT` pointing to the CA file inside the memtier image.
 
 ### Analyse results
 
 ```bash
 # With Prometheus (CPU/memory metrics)
-python cli.py benchmark --input ./results_memtier --output-dir ./benchmark_plots
+python cli.py benchmark --input ./results/memtier --output-dir ./plots/benchmark
 
 # Without Prometheus (JSON-only metrics)
-python cli.py benchmark --input ./test_data --no-prometheus --output-dir ./benchmark_plots
+python cli.py benchmark --input ./test_data --no-prometheus --output-dir ./plots/benchmark
 
 # Backwards-compatible shortcut (delegates to cli.py benchmark)
-python main.py --input ./results_memtier --output-dir ./benchmark_plots
+python main.py --input ./results/memtier --output-dir ./plots/benchmark
 ```
 
 Plots and `summary.csv` are saved to the output directory.
@@ -138,27 +211,33 @@ using [Chaos Mesh](https://chaos-mesh.org/) for fault injection.
 ### Run failover benchmark
 
 Runs memtier_benchmark under sustained load, kills a Valkey master pod at ~30s, and captures
-the per-second ops/latency time series. Repeats N=5 times by default.
+the per-second ops/latency time series plus a timestamped memtier stdout/stderr log. The script
+waits until memtier's timed run has started, then waits for the steady-state interval before
+injecting chaos. It runs once by default.
 
 ```bash
-./k8s/scripts/failover_benchmark.sh ./results_failover
+./k8s/scripts/failover_benchmark.sh ./results/failover
 ```
 
 Override the number of runs or image:
 
 ```bash
-N=3 MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/failover_benchmark.sh ./results_failover
+N=3 MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/failover_benchmark.sh ./results/failover
 ```
 
 ### Analyse failover results
 
 ```bash
-python cli.py failover --input ./results_failover --output-dir ./failover_plots
+python cli.py failover --input ./results/failover --output-dir ./plots/failover
 ```
 
 Produces per-run time series plots (ops/sec and latency with failover window highlighted),
 a comparison bar chart, and `failover_summary.csv` with mean +/- std for:
-failover duration (ms), ops lost, baseline ops/sec, peak p99 during failover.
+failover duration (ms), ops lost, baseline ops/sec, peak p99 during failover, and failed
+responses seen in the memtier logs such as `-CLUSTERDOWN`. When logs include timestamps,
+the per-run plot also shows failed responses per second. New runs also write
+`failover_timing_*.json`, which records when Chaos Mesh was applied so the plot can mark the
+actual injection time separately from the detected impact window.
 
 ### Note on `cluster-node-timeout`
 
@@ -179,7 +258,7 @@ using Chaos Mesh StressChaos experiments. Requires Chaos Mesh to be installed (s
 Saturates CPU on one Valkey pod for 30s during sustained load:
 
 ```bash
-./k8s/scripts/resilience_benchmark.sh cpu ./results_resilience
+./k8s/scripts/resilience_benchmark.sh cpu ./results/resilience
 ```
 
 ### Run memory stress test
@@ -187,14 +266,14 @@ Saturates CPU on one Valkey pod for 30s during sustained load:
 Allocates 900 MB on one Valkey pod for 60s (against the 1 GB maxmemory limit):
 
 ```bash
-./k8s/scripts/resilience_benchmark.sh memory ./results_resilience
+./k8s/scripts/resilience_benchmark.sh memory ./results/resilience
 ```
 
 ### Analyse resilience results
 
 ```bash
-python cli.py resilience --input ./results_resilience --scenario cpu --output-dir ./resilience_plots
-python cli.py resilience --input ./results_resilience --scenario memory --output-dir ./resilience_plots
+python cli.py resilience --input ./results/resilience --scenario cpu --output-dir ./plots/resilience
+python cli.py resilience --input ./results/resilience --scenario memory --output-dir ./plots/resilience
 ```
 
 Produces per-run time series plots, comparison charts, and `resilience_{scenario}_summary.csv` with:
@@ -210,13 +289,13 @@ A `helm upgrade` with a dummy annotation bump forces Kubernetes to restart all 6
 ### Run upgrade benchmark
 
 ```bash
-./k8s/scripts/upgrade_benchmark.sh ./results_upgrade
+./k8s/scripts/upgrade_benchmark.sh ./results/upgrade
 ```
 
 Override the Helm chart path, values file, or number of runs:
 
 ```bash
-HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 ./k8s/scripts/upgrade_benchmark.sh ./results_upgrade
+HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 ./k8s/scripts/upgrade_benchmark.sh ./results/upgrade
 ```
 
 The script starts a 5-minute memtier load, waits 30s for steady state, triggers the rolling
@@ -225,7 +304,7 @@ upgrade, and waits for both memtier and the rollout to finish before the next it
 ### Analyse upgrade results
 
 ```bash
-python cli.py upgrade --input ./results_upgrade --output-dir ./upgrade_plots
+python cli.py upgrade --input ./results/upgrade --output-dir ./plots/upgrade
 ```
 
 Produces per-run time series plots (ops/sec and latency with all disruption windows highlighted
@@ -255,13 +334,13 @@ minikube image load consistency_checker:1
 ### Run consistency benchmark
 
 ```bash
-./k8s/scripts/consistency_benchmark.sh ./results_consistency
+./k8s/scripts/consistency_benchmark.sh ./results/consistency
 ```
 
 Override the number of runs or image:
 
 ```bash
-N=3 CONSISTENCY_IMAGE=consistency_checker:2 ./k8s/scripts/consistency_benchmark.sh ./results_consistency
+N=3 CONSISTENCY_IMAGE=consistency_checker:2 ./k8s/scripts/consistency_benchmark.sh ./results/consistency
 ```
 
 Each run writes keys continuously for 120s. At ~30s, a 30s network partition isolates one
@@ -271,7 +350,7 @@ Valkey pod. After the write phase, the checker verifies all ACK'd keys and repor
 ### Analyse consistency results
 
 ```bash
-python cli.py consistency --input ./results_consistency --output-dir ./consistency_plots
+python cli.py consistency --input ./results/consistency --output-dir ./plots/consistency
 ```
 
 Produces per-run write-rate time series (showing partition error windows), a comparison bar
@@ -292,13 +371,13 @@ redirections, latency spikes). After each run, the cluster is restored to 3 shar
 ### Run resharding benchmark
 
 ```bash
-./k8s/scripts/reshard_benchmark.sh ./results_reshard
+./k8s/scripts/reshard_benchmark.sh ./results/reshard
 ```
 
 Override the Helm chart path, values file, or number of runs:
 
 ```bash
-HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 ./k8s/scripts/reshard_benchmark.sh ./results_reshard
+HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 ./k8s/scripts/reshard_benchmark.sh ./results/reshard
 ```
 
 Each run starts a 5-minute memtier load, waits 30s for steady state, scales up to 4 shards,
@@ -307,7 +386,7 @@ rebalances slots, waits for memtier to finish, then restores the cluster to 3 sh
 ### Analyse resharding results
 
 ```bash
-python cli.py reshard --input ./results_reshard --output-dir ./reshard_plots
+python cli.py reshard --input ./results/reshard --output-dir ./plots/reshard
 ```
 
 Produces per-run time series plots (ops/sec and latency with disruption windows highlighted),
@@ -338,15 +417,15 @@ minikube image load backup_restore:1
 Test with different dataset sizes (MB per shard):
 
 ```bash
-./k8s/scripts/backup_restore_benchmark.sh 100 ./results_backup     # 100 MB/shard
-./k8s/scripts/backup_restore_benchmark.sh 500 ./results_backup     # 500 MB/shard
-./k8s/scripts/backup_restore_benchmark.sh 1000 ./results_backup    # 1 GB/shard
+./k8s/scripts/backup_restore_benchmark.sh 100 ./results/backup     # 100 MB/shard
+./k8s/scripts/backup_restore_benchmark.sh 500 ./results/backup     # 500 MB/shard
+./k8s/scripts/backup_restore_benchmark.sh 1000 ./results/backup    # 1 GB/shard
 ```
 
 Override the number of runs or image:
 
 ```bash
-N=5 BACKUP_IMAGE=backup_restore:2 ./k8s/scripts/backup_restore_benchmark.sh 100 ./results_backup
+N=5 BACKUP_IMAGE=backup_restore:2 ./k8s/scripts/backup_restore_benchmark.sh 100 ./results/backup
 ```
 
 Each run seeds data, triggers BGSAVE, deletes all Valkey pods, waits for the cluster to
@@ -355,7 +434,7 @@ recover from RDB, verifies a 10% sample of keys, then cleans up. N=3 by default.
 ### Analyse backup/restore results
 
 ```bash
-python cli.py backup --input ./results_backup --output-dir ./backup_plots
+python cli.py backup --input ./results/backup --output-dir ./plots/backup
 ```
 
 Produces a grouped bar chart (BGSAVE vs restore duration per size), a scatter plot of restore

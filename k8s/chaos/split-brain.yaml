@@ -1,7 +1,7 @@
 apiVersion: chaos-mesh.org/v1alpha1
 kind: NetworkChaos
 metadata:
-  name: newtork-partition
+  name: split-brain-valkey-1-minority
   namespace: chaos-mesh
 spec:
   action: partition
@@ -10,7 +10,7 @@ spec:
     namespaces:
       - vk
     labelSelectors:
-      statefulset.kubernetes.io/pod-name: valkey-1
+      chaos-side: minority
   direction: both
   target:
     mode: all
@@ -18,4 +18,4 @@ spec:
       namespaces:
         - vk
       labelSelectors:
-        statefulset.kubernetes.io/pod-name: valkey-5
+        chaos-side: majority

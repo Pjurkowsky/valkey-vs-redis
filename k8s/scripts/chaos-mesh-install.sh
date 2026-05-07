@@ -6,8 +6,8 @@ helm repo update
 
 helm install chaos-mesh chaos-mesh/chaos-mesh \
     --namespace chaos-mesh --create-namespace \
-    --set chaosDaemon.runtime=containerd \
-    --set chaosDaemon.socketPath=/run/containerd/containerd.sock
+    --set chaosDaemon.runtime=docker \
+    --set chaosDaemon.socketPath=/var/run/docker.sock
 
 echo "Waiting for Chaos Mesh pods to be ready..."
 kubectl wait --for=condition=Ready pods --all -n chaos-mesh --timeout=120s

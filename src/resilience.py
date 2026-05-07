@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from src.chart_markers import mark_test_window
 from src.failover import parse_time_series
 
 matplotlib.use("Agg")
@@ -13,6 +14,11 @@ matplotlib.use("Agg")
 BASELINE_SECONDS = 25
 DEGRADATION_THRESHOLD = 0.80
 RECOVERY_THRESHOLD = 0.90
+STRESS_START_SECOND = 30
+STRESS_DURATIONS = {
+    "cpu": 30,
+    "memory": 60,
+}
 
 
 def detect_degradation(ts: pd.DataFrame) -> Dict[str, Any]:
@@ -203,6 +209,8 @@ def plot_resilience_timeseries(
 ) -> None:
     """Plot ops/sec and latency over time, highlighting degradation window."""
     label = "CPU stress" if scenario == "cpu" else "Memory stress"
+    stress_start = STRESS_START_SECOND
+    stress_end = stress_start + STRESS_DURATIONS[scenario]
 
     for i, (ts, (_, row)) in enumerate(zip(all_ts, results_df.iterrows())):
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
@@ -220,7 +228,9 @@ def plot_resilience_timeseries(
                 row["baseline_ops"], linestyle="--", color="gray",
                 linewidth=0.7, label="Baseline",
             )
-            ax1.legend(fontsize=8)
+
+        mark_test_window(ax1, stress_start, stress_end, with_labels=True)
+        ax1.legend(fontsize=8)
 
         ax2.plot(ts["second"], ts["p99"], linewidth=0.8, color="#c44e52", label="p99")
         ax2.plot(ts["second"], ts["p50"], linewidth=0.8, color="#55a868", label="p50")
@@ -233,6 +243,7 @@ def plot_resilience_timeseries(
                 row["degradation_start_s"], row["degradation_end_s"],
                 alpha=0.2, color="orange",
             )
+        mark_test_window(ax2, stress_start, stress_end)
 
         fig.tight_layout()
         prefix = "cpu" if scenario == "cpu" else "mem"

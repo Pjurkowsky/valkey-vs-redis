@@ -2,11 +2,11 @@
 set -euo pipefail
 
 SIZE_MB="${1:?Usage: $0 <size_mb> [output_dir]}"
-LOCAL_OUT="${2:-./results_backup}"
+LOCAL_OUT="${2:-./results/backup}"
 N="${N:-3}"
 NS="vk"
 IMAGE="${BACKUP_IMAGE:-backup_restore:1}"
-REMOTE_OUT="/work/results"
+REMOTE_OUT="/work/results/backup"
 
 HOST="valkey.vk.svc.cluster.local"
 PORT=6379
@@ -218,5 +218,5 @@ echo "=========================================="
 echo "  All ${N} backup/restore runs complete (${SIZE_MB} MB/shard)."
 echo "  Results in: ${LOCAL_OUT}/"
 echo "  Analyse with:"
-echo "    python cli.py backup --input ${LOCAL_OUT} --output-dir ./backup_plots"
+echo "    python cli.py backup --input ${LOCAL_OUT} --output-dir ./plots/backup"
 echo "=========================================="

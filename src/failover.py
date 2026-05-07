@@ -1,3 +1,6 @@
+import json
+import re
+from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -6,10 +9,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from src.chart_markers import mark_test_window
+
 matplotlib.use("Agg")
 
 BASELINE_SECONDS = 25
 DROP_THRESHOLD = 0.50
+STARTUP_IGNORE_SECONDS = 3
+ERROR_RESPONSE_RE = re.compile(r"handle error response:\s*(-[A-Z0-9_]+)")
+TIMESTAMPED_LOG_RE = re.compile(r"^(\d{10,})(?:\.\d+)?\t(.*)$")
 
 
 def parse_time_series(run_result: Dict[str, Any]) -> pd.DataFrame:
@@ -35,7 +43,7 @@ def parse_time_series(run_result: Dict[str, Any]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def detect_failover(ts: pd.DataFrame) -> Dict[str, Any]:
+def detect_failover(ts: pd.DataFrame, chaos_second: Optional[int] = None) -> Dict[str, Any]:
     """Analyse a single run's time series to detect the failover window.
 
     Returns a dict with failover metrics or None values if no failover detected.
@@ -43,18 +51,25 @@ def detect_failover(ts: pd.DataFrame) -> Dict[str, Any]:
     if ts.empty:
         return _empty_result()
 
-    available_baseline = min(BASELINE_SECONDS, len(ts) // 2)
-    if available_baseline < 3:
+    baseline_ts = _baseline_window(ts, chaos_second)
+    if len(baseline_ts) < 3:
         return _empty_result()
 
-    baseline_ops = ts.loc[ts["second"] < available_baseline, "count"].mean()
-    baseline_p99 = ts.loc[ts["second"] < BASELINE_SECONDS, "p99"].mean()
+    baseline_ops = baseline_ts["count"].mean()
+    baseline_p99 = baseline_ts["p99"].mean()
 
     if baseline_ops == 0:
         return _empty_result()
 
+    ts = _trim_terminal_partial_bucket(ts, baseline_ops)
     threshold = baseline_ops * DROP_THRESHOLD
-    degraded = ts[ts["count"] < threshold]
+    min_detection_second = (
+        max(0, chaos_second - 1)
+        if chaos_second is not None
+        else STARTUP_IGNORE_SECONDS
+    )
+    detection_ts = ts[ts["second"] >= min_detection_second]
+    degraded = detection_ts[detection_ts["count"] < threshold]
 
     if degraded.empty:
         return {
@@ -93,6 +108,146 @@ def detect_failover(ts: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
+def _baseline_window(ts: pd.DataFrame, chaos_second: Optional[int]) -> pd.DataFrame:
+    if chaos_second is not None:
+        baseline = ts[
+            (ts["second"] >= STARTUP_IGNORE_SECONDS)
+            & (ts["second"] < max(STARTUP_IGNORE_SECONDS + 1, chaos_second - 1))
+        ]
+        if len(baseline) >= 3:
+            return baseline
+
+    available_baseline = min(BASELINE_SECONDS, len(ts) // 2)
+    return ts[
+        (ts["second"] >= STARTUP_IGNORE_SECONDS)
+        & (ts["second"] < max(STARTUP_IGNORE_SECONDS + 1, available_baseline))
+    ]
+
+
+def parse_memtier_error_log(
+    log_path: Optional[Path],
+    run_start_ms: Optional[float] = None,
+) -> Tuple[Dict[str, Any], pd.DataFrame]:
+    """Count application-level error replies printed by memtier."""
+    if log_path is None or not log_path.exists():
+        return {
+            "log_file": None,
+            "failed_request_count": None,
+            "clusterdown_errors": None,
+            "error_response_types": None,
+            "first_error_second": None,
+            "last_error_second": None,
+        }, pd.DataFrame()
+
+    error_types: Counter[str] = Counter()
+    errors_by_second: Counter[int] = Counter()
+    clusterdown_by_second: Counter[int] = Counter()
+    error_seconds = []
+
+    with log_path.open(errors="replace") as fh:
+        for line in fh:
+            timestamp_s, message = _parse_timestamped_log_line(line)
+            match = ERROR_RESPONSE_RE.search(message)
+            if not match:
+                continue
+
+            error_type = match.group(1)
+            error_types[error_type] += 1
+
+            if timestamp_s is not None and run_start_ms is not None:
+                second = max(0, int(timestamp_s - (run_start_ms / 1000.0)))
+                errors_by_second[second] += 1
+                if error_type == "-CLUSTERDOWN":
+                    clusterdown_by_second[second] += 1
+                error_seconds.append(second)
+
+    error_ts = pd.DataFrame({
+        "second": sorted(errors_by_second.keys()),
+    })
+    if not error_ts.empty:
+        error_ts["failed_request_count"] = error_ts["second"].map(errors_by_second).astype(int)
+        error_ts["clusterdown_errors"] = error_ts["second"].map(clusterdown_by_second).fillna(0).astype(int)
+
+    return {
+        "log_file": log_path.name,
+        "failed_request_count": int(sum(error_types.values())),
+        "clusterdown_errors": int(error_types.get("-CLUSTERDOWN", 0)),
+        "error_response_types": ", ".join(
+            f"{error_type}:{count}" for error_type, count in sorted(error_types.items())
+        ),
+        "first_error_second": min(error_seconds) if error_seconds else None,
+        "last_error_second": max(error_seconds) if error_seconds else None,
+    }, error_ts
+
+
+def _parse_timestamped_log_line(line: str) -> Tuple[Optional[float], str]:
+    match = TIMESTAMPED_LOG_RE.match(line.rstrip("\n"))
+    if not match:
+        return None, line
+
+    return float(match.group(1)), match.group(2)
+
+
+def _run_start_ms(run_result: Dict[str, Any]) -> Optional[float]:
+    value = run_result.get("Runtime", {}).get("Start time")
+    if value is None:
+        return None
+    return float(value)
+
+
+def parse_failover_timing(timing_path: Path, run_start_ms: Optional[float]) -> Dict[str, Any]:
+    if not timing_path.exists():
+        return {
+            "timing_file": None,
+            "memtier_detected_start_second": None,
+            "chaos_second": None,
+            "steady_state_wait_s": None,
+            "chaos_target": None,
+        }
+
+    with timing_path.open() as fh:
+        timing = json.load(fh)
+
+    chaos_epoch_s = timing.get("chaos_epoch_s")
+    memtier_started_epoch_s = timing.get("memtier_started_epoch_s")
+    chaos_second = None
+    memtier_detected_start_second = None
+    relative_start_s = (
+        float(memtier_started_epoch_s)
+        if memtier_started_epoch_s is not None
+        else (run_start_ms / 1000.0 if run_start_ms is not None else None)
+    )
+    if chaos_epoch_s is not None and relative_start_s is not None:
+        chaos_second = max(0, int(float(chaos_epoch_s) - relative_start_s))
+    if memtier_started_epoch_s is not None and run_start_ms is not None:
+        memtier_detected_start_second = int(float(memtier_started_epoch_s) - (run_start_ms / 1000.0))
+
+    return {
+        "timing_file": timing_path.name,
+        "memtier_detected_start_second": memtier_detected_start_second,
+        "chaos_second": chaos_second,
+        "steady_state_wait_s": timing.get("steady_state_wait_s"),
+        "chaos_target": timing.get("target"),
+        "grace_period_s": timing.get("grace_period_s"),
+        "relative_start_ms": relative_start_s * 1000.0 if relative_start_s is not None else None,
+    }
+
+
+def _trim_terminal_partial_bucket(ts: pd.DataFrame, baseline_ops: float) -> pd.DataFrame:
+    """Ignore the final short bucket emitted when memtier exits."""
+    if len(ts) < 2:
+        return ts
+
+    last = ts.iloc[-1]
+    prev = ts.iloc[-2]
+    threshold = baseline_ops * DROP_THRESHOLD
+
+    if last["count"] < threshold and prev["count"] >= threshold:
+        return ts.iloc[:-1].copy()
+
+    return ts
+
+
 def _empty_result() -> Dict[str, Any]:
     return {
         "failover_detected": False,
@@ -110,8 +265,6 @@ def _empty_result() -> Dict[str, Any]:
 
 def analyse_failover_runs(json_dir: Path) -> Tuple[pd.DataFrame, List[pd.DataFrame]]:
     """Parse all failover_run_*.json files and return (summary_df, list_of_timeseries)."""
-    import json
-
     files = sorted(json_dir.glob("failover_run_*.json"))
     if not files:
         raise FileNotFoundError(f"No failover_run_*.json files in {json_dir}")
@@ -134,13 +287,40 @@ def analyse_failover_runs(json_dir: Path) -> Tuple[pd.DataFrame, List[pd.DataFra
             print(f"  [warn] No run results found in {f.name}, skipping")
             continue
 
+        run_start_ms = _run_start_ms(run_result)
+        timing_metrics = parse_failover_timing(_timing_path_for_run(f), run_start_ms)
+
         ts = parse_time_series(run_result)
-        all_ts.append(ts)
-        metrics = detect_failover(ts)
+        metrics = detect_failover(ts, timing_metrics.get("chaos_second"))
+        metrics.update(timing_metrics)
+
+        relative_start_ms = timing_metrics.get("relative_start_ms") or run_start_ms
+        error_metrics, error_ts = parse_memtier_error_log(f.with_suffix(".log"), relative_start_ms)
+        metrics.update(error_metrics)
         metrics["file"] = f.name
+
+        ts = _merge_error_series(ts, error_ts)
+        all_ts.append(ts)
         results.append(metrics)
 
     return pd.DataFrame(results), all_ts
+
+
+def _timing_path_for_run(run_path: Path) -> Path:
+    return run_path.with_name(run_path.name.replace("failover_run_", "failover_timing_", 1))
+
+
+def _merge_error_series(ts: pd.DataFrame, error_ts: pd.DataFrame) -> pd.DataFrame:
+    ts = ts.copy()
+    if error_ts.empty:
+        ts["failed_request_count"] = 0
+        ts["clusterdown_errors"] = 0
+        return ts
+
+    ts = ts.merge(error_ts, on="second", how="left")
+    ts["failed_request_count"] = ts["failed_request_count"].fillna(0).astype(int)
+    ts["clusterdown_errors"] = ts["clusterdown_errors"].fillna(0).astype(int)
+    return ts
 
 
 def print_failover_summary(df: pd.DataFrame) -> None:
@@ -152,6 +332,7 @@ def print_failover_summary(df: pd.DataFrame) -> None:
 
     if detected.empty:
         print("No failover events detected.")
+        _print_memtier_error_summary(df)
         return
 
     metrics = [
@@ -169,6 +350,20 @@ def print_failover_summary(df: pd.DataFrame) -> None:
         std = detected[col].std()
         print(f"{label:<40} {mean:>12.2f} {std:>12.2f}")
 
+    _print_memtier_error_summary(df)
+
+
+def _print_memtier_error_summary(df: pd.DataFrame) -> None:
+    error_df = df[df["failed_request_count"].notna()] if "failed_request_count" in df else pd.DataFrame()
+    if not error_df.empty:
+        runs_with_errors = int((error_df["failed_request_count"] > 0).sum())
+        total_failed = int(error_df["failed_request_count"].sum())
+        total_clusterdown = int(error_df["clusterdown_errors"].sum())
+        print("\nMemtier error responses from logs:")
+        print(f"  Runs with failed responses: {runs_with_errors}/{len(error_df)}")
+        print(f"  Failed responses total:     {total_failed}")
+        print(f"  CLUSTERDOWN responses:      {total_clusterdown}")
+
 
 def save_failover_csv(df: pd.DataFrame, out_dir: Path) -> None:
     csv_path = out_dir / "failover_summary.csv"
@@ -183,13 +378,17 @@ def plot_failover_timeseries(
 ) -> None:
     """Plot ops/sec over time for each failover run, highlighting the failover window."""
     for i, (ts, (_, row)) in enumerate(zip(all_ts, results_df.iterrows())):
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 6), sharex=True)
+        fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(10, 7.5), sharex=True)
 
         ax1.plot(ts["second"], ts["count"], linewidth=0.8, color="#4c72b0")
         ax1.set_ylabel("Ops/sec")
         ax1.set_title(f"Failover Run {i + 1}")
 
-        if row.get("failover_detected") and row["failover_start_s"] is not None:
+        has_failover_window = bool(row.get("failover_detected")) and _has_value(row.get("failover_start_s"))
+        chaos_second = row.get("chaos_second")
+        has_chaos_second = _has_value(chaos_second)
+
+        if has_failover_window:
             ax1.axvspan(
                 row["failover_start_s"], row["failover_end_s"],
                 alpha=0.2, color="red", label="Failover window",
@@ -198,23 +397,85 @@ def plot_failover_timeseries(
                 row["baseline_ops"], linestyle="--", color="gray",
                 linewidth=0.7, label="Baseline",
             )
-            ax1.legend(fontsize=8)
+
+        if has_chaos_second:
+            mark_test_window(
+                ax1,
+                chaos_second,
+                None,
+                with_labels=True,
+                start_label="Chaos injected",
+            )
+        ax1.legend(fontsize=8)
 
         ax2.plot(ts["second"], ts["p99"], linewidth=0.8, color="#c44e52", label="p99")
         ax2.plot(ts["second"], ts["p50"], linewidth=0.8, color="#55a868", label="p50")
         ax2.set_ylabel("Latency (ms)")
-        ax2.set_xlabel("Time (s)")
         ax2.legend(fontsize=8)
 
-        if row.get("failover_detected") and row["failover_start_s"] is not None:
+        if has_failover_window:
             ax2.axvspan(
                 row["failover_start_s"], row["failover_end_s"],
                 alpha=0.2, color="red",
+            )
+        if has_chaos_second:
+            mark_test_window(
+                ax2,
+                chaos_second,
+                None,
+                start_label="Chaos injected",
+            )
+
+        other_errors = (ts["failed_request_count"] - ts["clusterdown_errors"]).clip(lower=0)
+        ax3.bar(
+            ts["second"], ts["clusterdown_errors"],
+            width=0.8, color="#8172b3", label="CLUSTERDOWN",
+        )
+        if other_errors.sum() > 0:
+            ax3.bar(
+                ts["second"], other_errors, bottom=ts["clusterdown_errors"],
+                width=0.8, color="#ccb974", label="Other errors",
+            )
+        ax3.set_ylabel("Errors/sec")
+        ax3.set_xlabel("Time (s)")
+        if ts["failed_request_count"].sum() > 0:
+            ax3.legend(fontsize=8)
+
+        if has_failover_window:
+            ax3.axvspan(
+                row["failover_start_s"], row["failover_end_s"],
+                alpha=0.2, color="red",
+            )
+        if has_chaos_second:
+            mark_test_window(
+                ax3,
+                chaos_second,
+                None,
+                start_label="Chaos injected",
             )
 
         fig.tight_layout()
         fig.savefig(out_dir / f"failover_run_{i + 1}.png", dpi=150, bbox_inches="tight")
         plt.close(fig)
+
+
+def _has_value(value: Any) -> bool:
+    return value is not None and not pd.isna(value)
+
+
+def _test_end_second(row: pd.Series, chaos_second: Any) -> Optional[float]:
+    if not _has_value(chaos_second):
+        return None
+
+    failover_end = row.get("failover_end_s")
+    if _has_value(failover_end):
+        return max(float(chaos_second), float(failover_end))
+
+    grace_period = row.get("grace_period_s")
+    if _has_value(grace_period):
+        return float(chaos_second) + float(grace_period)
+
+    return float(chaos_second)
 
 
 def plot_failover_comparison(results_df: pd.DataFrame, out_dir: Path) -> None:

@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: account-default-viewer-fgitk
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chaos-cluster-viewer-fgitk
+rules:
+- apiGroups: [""]
+  resources: ["namespaces", "pods", "pods/log", "events"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets", "statefulsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["chaos-mesh.org"]
+  resources: ["*"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: chaos-cluster-viewer-binding-fgitk
+subjects:
+- kind: ServiceAccount
+  name: account-default-viewer-fgitk
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-cluster-viewer-fgitk
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: chaos-vk-editor-fgitk
+  namespace: vk
+rules:
+- apiGroups: ["chaos-mesh.org"]
+  resources:
+    [
+      "podchaos",
+      "stresschaos",
+      "networkchaos",
+      "workflows",
+      "workflowtemplates",
+      "cronworkflows",
+    ]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["pods", "events"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: chaos-vk-editor-binding-fgitk
+  namespace: vk
+subjects:
+- kind: ServiceAccount
+  name: account-default-viewer-fgitk
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: chaos-vk-editor-fgitk

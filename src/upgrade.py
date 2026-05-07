@@ -1,11 +1,12 @@
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from src.chart_markers import mark_test_window
 from src.failover import parse_time_series
 
 matplotlib.use("Agg")
@@ -227,7 +228,10 @@ def plot_upgrade_timeseries(
                 label="Disruption" if j == 0 else None,
             )
 
-        if windows:
+        test_window = _window_bounds(windows)
+        if test_window is not None:
+            mark_test_window(ax1, test_window[0], test_window[1], with_labels=True)
+        if windows or row.get("baseline_ops") is not None:
             ax1.legend(fontsize=8)
 
         ax2.plot(ts["second"], ts["p99"], linewidth=0.6, color="#c44e52", label="p99")
@@ -238,10 +242,22 @@ def plot_upgrade_timeseries(
 
         for w in windows:
             ax2.axvspan(w["start"], w["end"], alpha=0.2, color="orange")
+        if test_window is not None:
+            mark_test_window(ax2, test_window[0], test_window[1])
 
         fig.tight_layout()
         fig.savefig(out_dir / f"upgrade_run_{i + 1}.png", dpi=150, bbox_inches="tight")
         plt.close(fig)
+
+
+def _window_bounds(windows: List[Dict]) -> Optional[Tuple[float, float]]:
+    if not windows:
+        return None
+
+    return (
+        min(float(window["start"]) for window in windows),
+        max(float(window["end"]) for window in windows),
+    )
 
 
 def plot_upgrade_comparison(results_df: pd.DataFrame, out_dir: Path) -> None:

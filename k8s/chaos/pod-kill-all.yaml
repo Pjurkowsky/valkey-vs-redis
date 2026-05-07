@@ -1,14 +1,14 @@
-kind: PodChaos
 apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
 metadata:
+  name: valkey-kill-all
   namespace: vk
-  name: valkey-master-kill333
 spec:
   selector:
     namespaces:
       - vk
     labelSelectors:
       app.kubernetes.io/instance: valkey
-  mode: one
+  mode: all
   action: pod-kill
-  gracePeriod: 60
+  gracePeriod: 1

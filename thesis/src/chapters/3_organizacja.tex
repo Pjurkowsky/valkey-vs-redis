@@ -1,108 +1,207 @@
 \chapter[Założenia metodologiczne i organizacja badań]{Założenia metodologiczne \\i organizacja badań}\label{ch:organizacja}
-Politechnika Wrocławska to państwowa uczelnia techniczna we Wrocławiu. Figure~\ref{fig:logo} przedstawia logo uczelni. 
- 
-\begin{figure}[h]
-\centering
-\includegraphics[width=0.9\textwidth]{images/LogoPWr.png}
-\caption{Logo Politechniki Wrocławskiej}\label{fig:logo}
-\end{figure}
 
-Pamiętaj by nie zostawiać pustych miejsc pod tytułem rozdziału. Należy pamiętać o wprowadzeniu. Dopiero później powinny zostać przedstawione podrozdziały.
+Celem niniejszego rozdziału jest przedstawienie sposobu organizacji badań porównawczych klastra Valkey i rozwiązań opartych o Redis. Rozdział opisuje przyjęte warianty badawcze, środowisko testowe, narzędzia pomiarowe, parametry eksperymentów, metryki oraz sposób analizy wyników. Szczególny nacisk położono na powtarzalność procedury, ponieważ porównanie systemów in-memory wymaga kontroli wielu czynników zewnętrznych: konfiguracji zasobów CPU i pamięci, topologii klastra, sposobu generowania ruchu, stanu danych oraz wpływu środowiska Kubernetes.
+
+Metodyka została dobrana tak, aby umożliwić weryfikację hipotez sformułowanych w rozdziale~\ref{ch:wstep}. Badania obejmują zarówno pomiary wydajnościowe, jak i testy odpornościowe oraz ocenę złożoności utrzymania. Takie podejście wynika z faktu, że system cache wykorzystywany w środowisku produkcyjnym nie może być oceniany wyłącznie przez maksymalną liczbę operacji na sekundę. Istotne są także opóźnienia w ogonie rozkładu, zachowanie podczas awarii, koszt utrzymania oraz liczba czynności wymaganych od operatora. Podobny kierunek porównywania systemów in-memory, obejmujący wydajność i właściwości operacyjne, pojawia się w analizie chmurowo-natywnych magazynów danych przedstawionej przez Awaysheha i Awada~\cite{awaysheh2025}.
 
 \section{Organizacja badań}
-Praca może zawierać także tabele, które powinny być czytelne i dobrze opisane. Do wszystkich tabel i rysunków powinny pojawić się odwołania w tekście (oraz komentarze). Podpisy rysunków mają znaleźć się pod rysunkami, a podpisy tabel – nad tabelami. Tabela~\ref{tab:tab_example} stanowi przykład. 
 
-\begin{table}[H]
-    \centering
-        \caption{Krótki ale treściwy opis tabeli} \label{tab:tab_example} 
-        \begin{tabular}{lrrrr}
-        \toprule
-        Method &  anger &   joy &  optimism &  sadness \\
-        \midrule
-        model1 & 0.772 & \textbf{0.751} & \textbf{0.532} & 0.673 \\
-        model2 & 0.727 & 0.661 & 0.307 & 0.629 \\
-        model3 & 0.761 & 0.739 & 0.498 & \textbf{0.679} \\
-        model4 & \textbf{0.782} & 0.740 & 0.470 & 0.672 \\
-        \bottomrule
-        \end{tabular}
-\end{table}
+Badania podzielono na cztery główne etapy. Pierwszy etap obejmuje przygotowanie środowiska Kubernetes, wdrożenie badanych systemów oraz konfigurację monitoringu. Drugi etap obejmuje testy wydajnościowe, w których mierzone są przepustowość, opóźnienia oraz wykorzystanie zasobów. Trzeci etap obejmuje testy niezawodności i odporności, takie jak failover mastera, presja na CPU i pamięć oraz partycja sieciowa. Czwarty etap dotyczy utrzymywalności, w szczególności aktualizacji klastra, skalowania horyzontalnego, reshardingu oraz operacji backupu i odtwarzania.
 
-Warto także użyć gotowych generatorów do tabel (np. \url{https://www.tablesgenerator.com/}), niż formatować je samodzielnie. Mistrzem formatowania był Wojtek. Tabela~\ref{tab:main_results_sentence} o nieco zmienionej treści pochodzi z jego pracy. 
+Kolejność wykonywania badań ma znaczenie dla wiarygodności wyników. Najpierw wykonywane są testy bazowe, które nie ingerują destrukcyjnie w działanie klastra. Dopiero po ich zakończeniu przeprowadzane są testy awaryjne i operacyjne. Takie uporządkowanie ogranicza ryzyko, że pozostałości po testach chaos engineering, niepełne odtworzenie klastra albo zmieniony stan danych wpłyną na wyniki pomiarów wydajnościowych.
+
+Przyjęto następującą kolejność prac badawczych:
+
+\begin{enumerate}
+    \item przygotowanie środowiska Kubernetes, monitoringu oraz obrazów narzędzi testowych;
+    \item wdrożenie klastra Valkey i klastra Redis w porównywalnej topologii;
+    \item walidacja poprawności połączeń, replikacji i działania trybu klastrowego;
+    \item wykonanie testów wydajnościowych dla wszystkich konfiguracji CPU, payloadu i proporcji operacji;
+    \item wykonanie testów failover oraz testów odporności na niedobór zasobów;
+    \item wykonanie testów partycji sieciowej i spójności danych;
+    \item wykonanie testów utrzymywalności: upgrade, resharding, backup i restore;
+    \item agregacja wyników, wizualizacja, analiza statystyczna i weryfikacja hipotez.
+\end{enumerate}
+
+\section{Warianty badawcze}
+
+Podstawowym przedmiotem badań jest klaster Valkey uruchomiony samodzielnie w środowisku Kubernetes. Jego wyniki są zestawiane z rozwiązaniami opartymi o Redis oraz z usługą zarządzaną traktowaną jako punkt odniesienia dla kosztów i nakładu pracy operacyjnej. Tabela~\ref{tab:warianty_badawcze} przedstawia przyjęte warianty.
 
 \begin{table}[H]
 \centering
-\renewcommand*{\arraystretch}{1.3}
-\caption{Comparison of the compression methods considered for MultiEmo for the sentence level in the mixed domain scenario. The results are averaged on 5 repetitions. The best results are in \textbf{bold}.}
-\label{tab:main_results_sentence}
-\begin{tabular}{@{}
-l
-R{1.3cm}R{0.7cm}@{\hspace{0.1cm}}L{1.1cm}@{\hspace{8pt}}
-R{1.3cm}c@{\hspace{12pt}}
-cccc
-@{}} 
+\caption{Warianty uwzględnione w badaniu}
+\label{tab:warianty_badawcze}
+\begin{tabularx}{\textwidth}{p{3.6cm}X}
 \toprule
-\multicolumn{1}{c}{\textbf{Method}} &
-\multicolumn{1}{c}{\textbf{$\boldsymbol{\#}$Par.}} & 
-\multicolumn{2}{c@{\hspace{12pt}}}{
-\begin{tabular}[c]{@{}c@{}}\textbf{Mem.}\\\textbf{ [MB]}\end{tabular}} &
-\begin{tabular}[c]{@{}c@{}}\textbf{Train.}\\\textbf{ [min]}\end{tabular} & 
-\textbf{Eval [s]} & 
-\textbf{Acc.} &
-\textbf{F1}& 
-\textbf{Rec.}&
-\textbf{Prec.} \\ 
+\textbf{Wariant} & \textbf{Rola w badaniu} \\
 \midrule
-Model$_\mathrm{BASE}$ & 109M & \multicolumn{2}{c@{\hspace{10pt}}}{418} & 26.0 & 13.9 & 78.8 & 74.7 & 74.1 & 75.8 \\ 
-\midrule
-Model1 & 67M & 255 & (1.6x) & 14.1 & 7.0 (2.0x) & 77.9 & 73.9 & 73.3 & \bftab{74.8} \\
-Model2 & \bftab{13M} & \bftab{49} & \bftab{(8.6x)} & 6.5 & 2.3 (6.2x) & 76.7 & 72.4 & 71.7 & 73.9 \\
-Model3$_{6, \mathrm{TA}}$ & 67M & 255 & (1.6x) & 14.1 & 7.2 (1.9x) & 77.7 & 73.8 & 73.5 & 74.3 \\
-Model3$_{6, \mathrm{TS}}$ & 68M & 258 & (1.6x) & 62.9 & 7.2 (1.9x) & \bftab{78.2} & \bftab{74.4} & \bftab{74.1} & 74.7 \\
-Model3$_{4, \mathrm{TA}}$ & 14M & 55 & (7.6x) & \bftab{5.5} & 2.1 (6.6x) & 76.3 & 72.0 & 71.1 & 73.7 \\
-Model3$_{4, \mathrm{TS}}$ & 15M & 56 & (7.5x) & 38.3 & \bftab{2.0 (6.9x)} & 76.3 & 72.2 & 71.5 & 73.4 \\
-Model4 & 67M & 255 & (1.6x) & 19.1 & 7.8 (1.8x) & 76.6 & 72.5 & 72.1 & 73.2 \\
-Model5 & 14M & 55 & (7.6x) & 121.5 & 3.4 (4.1x) & 77.5 & 72.9 & 72.2 & 74.9 \\
+Valkey Cluster w Kubernetes & Główny wariant badawczy. System self-hosted oceniany pod względem wydajności, opóźnień, odporności, kosztów i złożoności utrzymania. \\
+Redis Cluster w Kubernetes & Podstawowy wariant porównawczy dla testów wydajnościowych i operacyjnych wykonywanych w tej samej topologii. \\
+Redis Sentinel & Wariant odniesienia dla klasycznego mechanizmu failoveru, wykorzystywany głównie przy ocenie czasu odtworzenia mastera. \\
+Google Cloud Memorystore & Usługa zarządzana wykorzystywana jako punkt odniesienia w analizie kosztów, dostępności i nakładu pracy operacyjnej. \\
 \bottomrule
-\end{tabular}
+\end{tabularx}
 \end{table}
 
-\section{Opis właściwości przedmiotu badań}
-Studia zapewniają podstawową wiedzę z zakresu sztucznej inteligencji i nauki o danych (data science). Rozwijają zarówno umiejętności matematyczne, programistyczne, obliczeniowe, analityczne, jak i umiejętności pracy projektowej w grupie, z nastawieniem na identyfikowanie problemów (naukowych, biznesowych, społecznych) i ich rozwiązywanie z wykorzystaniem technik i metod inteligentnych.
+Najbardziej bezpośrednie porównanie dotyczy wariantów Valkey Cluster i Redis Cluster uruchamianych w Kubernetes. W obu przypadkach należy zachować tę samą topologię, te same limity zasobów, ten sam generator obciążenia oraz te same parametry testów. Wariant Memorystore nie jest w pełni równoważny środowisku self-hosted, ponieważ część mechanizmów administracyjnych jest ukryta przed użytkownikiem. Z tego powodu w pracy jest on traktowany przede wszystkim jako wariant porównawczy dla analizy kosztów i maintenance overhead, a nie jako identycznie kontrolowane środowisko eksperymentalne.
 
-\section{Selekcja metod} 
-Społeczeństwo w swoim rozwoju wchodzi w czwartą rewolucję przemysłową, określaną często terminem ,,Przemysł 4.0''. Jest on oparty na systemach łączności piątej i wyższych generacji oraz Internecie Rzeczy (IoT), wspieranych sztuczną inteligencją.
+\section{Środowisko testowe}
 
-Przemysł 4.0 zmienia nie tylko technologie, ale przede wszystkim model biznesu i wymagania stawiane pracownikom. Rewolucja oprze się na danych, które będą zbierane, gromadzone i przetwarzane na każdym etapie prowadzenia biznesu. W firmach wykorzystywane będą nowoczesne technologie, chmury obliczeniowe, wielkie zbiory danych, Internet Rzeczy, rozszerzona rzeczywistość, sztuczna inteligencja czy druk 3D.
+Badania self-hosted prowadzone są w klastrze Kubernetes. Generator obciążenia uruchamiany jest jako pod w tym samym klastrze co badany system cache. Takie założenie ogranicza wpływ zewnętrznych load balancerów, publicznej sieci oraz dodatkowych przejść sieciowych, które mogłyby zdominować pomiar opóźnień. W środowisku produkcyjnym klient aplikacyjny bardzo często działa w tym samym klastrze lub w tej samej sieci prywatnej co cache, dlatego taki model lepiej odzwierciedla docelowy scenariusz użycia.
 
-Technologia powinna uwzględniać właściwe współdziałanie z człowiekiem. Dlatego należy badać aspekty komunikacji i interakcji człowiek – komputer czy szerzej: człowiek i rozbudowane środowiska robotyczne. Bariery rozwoju Przemysłu 4.0 mają związek przede wszystkim z dostępem do wykształconych kadr. To zrozumiałe w obliczu dużych oczekiwań co do interdyscyplinarnych kompetencji stawianych inżynierom.
+Konfigurację bazową środowiska przedstawiono w tabeli~\ref{tab:srodowisko_testowe}. Wartości te stanowią punkt wyjścia dla eksperymentów. Jeżeli ograniczenia sprzętowe uniemożliwią wykonanie pełnej macierzy testów, fakt ten powinien zostać odnotowany w rozdziale wynikowym jako ograniczenie badania.
 
-Nauka przed wyzwaniami
-Przyszłość stawia przed europejską nauką trzy kluczowe wyzwania:
+\begin{table}[H]
+\centering
+\caption{Bazowa konfiguracja środowiska testowego}
+\label{tab:srodowisko_testowe}
+\begin{tabularx}{\textwidth}{p{4.2cm}X}
+\toprule
+\textbf{Element} & \textbf{Konfiguracja bazowa} \\
+\midrule
+Orkiestracja & Kubernetes \\
+Tryb pracy systemu cache & Cluster mode \\
+Liczba shardów & 3 \\
+Liczba replik na shard & 1 \\
+Łączna liczba podów klastra & 6 \\
+Generator obciążenia & \texttt{memtier\_benchmark} uruchamiany jako pod w tym samym klastrze \\
+Monitoring & Prometheus oraz Grafana \\
+Metryki systemowe & CPU, pamięć, restarty podów, status klastra \\
+Trwałość danych & PVC, jeżeli scenariusz wymaga testu backup/restore lub odtworzenia po restarcie \\
+Zakłócenia kontrolowane & Chaos engineering przez ubijanie podów, presję na zasoby lub partycję sieciową \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+W testach wydajnościowych kluczowe jest zachowanie jednakowej konfiguracji dla Valkey i Redis. Obejmuje to nie tylko liczbę podów oraz przydział CPU, ale także politykę pamięci, ustawienia trwałości, rozmiar zbioru kluczy, wersję narzędzia testowego oraz sposób routingu ruchu. Każda zmiana tych parametrów może istotnie zmienić charakter obciążenia i utrudnić interpretację wyników.
+
+\section{Narzędzia badawcze}
+
+Do generowania obciążenia wybrano narzędzie \texttt{memtier\_benchmark}. Umożliwia ono wykonywanie testów dla protokołu Redis, pracę w trybie klastrowym, sterowanie liczbą wątków i klientów, ustawienie pipeline oraz zapis wyników w formacie JSON. Jest to istotne, ponieważ wyniki muszą być możliwe do automatycznej agregacji i porównania między powtórzeniami.
+
+Monitoring realizowany jest przez Prometheus, który zbiera metryki kontenerów i podów. Dane te są wykorzystywane do obliczania średniego zużycia CPU i pamięci podczas okna testowego. Wykresy oraz pliki CSV generowane są po zakończeniu testów, aby oddzielić fazę pomiaru od fazy analizy. Dzięki temu surowe wyniki mogą zostać ponownie przetworzone bez konieczności powtarzania kosztownych eksperymentów.
+
+Do testów odpornościowych przewidziano mechanizmy chaos engineering. Zakłócenia powinny być wprowadzane dopiero po osiągnięciu przez system stanu ustalonego, na przykład po 30 sekundach od rozpoczęcia obciążenia. Pozwala to odróżnić naturalny rozruch testu od wpływu awarii lub presji zasobowej.
+
+\section{Testy wydajnościowe}
+
+Testy wydajnościowe służą weryfikacji hipotezy H1. Ich celem jest porównanie liczby operacji na sekundę i rozkładu opóźnień dla Valkey oraz Redis Cluster przy identycznym przydziale zasobów. Badane są trzy typy obciążenia: tylko odczyt, tylko zapis oraz scenariusz mieszany. Uwzględnienie różnych rozmiarów payloadu pozwala sprawdzić, czy system jest ograniczony głównie przez CPU, sieć, kopiowanie pamięci czy obsługę protokołu.
+
+Parametry testów wydajnościowych przedstawiono w tabeli~\ref{tab:parametry_wydajnosci}. Wartości bazowe dobrano tak, aby uzyskać porównywalny wariant eksperymentalny, możliwy do powtórzenia dla obu systemów. Dodatkowo można wykonywać testy saturacyjne z większą liczbą klientów i wątków, jednak powinny one być oznaczone jako osobny scenariusz, aby nie mieszać ich z wariantem bazowym.
+
+\begin{table}[H]
+\centering
+\caption{Parametry bazowe testów wydajnościowych}
+\label{tab:parametry_wydajnosci}
+\begin{tabularx}{\textwidth}{p{4.6cm}X}
+\toprule
+\textbf{Parametr} & \textbf{Wartość} \\
+\midrule
+Narzędzie & \texttt{memtier\_benchmark} \\
+Tryb klienta & \texttt{--cluster-mode} \\
+Liczba vCPU na pod & 1, 2, 4 \\
+Rozmiar payloadu & 1 KB, 10 KB, 1 MB \\
+Typ operacji & read-only \texttt{0:1}, write-only \texttt{1:0}, mixed \texttt{1:1} \\
+Liczba wątków klienta & 4 \\
+Liczba klientów na wątek & 25 \\
+Łączna liczba połączeń & 100 \\
+Pipeline & 10 \\
+Maksymalna liczba komend w locie & 1000 \\
+Czas pojedynczego przebiegu & 300 s \\
+Liczba powtórzeń & 5 \\
+Zakres kluczy & 1000000 \\
+Percentyle opóźnień & p50, p95, p99, p99.9 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Pełna macierz testów obejmuje 3 wartości CPU, 3 rozmiary payloadu i 3 proporcje operacji, czyli 27 konfiguracji dla jednego systemu. Przy pięciu powtórzeniach daje to 135 przebiegów na system. W przypadku porównania Valkey i Redis liczba przebiegów ulega podwojeniu. Z tego powodu istotne jest automatyczne zapisywanie wyników oraz jednoznaczne nazewnictwo plików wynikowych.
+
+\section{Testy niezawodności i odporności}
+
+Druga grupa eksperymentów dotyczy zachowania klastra w sytuacjach awaryjnych. Testy te są związane głównie z hipotezą H3, ale ich wyniki wspierają również ocenę praktycznej użyteczności badanego rozwiązania. W środowisku produkcyjnym krótkotrwały spadek przepustowości może być akceptowalny, natomiast utrata potwierdzonych zapisów, długi brak dostępności albo lawinowy wzrost opóźnień mogą wykluczać dane rozwiązanie z zastosowań krytycznych.
+
+\subsection{Failover mastera}
+
+Test failoveru polega na ubiciu jednego poda pełniącego rolę mastera podczas ciągłego obciążenia. Procedura powinna rozpocząć się od ustabilizowania ruchu, następnie po około 30 sekundach wprowadzana jest awaria. W czasie testu rejestrowane są: liczba operacji na sekundę, opóźnienia, błędy klienta, czas wyboru nowego mastera oraz czas powrotu do stabilnego poziomu throughputu.
+
+Wariant podstawowy obejmuje awarię jednego mastera, ponieważ taki scenariusz jest najłatwiejszy do powtórzenia i interpretacji. Wariant rozszerzony może obejmować awarię wielu masterów lub awarię obejmującą większą część klastra, jednak wyniki takich testów powinny być interpretowane oddzielnie.
+
+\subsection{Spójność danych podczas partycji sieciowej}
+
+Test spójności danych polega na zapisywaniu kluczy z deterministycznymi wartościami, a następnie wprowadzeniu partycji sieciowej dla wybranego poda lub grupy podów. Po usunięciu zakłócenia wykonywana jest weryfikacja, czy wszystkie potwierdzone zapisy są nadal dostępne. Mierzone są liczba utraconych potwierdzonych zapisów, liczba błędów podczas partycji oraz tempo zapisów poza oknem awarii.
+
+Ten scenariusz jest istotny, ponieważ system cache może być wykorzystywany nie tylko do przechowywania danych łatwych do odtworzenia, ale również do przechowywania informacji tymczasowych istotnych dla działania aplikacji, takich jak sesje, tokeny lub liczniki. Utrata danych w takim scenariuszu może mieć inny koszt biznesowy niż utrata klasycznego cache'u stron lub zapytań.
+
+\subsection{Resilience przy niedoborze zasobów}
+
+Testy resilience sprawdzają zachowanie klastra przy presji na CPU i pamięć. W scenariuszu CPU stress wybrany pod jest obciążany dodatkową pracą obliczeniową, co pozwala obserwować wpływ ograniczonego czasu procesora na przepustowość i opóźnienia. W scenariuszu memory stress badany jest wpływ presji pamięci, potencjalnych restartów oraz mechanizmów odzyskiwania stabilnego stanu.
+
+Dla testu pamięci szczególnie istotny jest wariant warm cache, czyli wcześniejsze wypełnienie klastra danymi. Bez danych test nie oddaje rzeczywistego zachowania systemu, ponieważ presja pamięci może nie uruchomić mechanizmów eksmisji ani nie doprowadzić do sytuacji bliskiej OOM Kill.
+
+\section{Testy utrzymywalności}
+
+Testy utrzymywalności służą weryfikacji hipotezy H4. Ich celem jest ocena, ile pracy operacyjnej wymaga utrzymanie klastra self-hosted w porównaniu z usługą zarządzaną. W tej części obok metryk technicznych mierzone są również liczba kroków, liczba komend, czas wykonania procedury, konieczność ręcznej interwencji oraz ryzyko błędnej konfiguracji.
+
+\subsection{Rolling upgrade}
+
+Test rolling upgrade polega na wykonaniu aktualizacji lub wymuszonego restartu komponentów klastra podczas ciągłego obciążenia. Rejestrowane są liczba błędów klienta, czas trwania operacji, skoki opóźnień oraz liczba okien degradacji. Celem nie jest wyłącznie sprawdzenie, czy aktualizacja zakończy się sukcesem, ale również ocena, czy z perspektywy aplikacji operacja może być uznana za zero-downtime.
+
+\subsection{Skalowanie horyzontalne i resharding}
+
+Test reshardingu obejmuje dodanie nowego sharda do klastra i przeniesienie części slotów. Dla systemów Redis-compatible jest to operacja szczególnie istotna, ponieważ rozkład slotów wpływa na równomierność obciążenia oraz wykorzystanie zasobów. W trakcie testu mierzone są czas dodania sharda, czas przenoszenia slotów, liczba błędów lub przekierowań po stronie klienta, spadek przepustowości oraz wpływ operacji na p99 i p99.9 latency.
+
+\subsection{Backup i restore}
+
+Test backupu i odtwarzania obejmuje wypełnienie klastra danymi, utworzenie kopii oraz odtworzenie działania po restarcie lub awarii. Dla wariantu self-hosted mierzone są czas przygotowania danych, czas wykonania kopii, czas odtworzenia, integralność próbki danych oraz liczba kroków wymaganych od operatora. Dla usługi zarządzanej analizowany jest deklarowany mechanizm backup/restore, dostępność Point-in-Time Recovery oraz zakres odpowiedzialności użytkownika.
+
+\section{Metryki i sposób analizy}
+
+Zestaw metryk dobrano tak, aby umożliwić ocenę zarówno wydajności, jak i niezawodności oraz utrzymywalności. Tabela~\ref{tab:metryki_badawcze} przedstawia główne kategorie metryk.
+
+\begin{table}[H]
+\centering
+\caption{Główne metryki wykorzystywane w analizie}
+\label{tab:metryki_badawcze}
+\begin{tabularx}{\textwidth}{p{3.8cm}X}
+\toprule
+\textbf{Kategoria} & \textbf{Metryki} \\
+\midrule
+Wydajność & Ops/sec, średnia z powtórzeń, odchylenie standardowe, różnica procentowa Valkey względem Redis. \\
+Opóźnienia & p50, p95, p99, p99.9, maksymalne skoki opóźnień podczas awarii lub operacji utrzymaniowych. \\
+Zasoby & Średnie zużycie CPU, zużycie CPU per pod, zużycie pamięci, restarty podów. \\
+Failover & Czas odtworzenia mastera, liczba błędów klienta, czas degradacji, czas powrotu do stabilnego throughputu. \\
+Spójność danych & Liczba utraconych potwierdzonych zapisów, loss rate, liczba błędów podczas partycji. \\
+Utrzymywalność & Liczba kroków, liczba komend, czas procedury, liczba decyzji operatora, możliwość rollbacku. \\
+Koszty & Koszt miesięczny, koszt w przeliczeniu na 100 tys. ops/sec, koszt pracy operacyjnej, koszt zasobów infrastruktury. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Dla każdej konfiguracji liczbowej wykonywanych jest co najmniej pięć powtórzeń. Następnie obliczana jest średnia arytmetyczna oraz odchylenie standardowe. W przypadku porównania Valkey i Redis obliczana jest również różnica procentowa. Jeżeli rozkład wyników i liczba obserwacji na to pozwolą, można zastosować test statystyczny dla dwóch prób, na przykład test t-Studenta albo test Manna-Whitneya. Ze względu na ograniczoną liczbę powtórzeń wyniki należy jednak interpretować ostrożnie i traktować je jako eksperymentalne porównanie w określonym środowisku, a nie jako uniwersalną charakterystykę wszystkich możliwych wdrożeń.
+
+Wyniki prezentowane są w formie tabel i wykresów. Dla testów wydajnościowych stosowane są wykresy słupkowe ops/sec, wykresy percentyli opóźnień oraz heatmapy zależności throughputu od CPU i rozmiaru payloadu. Dla testów failover, resilience, upgrade i resharding stosowane są wykresy czasowe, na których oznaczone jest okno wprowadzenia zakłócenia lub operacji administracyjnej.
+
+\section{Zasady powtarzalności}
+
+Aby zachować powtarzalność badań, dla każdego przebiegu zapisywane są surowe wyniki, logi oraz parametry konfiguracji. Dotyczy to wersji Valkey, Redis, Kubernetes, obrazów kontenerowych, wartości limitów CPU i pamięci, parametrów \texttt{memtier\_benchmark} oraz informacji o stanie klastra przed rozpoczęciem testu.
+
+Przyjęto następujące zasady:
 
 \begin{itemize}
-    \item Rozwój innowacji zakłócających – innowacje przełomowe, takie które zmienią istniejący porządek na rynku, wprowadzając coś zupełnie nowego.
-    \item Biologizacja techniki – zastosowanie praw biologicznych, rządzących procesami zachodzącymi w organizmach żywych, do innych dziedzin.
-    \item Bezpieczeństwo publiczne – nowe rozwiązania jakościowe i innowacje dotyczące: bezpieczeństwa w zakresie IT (m.in. w kontekście ataków cybernetycznych), bezpieczeństwa systemów transportu drogowego, kolejowego i lotniczego, bezpieczeństwa infrastrukturalnego miast i zaopatrzenia w wodę i elektryczność.
+    \item Valkey i Redis są testowane w możliwie identycznej topologii;
+    \item generator obciążenia działa z tego samego środowiska Kubernetes;
+    \item przed każdą serią testów sprawdzany jest zdrowy stan klastra;
+    \item dane testowe są czyszczone albo przygotowywane w kontrolowany sposób;
+    \item wyniki nieudane i anomalie są dokumentowane, a nie usuwane bez komentarza;
+    \item testy destrukcyjne wykonywane są po testach bazowych;
+    \item artefakty wynikowe są zapisywane w oddzielnych katalogach dla każdego badanego wariantu.
 \end{itemize}
 
-Badania i dydaktyka na wysokim poziomie
-Szczególna rola w przełamywaniu barier rozwoju Przemysłu 4.0 przypadnie uniwersytetom, które w swoich zadaniach statutowych mają: badania naukowe i kształcenie na wysokim poziomie.
-Zadania te są równie ważne. Nie ma bowiem wysokiej jakości nauczania bez prowadzenia badań naukowych. Nie ma badań naukowych i rozwoju gospodarki bez odpowiednio wykształconej kadry. To uczelnie będą przełamywały główne bariery czwartej rewolucji przemysłowej. Wśród tych uczelni – biorąc pod uwagę kapitał ludzki i społeczny, infrastrukturę badawczą i dydaktyczną – nie może zabraknąć Politechniki Wrocławskiej, aspirującej do bycia uczelnią badawczą. Te istotne zadania w pokonywaniu barier realizują wydziały. Na nie, a przede wszystkim na nowo powstały Wydział Informatyki i Telekomunikacji, spada odpowiedzialność w tej dziedzinie.
+\section{Kryteria interpretacji wyników}
 
-Wydział tworzą katedry pochodzące z wydziałów Politechniki Wrocławskiej: Elektroniki, Informatyki i Zarządzania oraz Podstawowych Problemów Techniki.
-Badania naukowe prowadzone będą w katedrach: Automatyki, Mechatroniki i Systemów Sterowania, Informatyki Technicznej, Systemów i Sieci Komputerowych, Telekomunikacji i Teleinformatyki, Informatyki i Inżynierii Systemów, Informatyki Stosowanej, Inteligencji Obliczeniowej, Podstaw Informatyki.
+Valkey zostanie uznany za korzystniejszy technicznie od Redis Cluster w danym scenariuszu tylko wtedy, gdy przy tej samej konfiguracji osiąga wyższą przepustowość lub niższe opóźnienia bez pogorszenia stabilności, zużycia zasobów i zachowania podczas awarii. Pojedynczy lepszy wynik ops/sec nie jest wystarczający, jeżeli towarzyszy mu istotny wzrost p99 lub p99.9 latency.
 
-Oznacza to, że swoim zakresem obejmą większość dziedzin bezpośrednio związanych z Przemysłem 4.0. Realizowane będą zarówno badania podstawowe, jak i wdrożeniowe, skupimy się także na aktywnej współpracy z gospodarką i komercjalizacji wyników. W/w katedry są gwarancją, że badania obejmą większość dziedzin bezpośrednio związanych z Przemysłem 4.0.
+W przypadku hipotezy kosztowej porównanie obejmuje nie tylko koszt infrastruktury, ale także koszt pracy operacyjnej. Klaster self-hosted może być tańszy pod względem zasobów obliczeniowych, ale wymaga samodzielnego monitorowania, aktualizacji, reagowania na awarie oraz utrzymywania procedur backup/restore. Z tego względu wariant Valkey self-hosted zostanie uznany za korzystniejszy kosztowo tylko wtedy, gdy oszczędność infrastrukturalna nie zostanie zniwelowana przez maintenance overhead oraz ryzyko operacyjne.
 
-Za cel stawiamy sobie przede wszystkim zapewnienie przyjaznych warunków do rozwoju naukowego, zwłaszcza młodym, oraz przejrzystą ścieżkę kariery naukowej. Badania będziemy prowadzić we wszystkich dyscyplinach powiązanych z informatyką.
-
-Kadra ma świadomość, że fundamentem wydziału jest – stojące na wysokim poziomie, nowoczesne, spełniające potrzeby zmieniającego się świata – nauczanie. Odbywać się ono będzie na 12 polsko- i anglojęzycznych kierunkach: Computer Science, Computer Security, Cyberbezpieczeństwo, Informatyczne Systemy Automatyki, Informatyka Algorytmiczna, Informatyka Stosowana, Informatyka Techniczna, Inżynieria Systemów, Sztuczna Inteligencja, Teleinformatyka, Telekomunikacja, Zaufane Systemy Sztucznej Inteligencji. Lista kierunków będzie sukcesywnie modyfikowana w odpowiedzi na wyzwania stawiane przez uwarunkowania społeczno-gospodarcze.
-
-\section{Hipotezy badawcze}
-\dots
-
-\section{Wybór parametrów i miar, określenie założeń} 
-\dots
-
-\section{Plan badań}
-\dots
+Ostateczna ocena zostanie przeprowadzona osobno dla każdej hipotezy H1--H4 w rozdziale~\ref{ch:podsumowanie}. Pozwoli to oddzielić wnioski dotyczące wydajności od wniosków dotyczących kosztów i utrzymywalności.

@@ -1,11 +1,53 @@
 \chapter{Wstęp}\label{ch:wstep}
-W pracy formułuje się cele o charakterze badawczym wymagające doboru i zastosowania metod badawczych, wykorzystując wiedzę teoretyczną oraz naukową. Wskazane jest przedstawienie, co nowego jest zaproponowane w pracy oraz podanie ograniczeń i słabych/mocnych stron opracowanego rozwiązania (jeżeli dotyczy). Rozdział wprowadzający powinien służyć czytelnikowi do zrozumienia celu pracy. Przykład cytowania: ~\cite{nowak2018, w4n2017, babington2008}
+
+Systemy cache'owania danych w pamięci operacyjnej są jednym z podstawowych elementów współczesnych architektur aplikacji internetowych i chmurowych. Ich zadaniem jest ograniczenie liczby kosztownych odwołań do baz danych, usług zewnętrznych lub warstw trwałego składowania poprzez utrzymywanie często wykorzystywanych danych w strukturach dostępnych z bardzo małym opóźnieniem. W praktyce rozwiązania tego typu wpływają bezpośrednio na czas odpowiedzi aplikacji, stabilność systemu podczas skoków obciążenia oraz koszty działania infrastruktury. Znaczenie Redis jako narzędzia cache'ującego w aplikacjach o dużym ruchu zostało opisane między innymi w pracy Kaptosva, w której wskazano, że właściwie zaprojektowana warstwa cache może istotnie ograniczać opóźnienia i odciążać komponenty odpowiedzialne za trwałe przechowywanie danych~\cite{kaptosv2025}.
+
+Redis przez wiele lat był jednym z najczęściej wybieranych rozwiązań typu in-memory data store. Jego popularność wynikała z prostego modelu danych, wysokiej wydajności, szerokiego wsparcia narzędziowego oraz dojrzałego ekosystemu bibliotek klienckich. Jednocześnie zmiany licencyjne wprowadzone po wersji Redis 7.2 spowodowały istotną zmianę w sposobie postrzegania tego projektu przez społeczność open-source oraz dostawców usług chmurowych. Problem wpływu zmiany licencji Redis na ekosystem oprogramowania otwartego i dostawców usług chmurowych został omówiony przez Hana i współautorów~\cite{han2026}. Jedną z odpowiedzi społeczności na te zmiany było powstanie projektu Valkey, rozwijanego jako otwarta alternatywa zgodna funkcjonalnie z wcześniejszym kierunkiem rozwoju Redis. Awaysheh i Awad wskazują Valkey jako jeden z przykładów nowej generacji chmurowo-natywnych magazynów danych w pamięci, obok innych systemów rozwijanych w odpowiedzi na wymagania nowoczesnych środowisk obliczeniowych~\cite{awaysheh2025}.
+
+Z punktu widzenia organizacji wykorzystujących cache w środowiskach produkcyjnych sama zgodność interfejsu nie jest jednak wystarczającą podstawą do podjęcia decyzji o migracji. Wybór między Redis, Valkey oraz usługami zarządzanymi wymaga oceny wielu aspektów jednocześnie: wydajności, opóźnień, odporności na awarie, kosztów infrastruktury oraz nakładu pracy administracyjnej. Szczególnie istotne jest to w środowiskach Kubernetes, w których zespoły mogą samodzielnie utrzymywać klastry bazujące na kontenerach, operatorach i mechanizmach automatycznego odtwarzania. Takie podejście może obniżać koszty i zwiększać kontrolę nad konfiguracją, ale jednocześnie przenosi na zespół odpowiedzialność za aktualizacje, monitoring, kopie zapasowe, skalowanie oraz reakcję na awarie.
 
 \section{Przedmiot pracy}
-W tej sekcji student powinien przedstawić bliżej problem, którym chce się zmierzyć. Jasno zdefiniuj problem badawczy. Podaj swoje cele, zadania i pytania badawcze. Wyjaśnij znaczenie badania. Określ ograniczenia badań.
+
+Przedmiotem pracy jest analiza porównawcza klastra Valkey uruchomionego w środowisku Kubernetes z rozwiązaniami opartymi o Redis. Badanie koncentruje się na scenariuszach typowych dla warstwy cache w aplikacjach chmurowych, w których kluczowe znaczenie mają duża liczba operacji na sekundę, niskie opóźnienia oraz przewidywalne zachowanie systemu pod obciążeniem. W pracy rozpatrywane są zarówno testy wydajnościowe, jak i wybrane aspekty utrzymywalności oraz niezawodności, ponieważ w praktyce produkcyjnej wysoka przepustowość nie jest wystarczająca, jeśli system jest trudny w aktualizacji, niestabilny podczas awarii lub kosztowny w obsłudze.
+
+Problem badawczy można sformułować następująco: czy samodzielnie zarządzany klaster Valkey w Kubernetes może stanowić praktyczną, wydajną i ekonomicznie uzasadnioną alternatywę dla klastra Redis oraz usług zarządzanych, przy zachowaniu akceptowalnego poziomu niezawodności i złożoności operacyjnej? Odpowiedź na to pytanie wymaga nie tylko porównania wartości średnich dla liczby operacji na sekundę, ale również analizy rozkładu opóźnień, zachowania przy różnych rozmiarach danych, wpływu liczby przydzielonych zasobów CPU oraz skutków awarii lub operacji administracyjnych wykonywanych podczas ciągłego obciążenia.
+
+Istotnym elementem przedmiotu badań jest środowisko uruchomieniowe. Testy zakładają pracę w Kubernetes, ponieważ jest to obecnie jeden z podstawowych sposobów wdrażania usług stanowych i bezstanowych w środowiskach chmurowych. W takim modelu sam mechanizm działania bazy in-memory nie jest jedynym czynnikiem wpływającym na wynik. Znaczenie mają również limity zasobów, sposób rozmieszczenia podów, narzut sieciowy wewnątrz klastra, mechanizmy odtwarzania replik oraz integracja z monitoringiem. Z tego powodu praca nie ogranicza się do syntetycznego uruchomienia pojedynczego procesu Redis lub Valkey, lecz traktuje badany system jako usługę działającą w rzeczywistym modelu wdrożeniowym.
 
 \section{Cele pracy}
-W tej sekcji student powinien przedstawić bliżej problem, którym chce się zmierzyć. Jasno zdefiniuj problem badawczy. Podaj swoje cele, zadania i pytania badawcze. Wyjaśnij znaczenie badania. Określ ograniczenia badań.
+
+Celem głównym pracy jest przeprowadzenie kompleksowej analizy porównawczej samodzielnie zarządzanego klastra Valkey uruchomionego w Kubernetes z rozwiązaniami opartymi o Redis, z uwzględnieniem wydajności, opóźnień, odporności na awarie, kosztów oraz nakładu pracy operacyjnej. Wyniki badań mają umożliwić ocenę, w jakich warunkach Valkey może być traktowany jako technicznie i ekonomicznie uzasadniona alternatywa dla Redis Cluster lub usługi zarządzanej.
+
+Cel główny został rozbity na następujące cele szczegółowe:
+
+\begin{itemize}
+    \item przygotowanie środowiska testowego w Kubernetes dla badanych wariantów systemu cache;
+    \item opracowanie powtarzalnej procedury testów wydajnościowych z wykorzystaniem narzędzia \texttt{memtier\_benchmark};
+    \item porównanie przepustowości oraz opóźnień dla różnych konfiguracji CPU, rozmiarów danych i proporcji operacji odczytu oraz zapisu;
+    \item zbadanie zachowania klastra podczas awarii, niedoboru zasobów, aktualizacji oraz wybranych operacji administracyjnych;
+    \item określenie kosztów oraz nakładu pracy operacyjnej dla wariantu self-hosted w porównaniu z rozwiązaniem zarządzanym;
+    \item sformułowanie rekomendacji dotyczących wykorzystania Valkey i Redis w środowiskach chmurowych.
+\end{itemize}
+
+W pracy przyjęto cztery hipotezy badawcze:
+
+\begin{itemize}
+    \item \textbf{H1:} klaster Valkey osiąga większą przepustowość oraz niższe opóźnienia p95, p99 i p99.9 niż Redis Cluster przy takim samym przydziale zasobów CPU;
+    \item \textbf{H2:} samodzielnie zarządzany klaster Valkey może być tańszy od usługi zarządzanej przy porównywalnej wydajności i dostępności;
+    \item \textbf{H3:} czas odtworzenia mastera po awarii w rozwiązaniach zintegrowanych z Kubernetes jest krótszy niż w klasycznym podejściu Redis Sentinel oraz porównywalny z mechanizmami usług zarządzanych;
+    \item \textbf{H4:} samodzielnie utrzymywany klaster Valkey wymaga większego nakładu pracy operacyjnej niż usługa zarządzana, mimo potencjalnych korzyści wydajnościowych i kosztowych.
+\end{itemize}
+
+\section{Zakres i ograniczenia pracy}
+
+Zakres pracy obejmuje testy wydajnościowe, testy odpornościowe oraz analizę utrzymywalności. W części wydajnościowej badane są operacje odczytu, zapisu oraz mieszane scenariusze odczytu i zapisu. Zmiennymi niezależnymi są liczba vCPU przypisana do poda, rozmiar payloadu oraz proporcja typów operacji. Dla każdej konfiguracji wykonywana jest seria powtórzeń, a wyniki są analizowane z wykorzystaniem średniej, odchylenia standardowego oraz percentyli opóźnień. Takie podejście jest spójne z charakterem badań systemów in-memory, w których pojedyncza wartość średnia może ukrywać istotne problemy widoczne dopiero w ogonie rozkładu opóźnień.
+
+W części dotyczącej niezawodności i utrzymywalności uwzględniono scenariusze failover, presję na zasoby CPU i pamięć, aktualizację klastra podczas obciążenia, skalowanie horyzontalne oraz operacje backupu i odtwarzania. Scenariusze te zostały dobrane tak, aby odzwierciedlały zadania, z którymi administratorzy i zespoły platformowe spotykają się w środowiskach produkcyjnych. Analiza nie ogranicza się więc wyłącznie do parametrów szybkościowych, ale obejmuje również praktyczną ocenę trudności utrzymania badanego rozwiązania.
+
+Praca ma również ograniczenia. Testy wykonywane są w kontrolowanym środowisku laboratoryjnym, dlatego ich wyniki nie muszą wprost odpowiadać wszystkim możliwym konfiguracjom produkcyjnym. Na rezultaty mogą wpływać parametry klastra Kubernetes, zasoby komputera testowego, konfiguracja sieci, wersje obrazów kontenerowych oraz sposób działania narzędzia generującego obciążenie. Ponadto porównanie z usługą zarządzaną ma częściowo charakter black-box, ponieważ dostawcy chmurowi nie zawsze ujawniają szczegóły wewnętrznej implementacji mechanizmów failover, replikacji i backupu. Ograniczenia te są jednak typowe dla badań porównawczych systemów infrastrukturalnych i zostaną uwzględnione podczas interpretacji wyników.
 
 \section{Struktura pracy}
-Zarysuj strukturę swojej pracy dyplomowej. Ogólnie przedstawienie pracy. Przykładowo: ,,Praca dzieli się na $7$ rozdziałów (\dots)''. Rozdział \ref{ch:tematyka} dotyczy (\dots). Temat został rozwinięty~w~\ref{ch:organizacja}.
+
+Praca składa się z sześciu rozdziałów merytorycznych. Rozdział~\ref{ch:wstep} przedstawia kontekst problemu, przedmiot badań, cele pracy, hipotezy oraz zakres i ograniczenia opracowania. Rozdział~\ref{ch:tematyka} zawiera teoretyczne podstawy problematyki badań, w tym omówienie systemów cache'owania, architektury Redis i Valkey, modeli klastrowych oraz znaczenia zmian licencyjnych dla ekosystemu open-source. Rozdział~\ref{ch:organizacja} opisuje założenia metodologiczne, środowisko badawcze, wykorzystywane narzędzia, konfiguracje testowe oraz plan eksperymentów.
+
+W rozdziale~\ref{ch:wyniki} przedstawione zostaną wyniki pomiarów wydajnościowych, testów odpornościowych i analiz operacyjnych. Rozdział~\ref{ch:podsumowanie} będzie poświęcony syntetycznemu omówieniu rezultatów, weryfikacji hipotez badawczych oraz sformułowaniu wniosków wynikających z przeprowadzonych badań. Rozdział~\ref{ch:zakonczenie} zamknie pracę poprzez wskazanie najważniejszych osiągnięć, ograniczeń oraz możliwych kierunków dalszych badań.

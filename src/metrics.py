@@ -70,6 +70,26 @@ def extract_metric(
     return Metric(ops_sec, p50, p95, p99, p999, cpu_util, memory_usage)
 
 
+def extract_cpu_util_by_pod(
+    run_result: Dict[str, Any],
+    prom: Optional[Any] = None,
+) -> Dict[str, float]:
+    runtime = run_result.get("Runtime", {})
+    start_ms = runtime.get("Start time")
+    finish_ms = runtime.get("Finish time")
+
+    if prom is None or not start_ms or not finish_ms:
+        return {}
+
+    start_dt = datetime.fromtimestamp(start_ms / 1000, tz=timezone.utc)
+    end_dt = datetime.fromtimestamp(finish_ms / 1000, tz=timezone.utc)
+    try:
+        return mean_from_range(prom, CPU_QUERY, start_dt, end_dt)
+    except Exception as e:
+        print(f"  [warn] per-pod cpu query failed: {e}")
+        return {}
+
+
 def iter_run_results(doc: Dict[str, Any]) -> Iterable[Tuple[int, Dict[str, Any]]]:
     for i in range(1, 6):
         key = f"RUN #{i} RESULTS"

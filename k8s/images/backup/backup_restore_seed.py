@@ -181,7 +181,7 @@ def main() -> None:
     parser.add_argument("--seed-report", type=Path, default=None,
                         help="Path to seed report JSON (verify/cleanup mode)")
     parser.add_argument("--output", type=Path,
-                        default=Path("/work/results/report.json"))
+                        default=Path("/work/results/backup/report.json"))
     args = parser.parse_args()
 
     if args.run_id is None:

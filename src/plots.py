@@ -115,6 +115,65 @@ def plot_cpu_mem(agg: pd.DataFrame, out_dir: Path) -> None:
                 _save(fig, out_dir, f"mem_usage_{ratio}_{payload}kb")
 
 
+def _pod_sort_key(pod: str) -> tuple[str, int]:
+    prefix, _, suffix = pod.rpartition("-")
+    if suffix.isdigit():
+        return prefix, int(suffix)
+    return pod, -1
+
+
+def plot_cpu_util_per_pod(pod_cpu: pd.DataFrame, out_dir: Path) -> None:
+    """Grouped CPU utilization bars per pod and vCPU, one figure per (ratio, payload)."""
+    if pod_cpu.empty or pod_cpu["cpu_util"].isna().all():
+        return
+
+    agg = (
+        pod_cpu.groupby(["cpu", "payload", "ratio", "pod"], as_index=False)
+        .agg(
+            cpu_util_mean=("cpu_util", "mean"),
+            cpu_util_std=("cpu_util", "std"),
+        )
+    )
+
+    for ratio in sorted(agg["ratio"].unique()):
+        for payload in sorted(agg[agg["ratio"] == ratio]["payload"].unique()):
+            sub = agg[(agg["ratio"] == ratio) & (agg["payload"] == payload)]
+            cpus = sorted(sub["cpu"].unique())
+            pods = sorted(sub["pod"].unique(), key=_pod_sort_key)
+            if not cpus or not pods:
+                continue
+
+            fig, ax = plt.subplots(figsize=(10, 4.8))
+            x = np.arange(len(cpus))
+            width = min(0.8 / len(pods), 0.14)
+
+            for j, pod in enumerate(pods):
+                pod_sub = sub[sub["pod"] == pod].set_index("cpu")
+                means = [pod_sub.at[cpu, "cpu_util_mean"] if cpu in pod_sub.index else np.nan for cpu in cpus]
+                stds = [pod_sub.at[cpu, "cpu_util_std"] if cpu in pod_sub.index else 0.0 for cpu in cpus]
+                offset = (j - len(pods) / 2 + 0.5) * width
+                ax.bar(
+                    x + offset,
+                    means,
+                    width,
+                    yerr=stds,
+                    label=pod,
+                    edgecolor="black",
+                    linewidth=0.4,
+                    capsize=2,
+                )
+
+            ax.set_xticks(x)
+            ax.set_xticklabels([str(cpu) for cpu in cpus])
+            ax.set_xlabel("vCPU")
+            ax.set_ylabel("CPU cores used per pod")
+            ax.set_title(f"CPU utilization per pod  |  {ratio_label(ratio)}  |  {payload} KB")
+            ax.set_ylim(bottom=0)
+            ax.legend(ncol=min(len(pods), 3), fontsize=8)
+            fig.tight_layout()
+            _save(fig, out_dir, f"cpu_util_per_pod_{ratio}_{payload}kb")
+
+
 def plot_heatmap(agg: pd.DataFrame, out_dir: Path) -> None:
     """Heatmap of ops/sec across (payload x vCPU) for each ratio."""
     for ratio in sorted(agg["ratio"].unique()):
