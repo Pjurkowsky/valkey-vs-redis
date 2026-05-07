@@ -4,5 +4,6 @@ RUN pip install --no-cache-dir "redis[hiredis]"
 
 WORKDIR /work
 COPY consistency_check.py /work/consistency_check.py
+COPY split_brain_check.py /work/split_brain_check.py
 
 ENTRYPOINT ["python", "/work/consistency_check.py"]

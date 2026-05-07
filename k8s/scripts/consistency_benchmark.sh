@@ -7,7 +7,7 @@ IMAGE="${CONSISTENCY_IMAGE:-consistency_checker:1}"
 LOCAL_OUT="${1:-./results/consistency}"
 REMOTE_OUT="/work/results/consistency"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CHAOS_YAML="${CHAOS_YAML:-${SCRIPT_DIR}/../chaos/network-partition.yaml}"
+CHAOS_YAML="${CHAOS_YAML:-${SCRIPT_DIR}/../chaos/client-network-partition.yaml}"
 
 source "${SCRIPT_DIR}/pod_results.sh"
 
