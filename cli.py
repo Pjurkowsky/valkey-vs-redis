@@ -240,6 +240,28 @@ def cmd_backup(args: argparse.Namespace) -> None:
     print(f"\nPlots saved to {out_dir}/")
 
 
+def cmd_maxmemory(args: argparse.Namespace) -> None:
+    from src.maxmemory import (
+        analyse_maxmemory_runs,
+        plot_evictions_and_missing,
+        plot_memory_before_after,
+        print_maxmemory_summary,
+        save_maxmemory_csv,
+    )
+
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Loading maxmemory results from {args.input} ...")
+    results_df = analyse_maxmemory_runs(Path(args.input))
+
+    print_maxmemory_summary(results_df)
+    save_maxmemory_csv(results_df, out_dir)
+    plot_memory_before_after(results_df, out_dir)
+    plot_evictions_and_missing(results_df, out_dir)
+    print(f"\nPlots saved to {out_dir}/")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="cli.py",
@@ -266,7 +288,7 @@ def build_parser() -> argparse.ArgumentParser:
     # resilience
     p = sub.add_parser("resilience", help="Resilience analysis")
     p.add_argument("--input", required=True, help="Directory with resilience_*_run_*.json files")
-    p.add_argument("--scenario", required=True, choices=["cpu", "memory"],
+    p.add_argument("--scenario", required=True, choices=["cpu", "memory", "memory-extreme", "maxmemory"],
                    help="Stress scenario to analyse")
     p.add_argument("--output-dir", default=f"{PLOTS_DIR}/resilience", help="Output directory")
     p.set_defaults(func=cmd_resilience)
@@ -300,6 +322,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--input", required=True, help="Directory with backup_timing_*.json files")
     p.add_argument("--output-dir", default=f"{PLOTS_DIR}/backup", help="Output directory")
     p.set_defaults(func=cmd_backup)
+
+    # maxmemory
+    p = sub.add_parser("maxmemory", help="Maxmemory eviction analysis")
+    p.add_argument("--input", required=True, help="Directory with maxmemory_summary_*.json files")
+    p.add_argument("--output-dir", default=f"{PLOTS_DIR}/maxmemory", help="Output directory")
+    p.set_defaults(func=cmd_maxmemory)
 
     return parser
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCENARIO="${1:?Usage: $0 <cpu|memory> [output_dir]}"
+SCENARIO="${1:?Usage: $0 <cpu|memory|memory-extreme> [output_dir]}"
 LOCAL_OUT="${2:-./results/resilience}"
 
 N="${N:-5}"
@@ -35,8 +35,14 @@ case "${SCENARIO}" in
     CHAOS_KIND="stresschaos"
     FILE_PREFIX="resilience_mem"
     ;;
+  memory-extreme)
+    CHAOS_YAML="${SCRIPT_DIR}/../chaos/stress-memory-extreme.yaml"
+    CHAOS_NAME="valkey-memory-extreme-stress"
+    CHAOS_KIND="stresschaos"
+    FILE_PREFIX="resilience_mem_extreme"
+    ;;
   *)
-    echo "ERROR: Unknown scenario '${SCENARIO}'. Use 'cpu' or 'memory'."
+    echo "ERROR: Unknown scenario '${SCENARIO}'. Use 'cpu', 'memory', or 'memory-extreme'."
     exit 1
     ;;
 esac

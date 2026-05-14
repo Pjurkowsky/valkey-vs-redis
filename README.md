@@ -269,16 +269,45 @@ Allocates 900 MB on one Valkey pod for 60s (against the 1 GB maxmemory limit):
 ./k8s/scripts/resilience_benchmark.sh memory ./results/resilience
 ```
 
+### Run extreme memory stress test
+
+Allocates 1800 MB per worker with 2 workers on one Valkey pod for 60s:
+
+```bash
+./k8s/scripts/resilience_benchmark.sh memory-extreme ./results/resilience
+```
+
 ### Analyse resilience results
 
 ```bash
 python cli.py resilience --input ./results/resilience --scenario cpu --output-dir ./plots/resilience
 python cli.py resilience --input ./results/resilience --scenario memory --output-dir ./plots/resilience
+python cli.py resilience --input ./results/resilience --scenario memory-extreme --output-dir ./plots/resilience
 ```
 
 Produces per-run time series plots, comparison charts, and `resilience_{scenario}_summary.csv` with:
 degradation duration, ops/sec drop (%), min ops/sec during stress, peak p99/p99.9,
 recovery status, and pod restart detection (OOM).
+
+## Maxmemory Testing
+
+Measures Valkey's configured `maxmemory 1gb` behavior by writing more data than the
+cluster can retain and checking eviction counters plus a sample of written keys.
+
+```bash
+N=1 ./k8s/scripts/maxmemory_benchmark.sh 4096 ./results/maxmemory
+```
+
+With 3 masters and `maxmemory 1gb`, `4096` MB of 1 KB values should push the cluster
+past its retainable dataset size and trigger `allkeys-lru` evictions.
+
+To measure resilience while maxmemory pressure is happening, run memtier continuously
+and start the maxmemory writer after the steady-state window:
+
+```bash
+N=1 ./k8s/scripts/maxmemory_resilience_benchmark.sh 4096 ./results/maxmemory_resilience
+python cli.py resilience --input ./results/maxmemory_resilience --scenario maxmemory --output-dir ./plots/maxmemory_resilience
+```
 
 ## Zero-Downtime Upgrade Testing
 
@@ -363,10 +392,11 @@ chart, and `consistency_summary.csv` with mean +/- std for:
 
 ## Horizontal Scaling / Resharding
 
-Measures the operational impact of adding a new shard to the Valkey cluster under continuous load.
-The test scales from 3 to 4 shards via `helm upgrade`, then runs `valkey-cli --cluster rebalance`
-to redistribute hash slots. Memtier captures the traffic impact during slot migration (ASK/MOVED
-redirections, latency spikes). After each run, the cluster is restored to 3 shards.
+Measures the operational impact of changing shard count in both directions under continuous
+load. The test first scales from 3 to 4 shards and observes whether the chart/init
+auto-rebalances slots onto the new shard, then runs a second workload while moving slots
+off the extra shard and scaling back from 4 to 3 shards. Memtier captures the traffic
+impact during slot migration (ASK/MOVED redirections, latency spikes).
 
 ### Run resharding benchmark
 
@@ -374,14 +404,32 @@ redirections, latency spikes). After each run, the cluster is restored to 3 shar
 ./k8s/scripts/reshard_benchmark.sh ./results/reshard
 ```
 
-Override the Helm chart path, values file, or number of runs:
+Each memtier phase runs for 120s by default. Override the Helm chart path, values file,
+number of runs, or test time:
 
 ```bash
-HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 ./k8s/scripts/reshard_benchmark.sh ./results/reshard
+HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 TEST_TIME=120 ./k8s/scripts/reshard_benchmark.sh ./results/reshard
 ```
 
-Each run starts a 5-minute memtier load, waits 30s for steady state, scales up to 4 shards,
-rebalances slots, waits for memtier to finish, then restores the cluster to 3 shards.
+Each run has two measured phases:
+
+- **Reshard up**: starts memtier, waits 30s for steady state, checks that no Chaos Mesh
+  experiment is active, patches the StatefulSet rolling-update partition to `6`, scales
+  to 4 shards, waits for `valkey-6` and `valkey-7`, and observes the chart/init
+  auto-rebalance instead of running a manual rebalance command.
+- **Reshard down**: starts a second memtier run, waits 30s for steady state, moves slots
+  off the extra master back across the original masters, removes the extra cluster nodes,
+  and only then scales the Helm release back to 3 shards.
+
+The partition patch keeps existing pods `valkey-0` through `valkey-5` from being restarted
+while the benchmark is measuring slot movement.
+
+### Check cluster state
+
+```bash
+kubectl exec -n vk valkey-0 -- valkey-cli cluster info
+kubectl exec -n vk valkey-0 -- valkey-cli cluster nodes
+```
 
 ### Analyse resharding results
 
@@ -389,14 +437,20 @@ rebalances slots, waits for memtier to finish, then restores the cluster to 3 sh
 python cli.py reshard --input ./results/reshard --output-dir ./plots/reshard
 ```
 
-Produces per-run time series plots (ops/sec and latency with disruption windows highlighted),
-a comparison bar chart, and `reshard_summary.csv` with mean +/- std for:
+Produces per-phase time series plots (ops/sec and latency with reshard start/end markers
+and line markers for scale/auto-rebalance subphases),
+a duration-only stacked comparison chart (`reshard_comparison.png`) with reshard-up and
+reshard-down panels side by side, and `reshard_summary.csv` with raw timing columns for:
 
-- **Rebalance duration (s)** — wall time of slot redistribution
-- **Scale-up duration (s)** — time for new pods to become Ready
-- **Total disrupted time (ms)** — sum of ops/sec dips below 80% of baseline
-- **Ops lost** — total operations lost during the reshard
-- **Peak p99 during reshard** vs baseline
+- **Operation duration (s)** — total measured reshard operation time
+- **Scale / auto-rebalance duration (s)** — reshard-up timing breakdown
+- **Move slots / delete nodes / scale-down duration (s)** — reshard-down timing breakdown
+- **Wait/check duration (s)** — time between steps spent waiting for cluster health checks
+- **Auto-rebalance status and slot count** — whether auto-rebalance was detected and
+  how many slots landed on the new master
+
+Each up run also writes `reshard_auto_rebalance_N.csv`, a poll trace of slot count on the
+new master and cluster health while auto-rebalance is being observed.
 
 ## Backup & Restore Testing
 

@@ -209,6 +209,10 @@ def plot_upgrade_timeseries(
     for i, (ts, windows, (_, row)) in enumerate(
         zip(all_ts, all_windows, results_df.iterrows())
     ):
+        if ts.empty or "second" not in ts.columns or "count" not in ts.columns:
+            print(f"  [warn] Skipping time-series plot for {row.get('file', f'run {i + 1}')} (no Time-Serie data)")
+            continue
+
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 6), sharex=True)
 
         ax1.plot(ts["second"], ts["count"], linewidth=0.6, color="#4c72b0")

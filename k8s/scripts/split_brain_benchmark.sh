@@ -11,12 +11,13 @@ set -euo pipefail
 
 N="${N:-5}"
 NS="vk"
-IMAGE="${CONSISTENCY_IMAGE:-consistency_checker:1}"
+IMAGE="${CONSISTENCY_IMAGE:-consistency_checker:2}"
 LOCAL_OUT="${1:-./results/split_brain}"
 REMOTE_OUT="/work/results/split_brain"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHAOS_YAML="${CHAOS_YAML:-${SCRIPT_DIR}/../chaos/split-brain-partition.yaml}"
 CHAOS_NAME="valkey-split-brain"
+VALKEY_POD_SELECTOR="${VALKEY_POD_SELECTOR:-app.kubernetes.io/name=valkey}"
 
 source "${SCRIPT_DIR}/pod_results.sh"
 
@@ -72,8 +73,9 @@ esac
 # -- Topology discovery --------------------------------------------------
 
 discover_minority() {
-  # Pick one shard (master + its replica) as the minority partition.
-  # Returns two pod names separated by newline.
+  # Isolate one master as the minority partition while leaving its replica
+  # in the majority partition so the majority can promote it during the split.
+  # Returns one pod name.
   local nodes_output
   nodes_output="$(kubectl exec valkey-0 -n "${NS}" -- \
     valkey-cli "${VALKEY_CLI_ARGS[@]}" cluster nodes 2>/dev/null)"
@@ -92,18 +94,15 @@ discover_minority() {
     return 1
   fi
 
+  if [[ -z "${replica_pod}" ]]; then
+    echo "ERROR: could not find a replica for master ${target_master_id}" >&2
+    return 1
+  fi
+
   local master_pod_name
   master_pod_name="$(resolve_address_to_pod "${target_master_pod}")"
 
-  local replica_pod_name=""
-  if [[ -n "${replica_pod}" ]]; then
-    replica_pod_name="$(resolve_address_to_pod "${replica_pod}")"
-  fi
-
   echo "${master_pod_name}"
-  if [[ -n "${replica_pod_name}" ]]; then
-    echo "${replica_pod_name}"
-  fi
 }
 
 resolve_address_to_pod() {
@@ -126,8 +125,13 @@ resolve_address_to_pod() {
 label_pods() {
   local -a minority_pods=("$@")
   local all_pods
-  all_pods="$(kubectl get pods -n "${NS}" -l app.kubernetes.io/component=valkey \
+  all_pods="$(kubectl get pods -n "${NS}" -l "${VALKEY_POD_SELECTOR}" \
     -o jsonpath='{.items[*].metadata.name}')"
+
+  if [[ -z "${all_pods}" ]]; then
+    echo "ERROR: no Valkey pods matched selector '${VALKEY_POD_SELECTOR}'" >&2
+    return 1
+  fi
 
   for pod in ${all_pods}; do
     local is_minority=false
@@ -147,7 +151,7 @@ label_pods() {
 }
 
 remove_labels() {
-  kubectl label pods -n "${NS}" -l app.kubernetes.io/component=valkey chaos-side- 2>/dev/null || true
+  kubectl label pods -n "${NS}" -l chaos-side chaos-side- 2>/dev/null || true
 }
 
 wait_for_networkchaos_injected() {
@@ -214,7 +218,7 @@ for i in $(seq 1 "${N}"); do
   echo "[${i}] Labeling pods (minority/majority)..."
   label_pods "${MINORITY_PODS[@]}"
 
-  kubectl get pods -n "${NS}" -l app.kubernetes.io/component=valkey \
+  kubectl get pods -n "${NS}" -l "${VALKEY_POD_SELECTOR}" \
     --show-labels --no-headers | grep -E 'chaos-side' || true
 
   # Start checker pod

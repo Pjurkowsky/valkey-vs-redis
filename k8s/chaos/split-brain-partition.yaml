@@ -10,6 +10,7 @@ spec:
     namespaces:
       - vk
     labelSelectors:
+      app.kubernetes.io/name: valkey
       chaos-side: minority
   direction: both
   target:
@@ -18,5 +19,6 @@ spec:
       namespaces:
         - vk
       labelSelectors:
+        app.kubernetes.io/name: valkey
         chaos-side: majority
   duration: "90s"

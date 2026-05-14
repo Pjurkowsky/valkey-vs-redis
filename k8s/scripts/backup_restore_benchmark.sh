@@ -7,11 +7,41 @@ N="${N:-3}"
 NS="vk"
 IMAGE="${BACKUP_IMAGE:-backup_restore:1}"
 REMOTE_OUT="/work/results/backup"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 HOST="valkey.vk.svc.cluster.local"
 PORT=6379
 
+source "${SCRIPT_DIR}/pod_results.sh"
+
 mkdir -p "${LOCAL_OUT}"
+
+wait_for_command_pod() {
+  local pod_name="$1"
+  local timeout_s="$2"
+
+  if ! wait_for_pod_marker "${NS}" "${pod_name}" "${POD_DONE_FILE}" "${timeout_s}"; then
+    echo "ERROR: pod ${pod_name} did not signal completion." >&2
+    print_pod_debug_info "${NS}" "${pod_name}"
+    return 1
+  fi
+
+  local exit_code
+  exit_code="$(read_pod_exit_code "${NS}" "${pod_name}" "${POD_EXIT_CODE_FILE}")"
+  if [[ -z "${exit_code}" || "${exit_code}" != "0" ]]; then
+    echo "ERROR: pod ${pod_name} exited with code ${exit_code:-unknown}." >&2
+    print_pod_debug_info "${NS}" "${pod_name}"
+    return 1
+  fi
+}
+
+wait_for_pod_ready() {
+  local pod_name="$1"
+  local timeout_s="${2:-60}"
+
+  kubectl wait pod/"${pod_name}" -n "${NS}" \
+    --for=condition=Ready --timeout="${timeout_s}s"
+}
 
 wait_cluster_healthy() {
   local max_wait="${1:-300}"
@@ -107,16 +137,22 @@ for i in $(seq 1 "${N}"); do
     --image="${IMAGE}" \
     --restart=Never \
     --command -- \
-    python /work/backup_restore_seed.py \
-      --mode seed \
-      --host "${HOST}" --port "${PORT}" \
-      --target-mb "${SIZE_MB}" \
-      --run-id "${RUN_ID}" \
-      --output "${REMOTE_OUT}/${SEED_REPORT}"
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      python /work/backup_restore_seed.py \
+        --mode seed \
+        --host '${HOST}' --port '${PORT}' \
+        --target-mb '${SIZE_MB}' \
+        --run-id '${RUN_ID}' \
+        --output '${REMOTE_OUT}/${SEED_REPORT}'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
 
   echo "[${i}] Waiting for seed to complete..."
-  kubectl wait pod/"${SEED_POD}" -n "${NS}" \
-    --for=jsonpath='{.status.phase}'=Succeeded --timeout=1800s
+  wait_for_command_pod "${SEED_POD}" 1800
 
   kubectl cp "${NS}/${SEED_POD}:${REMOTE_OUT}/${SEED_REPORT}" "${LOCAL_OUT}/${SEED_REPORT}"
   kubectl delete pod "${SEED_POD}" -n "${NS}" --ignore-not-found
@@ -132,7 +168,7 @@ for i in $(seq 1 "${N}"); do
   # -- Kill phase --
   echo "[${i}] Killing all Valkey pods (PVCs preserved)..."
   DELETE_TS="$(date +%s)"
-  kubectl delete pods -n "${NS}" -l app.kubernetes.io/component=valkey --wait=false
+  kubectl delete pods -n "${NS}" -l app.kubernetes.io/name=valkey --wait=false
 
   echo "[${i}] Waiting for pods to terminate..."
   sleep 10
@@ -152,17 +188,25 @@ for i in $(seq 1 "${N}"); do
     --image="${IMAGE}" \
     --restart=Never \
     --command -- \
-    python /work/backup_restore_seed.py \
-      --mode verify \
-      --host "${HOST}" --port "${PORT}" \
-      --seed-report "${REMOTE_OUT}/${SEED_REPORT}" \
-      --output "${REMOTE_OUT}/${VERIFY_REPORT}"
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      while [ ! -f '${REMOTE_OUT}/${SEED_REPORT}' ]; do sleep 1; done
+      python /work/backup_restore_seed.py \
+        --mode verify \
+        --host '${HOST}' --port '${PORT}' \
+        --seed-report '${REMOTE_OUT}/${SEED_REPORT}' \
+        --output '${REMOTE_OUT}/${VERIFY_REPORT}'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
 
+  wait_for_pod_ready "${VERIFY_POD}" 60
   kubectl cp "${LOCAL_OUT}/${SEED_REPORT}" "${NS}/${VERIFY_POD}:${REMOTE_OUT}/${SEED_REPORT}"
 
   echo "[${i}] Waiting for verify to complete..."
-  kubectl wait pod/"${VERIFY_POD}" -n "${NS}" \
-    --for=jsonpath='{.status.phase}'=Succeeded --timeout=600s
+  wait_for_command_pod "${VERIFY_POD}" 600
 
   kubectl cp "${NS}/${VERIFY_POD}:${REMOTE_OUT}/${VERIFY_REPORT}" "${LOCAL_OUT}/${VERIFY_REPORT}"
   kubectl delete pod "${VERIFY_POD}" -n "${NS}" --ignore-not-found
@@ -170,7 +214,7 @@ for i in $(seq 1 "${N}"); do
   # -- Timing report --
   SEED_KEYS="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['written_keys'])" 2>/dev/null || echo 0)"
   SEED_DUR="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['seed_duration_s'])" 2>/dev/null || echo 0)"
-  INTEGRITY="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}'))['integrity_ok'])" 2>/dev/null || echo false)"
+  INTEGRITY="$(python3 -c "import json; print(json.dumps(bool(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}'))['integrity_ok'])))" 2>/dev/null || echo false)"
 
   cat > "${LOCAL_OUT}/${TIMING_FILE}" <<EOF
 {
@@ -199,15 +243,23 @@ EOF
     --image="${IMAGE}" \
     --restart=Never \
     --command -- \
-    python /work/backup_restore_seed.py \
-      --mode cleanup \
-      --host "${HOST}" --port "${PORT}" \
-      --seed-report "${REMOTE_OUT}/${SEED_REPORT}"
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      while [ ! -f '${REMOTE_OUT}/${SEED_REPORT}' ]; do sleep 1; done
+      python /work/backup_restore_seed.py \
+        --mode cleanup \
+        --host '${HOST}' --port '${PORT}' \
+        --seed-report '${REMOTE_OUT}/${SEED_REPORT}'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
 
+  wait_for_pod_ready "${CLEANUP_POD}" 60
   kubectl cp "${LOCAL_OUT}/${SEED_REPORT}" "${NS}/${CLEANUP_POD}:${REMOTE_OUT}/${SEED_REPORT}"
 
-  kubectl wait pod/"${CLEANUP_POD}" -n "${NS}" \
-    --for=jsonpath='{.status.phase}'=Succeeded --timeout=600s 2>/dev/null || true
+  wait_for_command_pod "${CLEANUP_POD}" 600 || true
   kubectl delete pod "${CLEANUP_POD}" -n "${NS}" --ignore-not-found
 
   echo "[${i}] Done."

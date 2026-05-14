@@ -4,6 +4,7 @@ set -euo pipefail
 N="${N:-5}"
 NS="vk"
 IMAGE="${MEMTIER_IMAGE:-memtier_k8s:1}"
+PROBE_IMAGE="${PROBE_IMAGE:-docker.io/valkey/valkey:9.0.1}"
 LOCAL_OUT="${1:-./results/upgrade}"
 REMOTE_OUT="/work/results/upgrade"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -25,6 +26,45 @@ STEADY_STATE_WAIT=30
 
 mkdir -p "${LOCAL_OUT}"
 
+wait_cluster_client_ready() {
+  local max_wait="${1:-300}"
+  local elapsed=0
+
+  echo "  Waiting for Valkey cluster client readiness (max ${max_wait}s)..."
+  while [[ "${elapsed}" -lt "${max_wait}" ]]; do
+    local info state slots_ok slots_assigned
+    info="$(kubectl exec valkey-0 -n "${NS}" -- \
+      valkey-cli cluster info 2>/dev/null || true)"
+    state="$(awk -F: '$1=="cluster_state" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
+    slots_ok="$(awk -F: '$1=="cluster_slots_ok" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
+    slots_assigned="$(awk -F: '$1=="cluster_slots_assigned" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
+
+    if [[ "${state}" == "ok" && "${slots_ok}" == "16384" && "${slots_assigned}" == "16384" ]]; then
+      local probe_key="upgrade:probe:$(date +%s%N)"
+      if kubectl run "upgrade-probe-${elapsed}" -n "${NS}" \
+        --image="${PROBE_IMAGE}" \
+        --restart=Never \
+        --quiet \
+        --rm \
+        --attach \
+        --command -- \
+        /bin/sh -c "valkey-cli -c -h '${HOST}' -p '${PORT}' set '${probe_key}' ok >/dev/null && test \"\$(valkey-cli -c -h '${HOST}' -p '${PORT}' get '${probe_key}')\" = ok && valkey-cli -c -h '${HOST}' -p '${PORT}' del '${probe_key}' >/dev/null" \
+        >/dev/null 2>&1; then
+        echo "  Cluster client-ready after ${elapsed}s"
+        return 0
+      fi
+    fi
+
+    sleep 5
+    elapsed=$((elapsed + 5))
+  done
+
+  echo "ERROR: Valkey cluster was not client-ready after ${max_wait}s" >&2
+  kubectl exec valkey-0 -n "${NS}" -- valkey-cli cluster info || true
+  kubectl exec valkey-0 -n "${NS}" -- valkey-cli cluster slots || true
+  return 1
+}
+
 for i in $(seq 1 "${N}"); do
   POD_NAME="memtier-upgrade-${i}"
   OUT_FILE="upgrade_run_${i}.json"
@@ -34,6 +74,8 @@ for i in $(seq 1 "${N}"); do
   echo "=========================================="
 
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+
+  wait_cluster_client_ready 300
 
   echo "[${i}] Starting memtier pod (test-time=${TEST_TIME}s)..."
   kubectl run "${POD_NAME}" -n "${NS}" \
@@ -72,7 +114,7 @@ for i in $(seq 1 "${N}"); do
   helm upgrade valkey "${HELM_CHART_PATH}" \
     -n "${NS}" \
     -f "${VALUES_FILE}" \
-    --set "podAnnotations.restart-trigger=${TRIGGER}" \
+    --set-string "podAnnotations.restart-trigger=${TRIGGER}" \
     --wait=false
 
   echo "[${i}] Waiting for memtier to finish..."
@@ -97,6 +139,7 @@ for i in $(seq 1 "${N}"); do
 
   echo "[${i}] Waiting for Valkey rollout to fully complete..."
   kubectl rollout status sts/valkey -n "${NS}" --timeout=300s
+  wait_cluster_client_ready 300
   sleep 15
 
   echo "[${i}] Done. Result: ${LOCAL_OUT}/${OUT_FILE}"

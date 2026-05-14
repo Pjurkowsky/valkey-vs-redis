@@ -15,16 +15,24 @@ VALUES_FILE="${VALUES_FILE:-./k8s/manifests/values.yaml}"
 
 HOST="valkey.vk.svc.cluster.local"
 PORT=6379
+ADMIN_HOST="valkey-0.valkey-headless.${NS}.svc.cluster.local"
+CLUSTER_ENDPOINT="${ADMIN_HOST}:${PORT}"
 THREADS=4
 CLIENTS=16
-TEST_TIME=300
+TEST_TIME="${TEST_TIME:-120}"
 KEYS=100000
 DATA_SIZE=1024
 RATIO="1:1"
 STEADY_STATE_WAIT=30
+AUTO_REBALANCE_TIMEOUT="${AUTO_REBALANCE_TIMEOUT:-180}"
 
 ORIGINAL_SHARDS=3
 TARGET_SHARDS=4
+REPLICAS_PER_SHARD="${REPLICAS_PER_SHARD:-1}"
+ORIGINAL_NODE_COUNT=$((ORIGINAL_SHARDS * (1 + REPLICAS_PER_SHARD)))
+TARGET_NODE_COUNT=$((TARGET_SHARDS * (1 + REPLICAS_PER_SHARD)))
+NEW_NODE_START="${ORIGINAL_NODE_COUNT}"
+NEW_NODE_END=$((TARGET_NODE_COUNT - 1))
 
 mkdir -p "${LOCAL_OUT}"
 
@@ -33,73 +41,501 @@ get_master_node_id() {
   kubectl exec "${pod}" -n "${NS}" -- valkey-cli cluster myid 2>/dev/null | tr -d '[:space:]'
 }
 
-restore_cluster() {
-  echo "  [restore] Attempting graceful restore to ${ORIGINAL_SHARDS} shards..."
+cluster_info() {
+  kubectl exec valkey-0 -n "${NS}" -- valkey-cli cluster info 2>/dev/null
+}
 
-  local new_master_pod="valkey-${ORIGINAL_SHARDS}"
-  local new_master_id
-  new_master_id="$(get_master_node_id "${new_master_pod}" 2>/dev/null || echo "")"
+cluster_nodes() {
+  kubectl exec valkey-0 -n "${NS}" -- valkey-cli cluster nodes 2>/dev/null
+}
 
-  if [[ -z "${new_master_id}" ]]; then
-    echo "  [restore] New shard pod not found or not responding, skipping graceful reshard."
-    echo "  [restore] Falling back to helm reinstall..."
-    helm uninstall valkey -n "${NS}" --wait 2>/dev/null || true
-    sleep 10
-    helm install valkey "${HELM_CHART_PATH}" -n "${NS}" -f "${VALUES_FILE}"
-    kubectl rollout status sts/valkey -n "${NS}" --timeout=300s
-    sleep 20
-    return
+cluster_info_field() {
+  local field="$1"
+  cluster_info | awk -F: -v field="${field}" '$1 == field {gsub(/\r/, "", $2); print $2}'
+}
+
+cluster_check() {
+  kubectl exec valkey-0 -n "${NS}" -- \
+    valkey-cli --cluster check "${CLUSTER_ENDPOINT}" 2>&1
+}
+
+cluster_is_healthy_now() {
+  local state slots_ok slots_assigned
+  state="$(cluster_info_field cluster_state || true)"
+  slots_ok="$(cluster_info_field cluster_slots_ok || true)"
+  slots_assigned="$(cluster_info_field cluster_slots_assigned || true)"
+
+  [[ "${state}" == "ok" && "${slots_ok}" == "16384" && "${slots_assigned}" == "16384" ]] \
+    && cluster_check >/dev/null 2>&1
+}
+
+fix_cluster_slots() {
+  echo "  Running valkey-cli --cluster fix to clear open/importing/migrating slots..."
+  kubectl exec valkey-0 -n "${NS}" -- \
+    valkey-cli --cluster fix "${CLUSTER_ENDPOINT}" \
+      --cluster-yes 2>&1
+}
+
+wait_cluster_healthy() {
+  local max_wait="${1:-300}"
+  local waited=0
+  local state slots_ok slots_assigned check_output
+
+  echo "  Waiting for cluster_state=ok, all slots covered, and no open slots (max ${max_wait}s)..."
+  while [[ "${waited}" -lt "${max_wait}" ]]; do
+    state="$(cluster_info_field cluster_state || true)"
+    slots_ok="$(cluster_info_field cluster_slots_ok || true)"
+    slots_assigned="$(cluster_info_field cluster_slots_assigned || true)"
+
+    if [[ "${state}" == "ok" && "${slots_ok}" == "16384" && "${slots_assigned}" == "16384" ]]; then
+      if check_output="$(cluster_check)"; then
+        return 0
+      fi
+    fi
+
+    sleep 5
+    waited=$((waited + 5))
+  done
+
+  echo "ERROR: Cluster did not become healthy after ${max_wait}s" >&2
+  cluster_info || true
+  cluster_check || true
+  cluster_nodes || true
+  return 1
+}
+
+ensure_cluster_clean() {
+  local max_wait="${1:-300}"
+
+  if wait_cluster_healthy "${max_wait}"; then
+    return 0
   fi
 
-  local target_id
-  target_id="$(get_master_node_id valkey-0)"
+  fix_cluster_slots || true
+  sleep 5
+  wait_cluster_healthy "${max_wait}"
+}
 
+assert_no_chaos_experiments() {
+  local active
+  active="$(kubectl get podchaos,networkchaos,stresschaos -A --no-headers 2>/dev/null || true)"
+
+  if [[ -n "${active}" ]]; then
+    echo "ERROR: Chaos Mesh experiments are present. Remove them before resharding:" >&2
+    echo "${active}" >&2
+    return 1
+  fi
+}
+
+patch_rollout_partition() {
+  local partition="$1"
+  echo "  Setting StatefulSet rolling-update partition=${partition}"
+  kubectl patch sts valkey -n "${NS}" --type=merge \
+    -p "{\"spec\":{\"updateStrategy\":{\"type\":\"RollingUpdate\",\"rollingUpdate\":{\"partition\":${partition}}}}}" \
+    >/dev/null
+}
+
+wait_for_pods_ready() {
+  local start="$1"
+  local end="$2"
+  local ordinal
+
+  for ordinal in $(seq "${start}" "${end}"); do
+    kubectl wait "pod/valkey-${ordinal}" -n "${NS}" \
+      --for=condition=Ready \
+      --timeout=300s
+  done
+}
+
+wait_for_pods_absent() {
+  local start="$1"
+  local end="$2"
+  local timeout="${3:-300}"
+  local ordinal deadline
+
+  for ordinal in $(seq "${start}" "${end}"); do
+    deadline=$((SECONDS + timeout))
+    while kubectl get "pod/valkey-${ordinal}" -n "${NS}" >/dev/null 2>&1; do
+      if (( SECONDS >= deadline )); then
+        echo "ERROR: pod/valkey-${ordinal} still exists after ${timeout}s" >&2
+        return 1
+      fi
+      sleep 2
+    done
+  done
+}
+
+extra_pods_present() {
+  local ordinal
+
+  for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
+    if kubectl get "pod/valkey-${ordinal}" -n "${NS}" >/dev/null 2>&1; then
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+wait_for_new_nodes_known() {
+  local max_wait="${1:-120}"
+  local waited=0
+  local ordinal nodes found
+
+  echo "  Waiting for new nodes valkey-${NEW_NODE_START}..valkey-${NEW_NODE_END} to join cluster gossip..."
+  while [[ "${waited}" -lt "${max_wait}" ]]; do
+    nodes="$(cluster_nodes || true)"
+    found=0
+
+    for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
+      if grep -q "valkey-${ordinal}\.valkey-headless" <<<"${nodes}"; then
+        found=$((found + 1))
+      fi
+    done
+
+    if [[ "${found}" -eq "$((NEW_NODE_END - NEW_NODE_START + 1))" ]]; then
+      return 0
+    fi
+
+    sleep 2
+    waited=$((waited + 2))
+  done
+
+  echo "ERROR: New nodes did not join cluster gossip after ${max_wait}s" >&2
+  cluster_nodes || true
+  return 1
+}
+
+node_id_for_pod() {
+  local pod="$1"
+  cluster_nodes | awk -v pod="${pod}" '$0 ~ pod "\\.valkey-headless" {print $1; exit}'
+}
+
+node_flags_for_pod() {
+  local pod="$1"
+  cluster_nodes | awk -v pod="${pod}" '$0 ~ pod "\\.valkey-headless" {print $3; exit}'
+}
+
+original_master_ids() {
+  cluster_nodes | awk -v max_ordinal="${NEW_NODE_START}" '
+    /master/ && !/fail/ {
+      for (i = 0; i < max_ordinal; i++) {
+        if ($0 ~ "valkey-" i "\\.valkey-headless") {
+          print $1
+          break
+        }
+      }
+    }
+  '
+}
+
+slot_count_for_node_id() {
+  local node_id="$1"
+  cluster_nodes | awk -v node_id="${node_id}" '
+    $1 == node_id {
+      for (i = 9; i <= NF; i++) {
+        if ($i ~ /^[0-9]+-[0-9]+$/) {
+          split($i, range, "-")
+          total += range[2] - range[1] + 1
+        } else if ($i ~ /^[0-9]+$/) {
+          total += 1
+        }
+      }
+      print total + 0
+      found = 1
+    }
+    END {
+      if (!found) {
+        print 0
+      }
+    }
+  '
+}
+
+json_number_or_null() {
+  local value="${1:-0}"
+  if [[ "${value}" =~ ^[0-9]+$ && "${value}" -gt 0 ]]; then
+    echo "${value}"
+  else
+    echo "null"
+  fi
+}
+
+relative_or_null() {
+  local value="${1:-0}"
+  local base="$2"
+  if [[ "${value}" =~ ^[0-9]+$ && "${value}" -gt 0 ]]; then
+    echo "$((value - base))"
+  else
+    echo "null"
+  fi
+}
+
+observe_auto_rebalance() {
+  local new_master_id="$1"
+  local expected_slots="$2"
+  local max_wait="$3"
+  local memtier_start="$4"
+  local trace_file="$5"
+  local waited=0 now slots state slots_ok slots_assigned
+
+  AUTO_REBALANCE_DETECTED=false
+  AUTO_REBALANCE_STATUS="timeout"
+  AUTO_REBALANCE_START=0
+  AUTO_REBALANCE_END=0
+  AUTO_REBALANCE_DURATION=0
+  AUTO_REBALANCE_FINAL_SLOTS=0
+
+  echo "timestamp,second,slots_on_extra_master,cluster_state,cluster_slots_ok,cluster_slots_assigned" > "${trace_file}"
+  echo "  Observing chart auto-rebalance for up to ${max_wait}s..."
+
+  while [[ "${waited}" -le "${max_wait}" ]]; do
+    now="$(date +%s)"
+    slots="$(slot_count_for_node_id "${new_master_id}" || echo 0)"
+    state="$(cluster_info_field cluster_state || echo unknown)"
+    slots_ok="$(cluster_info_field cluster_slots_ok || echo unknown)"
+    slots_assigned="$(cluster_info_field cluster_slots_assigned || echo unknown)"
+    AUTO_REBALANCE_FINAL_SLOTS="${slots}"
+
+    printf "%s,%s,%s,%s,%s,%s\n" \
+      "${now}" "$((now - memtier_start))" "${slots}" "${state}" "${slots_ok}" "${slots_assigned}" \
+      >> "${trace_file}"
+
+    if [[ "${slots}" -ge "${expected_slots}" ]] && cluster_is_healthy_now; then
+      AUTO_REBALANCE_END="${now}"
+      if [[ "${AUTO_REBALANCE_DETECTED}" == "false" ]]; then
+        AUTO_REBALANCE_DETECTED=true
+        AUTO_REBALANCE_STATUS="already_complete"
+        AUTO_REBALANCE_START="${now}"
+      else
+        AUTO_REBALANCE_STATUS="complete"
+      fi
+      AUTO_REBALANCE_DURATION=$((AUTO_REBALANCE_END - AUTO_REBALANCE_START))
+      echo "  Auto-rebalance ${AUTO_REBALANCE_STATUS}; extra master has ${slots}/${expected_slots} slots."
+      return 0
+    fi
+
+    if [[ "${slots}" -gt 0 && "${AUTO_REBALANCE_DETECTED}" == "false" ]]; then
+      AUTO_REBALANCE_DETECTED=true
+      AUTO_REBALANCE_STATUS="in_progress"
+      AUTO_REBALANCE_START="${now}"
+      echo "  Auto-rebalance detected at t=$((now - memtier_start))s with ${slots} slots on extra master."
+    fi
+
+    sleep 2
+    waited=$((waited + 2))
+  done
+
+  AUTO_REBALANCE_END="$(date +%s)"
+  if [[ "${AUTO_REBALANCE_DETECTED}" == "true" ]]; then
+    AUTO_REBALANCE_DURATION=$((AUTO_REBALANCE_END - AUTO_REBALANCE_START))
+    AUTO_REBALANCE_STATUS="partial"
+  fi
+
+  echo "  Auto-rebalance ${AUTO_REBALANCE_STATUS}; extra master has ${AUTO_REBALANCE_FINAL_SLOTS}/${expected_slots} slots."
+  return 1
+}
+
+extra_master_id() {
+  local ordinal pod flags
+
+  for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
+    pod="valkey-${ordinal}"
+    flags="$(node_flags_for_pod "${pod}" || true)"
+    if [[ "${flags}" == *master* ]]; then
+      node_id_for_pod "${pod}"
+      return 0
+    fi
+  done
+}
+
+move_slots_off_extra_master() {
+  local new_master_id="$1"
   local slots_on_new
-  slots_on_new="$(kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli cluster nodes 2>/dev/null \
-    | grep "${new_master_id}" \
-    | grep -oP '\d+-\d+' \
-    | awk -F- '{s+=$2-$1+1} END {print s+0}')"
+  slots_on_new="$(slot_count_for_node_id "${new_master_id}")"
 
-  if [[ "${slots_on_new}" -gt 0 ]]; then
-    echo "  [restore] Moving ${slots_on_new} slots from shard-${ORIGINAL_SHARDS} back..."
+  if [[ "${slots_on_new}" -le 0 ]]; then
+    echo "  No slots found on extra master ${new_master_id}; skipping slot migration."
+    return 0
+  fi
+
+  mapfile -t target_ids < <(original_master_ids)
+  if [[ "${#target_ids[@]}" -eq 0 ]]; then
+    echo "ERROR: No original masters available as reshard targets." >&2
+    return 1
+  fi
+
+  local remaining="${slots_on_new}"
+  local remaining_targets="${#target_ids[@]}"
+  local target_id slots_for_target
+
+  echo "  Moving ${slots_on_new} slots from extra master across ${#target_ids[@]} original masters..."
+  for target_id in "${target_ids[@]}"; do
+    if [[ "${remaining}" -le 0 ]]; then
+      break
+    fi
+
+    slots_for_target=$(((remaining + remaining_targets - 1) / remaining_targets))
+    echo "  Moving ${slots_for_target} slots to ${target_id}..."
     kubectl exec valkey-0 -n "${NS}" -- \
-      valkey-cli --cluster reshard "${HOST}:${PORT}" \
+      valkey-cli --cluster reshard "${CLUSTER_ENDPOINT}" \
         --cluster-from "${new_master_id}" \
         --cluster-to "${target_id}" \
-        --cluster-slots "${slots_on_new}" \
-        --cluster-yes 2>&1 || true
-    sleep 5
-  fi
+        --cluster-slots "${slots_for_target}" \
+        --cluster-yes 2>&1
 
-  local replica_id
-  replica_id="$(kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli cluster nodes 2>/dev/null \
-    | grep "slave ${new_master_id}" \
-    | awk '{print $1}' || echo "")"
+    remaining=$((remaining - slots_for_target))
+    remaining_targets=$((remaining_targets - 1))
+    sleep 2
+  done
+}
 
-  if [[ -n "${replica_id}" ]]; then
-    echo "  [restore] Removing replica node ${replica_id}..."
-    kubectl exec valkey-0 -n "${NS}" -- \
-      valkey-cli --cluster del-node "${HOST}:${PORT}" "${replica_id}" 2>&1 || true
-    sleep 3
-  fi
+delete_extra_cluster_nodes() {
+  local ordinal pod node_id flags
 
-  if [[ -n "${new_master_id}" ]]; then
-    echo "  [restore] Removing master node ${new_master_id}..."
-    kubectl exec valkey-0 -n "${NS}" -- \
-      valkey-cli --cluster del-node "${HOST}:${PORT}" "${new_master_id}" 2>&1 || true
-    sleep 3
-  fi
+  for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
+    pod="valkey-${ordinal}"
+    flags="$(node_flags_for_pod "${pod}" || true)"
+    if [[ "${flags}" == *slave* ]]; then
+      node_id="$(node_id_for_pod "${pod}" || true)"
+      if [[ -n "${node_id}" ]]; then
+        echo "  [restore] Removing extra replica ${pod} (${node_id})..."
+        kubectl exec valkey-0 -n "${NS}" -- \
+          valkey-cli --cluster del-node "${CLUSTER_ENDPOINT}" "${node_id}" 2>&1 || true
+        sleep 3
+      fi
+    fi
+  done
 
-  echo "  [restore] Scaling back to ${ORIGINAL_SHARDS} shards via helm..."
+  for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
+    pod="valkey-${ordinal}"
+    flags="$(node_flags_for_pod "${pod}" || true)"
+    if [[ "${flags}" == *master* ]]; then
+      node_id="$(node_id_for_pod "${pod}" || true)"
+      if [[ -n "${node_id}" ]]; then
+        echo "  [restore] Removing extra master ${pod} (${node_id})..."
+        kubectl exec valkey-0 -n "${NS}" -- \
+          valkey-cli --cluster del-node "${CLUSTER_ENDPOINT}" "${node_id}" 2>&1 || true
+        sleep 3
+      fi
+    fi
+  done
+}
+
+scale_down_to_original_shards() {
+  patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
   helm upgrade valkey "${HELM_CHART_PATH}" \
     -n "${NS}" \
     -f "${VALUES_FILE}" \
     --set "cluster.shards=${ORIGINAL_SHARDS}" \
     --wait=false 2>&1 || true
+  patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
 
-  kubectl rollout status sts/valkey -n "${NS}" --timeout=300s
+  wait_for_pods_absent "${NEW_NODE_START}" "${NEW_NODE_END}" 300
+  wait_for_pods_ready 0 $((ORIGINAL_NODE_COUNT - 1))
+  ensure_cluster_clean 300
+}
+
+start_memtier_pod() {
+  local pod_name="$1"
+  local out_file="$2"
+
+  kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found 2>/dev/null || true
+
+  kubectl run "${pod_name}" -n "${NS}" \
+    --image="${IMAGE}" \
+    --restart=Never \
+    --command -- \
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      memtier_benchmark \
+        --server='${HOST}' --port='${PORT}' \
+        --protocol=redis \
+        --cluster-mode \
+        --threads='${THREADS}' --clients='${CLIENTS}' \
+        --test-time='${TEST_TIME}' \
+        --key-maximum='${KEYS}' \
+        --data-size='${DATA_SIZE}' \
+        --ratio='${RATIO}' \
+        --json-out-file '${REMOTE_OUT}/${out_file}' \
+        --run-count 1 \
+        --print-percentiles='50,95,99,99.9'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
+
+  kubectl wait pod/"${pod_name}" -n "${NS}" \
+    --for=condition=Ready --timeout=60s 2>/dev/null || true
+}
+
+finish_memtier_pod() {
+  local pod_name="$1"
+  local out_file="$2"
+
+  if ! wait_for_pod_marker "${NS}" "${pod_name}" "${POD_DONE_FILE}" 600; then
+    echo "ERROR: memtier pod ${pod_name} did not signal completion." >&2
+    print_pod_debug_info "${NS}" "${pod_name}"
+    return 1
+  fi
+
+  local exit_code
+  exit_code="$(read_pod_exit_code "${NS}" "${pod_name}" "${POD_EXIT_CODE_FILE}")"
+  if [[ -z "${exit_code}" || "${exit_code}" != "0" ]]; then
+    echo "ERROR: memtier pod ${pod_name} exited with code ${exit_code:-unknown}." >&2
+    print_pod_debug_info "${NS}" "${pod_name}"
+    return 1
+  fi
+
+  kubectl cp "${NS}/${pod_name}:${REMOTE_OUT}/${out_file}" "${LOCAL_OUT}/${out_file}"
+}
+
+restore_cluster() {
+  echo "  [restore] Attempting graceful restore to ${ORIGINAL_SHARDS} shards..."
+
+  patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
+
+  if wait_cluster_healthy 30; then
+    local current_masters known_nodes
+    current_masters="$(cluster_nodes | awk '/master/ && !/fail/ {count++} END {print count + 0}')"
+    known_nodes="$(cluster_info_field cluster_known_nodes || echo 0)"
+    if [[ "${current_masters}" -eq "${ORIGINAL_SHARDS}" && "${known_nodes:-0}" -le "${ORIGINAL_NODE_COUNT}" ]] && ! extra_pods_present; then
+      patch_rollout_partition 0
+      echo "  [restore] Cluster is already at ${ORIGINAL_SHARDS} healthy shards."
+      return 0
+    fi
+  fi
+
+  if ! kubectl get "pod/valkey-${NEW_NODE_START}" -n "${NS}" >/dev/null 2>&1; then
+    echo "  [restore] Extra shard pods are missing; scaling back to ${TARGET_SHARDS} shards before slot migration..."
+    helm upgrade valkey "${HELM_CHART_PATH}" \
+      -n "${NS}" \
+      -f "${VALUES_FILE}" \
+      --set "cluster.shards=${TARGET_SHARDS}" \
+      --wait=false
+    patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
+    wait_for_pods_ready "${NEW_NODE_START}" "${NEW_NODE_END}"
+    wait_for_new_nodes_known 180
+  fi
+
+  ensure_cluster_clean 300
+
+  local new_master_id
+  new_master_id="$(extra_master_id || true)"
+
+  if [[ -z "${new_master_id}" ]]; then
+    echo "  [restore] No extra master found in cluster metadata; skipping slot migration."
+  else
+    move_slots_off_extra_master "${new_master_id}"
+    ensure_cluster_clean 180
+  fi
+
+  delete_extra_cluster_nodes
+
+  echo "  [restore] Scaling back to ${ORIGINAL_SHARDS} shards via helm..."
+  scale_down_to_original_shards
+  patch_rollout_partition 0
   sleep 20
   echo "  [restore] Cluster restored."
 }
@@ -115,44 +551,43 @@ for i in $(seq 1 "${N}"); do
 
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
 
+  echo "[${i}] Checking for active Chaos Mesh experiments..."
+  assert_no_chaos_experiments
+
   echo "[${i}] Verifying cluster is at ${ORIGINAL_SHARDS} shards..."
-  CURRENT_MASTERS="$(kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli cluster nodes 2>/dev/null | grep master | wc -l)"
+  if ! ensure_cluster_clean 60; then
+    KNOWN_NODES="$(cluster_info_field cluster_known_nodes || echo 0)"
+    CLUSTER_SIZE="$(cluster_info_field cluster_size || echo 0)"
+
+    if [[ "${KNOWN_NODES:-0}" -gt "${ORIGINAL_NODE_COUNT}" || "${CLUSTER_SIZE:-0}" -gt "${ORIGINAL_SHARDS}" ]]; then
+      echo "[${i}] Cluster still references extra shard nodes; attempting restore before benchmark..."
+      restore_cluster
+    fi
+
+    ensure_cluster_clean 300
+  fi
+
+  CURRENT_MASTERS="$(cluster_nodes | awk '/master/ && !/fail/ {count++} END {print count + 0}')"
   echo "[${i}] Current masters: ${CURRENT_MASTERS}"
+  if [[ "${CURRENT_MASTERS}" -ne "${ORIGINAL_SHARDS}" ]]; then
+    echo "[${i}] Expected ${ORIGINAL_SHARDS} healthy masters before reshard, found ${CURRENT_MASTERS}; attempting restore..."
+    restore_cluster
+    CURRENT_MASTERS="$(cluster_nodes | awk '/master/ && !/fail/ {count++} END {print count + 0}')"
+    if [[ "${CURRENT_MASTERS}" -ne "${ORIGINAL_SHARDS}" ]]; then
+      echo "[${i}] ERROR: Could not restore to ${ORIGINAL_SHARDS} healthy masters." >&2
+      cluster_nodes || true
+      exit 1
+    fi
+  fi
 
-  echo "[${i}] Starting memtier pod (test-time=${TEST_TIME}s)..."
-  kubectl run "${POD_NAME}" -n "${NS}" \
-    --image="${IMAGE}" \
-    --restart=Never \
-    --command -- \
-    /bin/sh -c "
-      mkdir -p '${REMOTE_OUT}'
-      memtier_benchmark \
-        --server='${HOST}' --port='${PORT}' \
-        --protocol=redis \
-        --cluster-mode \
-        --threads='${THREADS}' --clients='${CLIENTS}' \
-        --test-time='${TEST_TIME}' \
-        --key-maximum='${KEYS}' \
-        --data-size='${DATA_SIZE}' \
-        --ratio='${RATIO}' \
-        --json-out-file '${REMOTE_OUT}/${OUT_FILE}' \
-        --run-count 1 \
-        --print-percentiles='50,95,99,99.9'
-      status=\$?
-      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
-      touch '${POD_DONE_FILE}'
-      sleep '${POD_HOLD_SECONDS}'
-    "
-
-  echo "[${i}] Waiting for pod to start..."
-  kubectl wait pod/"${POD_NAME}" -n "${NS}" \
-    --for=condition=Ready --timeout=60s 2>/dev/null || true
-
+  echo "[${i}] Starting memtier pod for reshard-up (test-time=${TEST_TIME}s)..."
+  start_memtier_pod "${POD_NAME}" "${OUT_FILE}"
+  MEMTIER_START="$(date +%s)"
   echo "[${i}] Waiting ${STEADY_STATE_WAIT}s for steady state..."
   sleep "${STEADY_STATE_WAIT}"
 
-  MEMTIER_START="$(date +%s)"
+  echo "[${i}] Guarding existing pods valkey-0..valkey-$((ORIGINAL_NODE_COUNT - 1)) from rolling restart..."
+  patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
 
   echo "[${i}] Scaling up to ${TARGET_SHARDS} shards..."
   SCALE_START="$(date +%s)"
@@ -161,54 +596,84 @@ for i in $(seq 1 "${N}"); do
     -f "${VALUES_FILE}" \
     --set "cluster.shards=${TARGET_SHARDS}" \
     --wait=false
+  patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
 
-  echo "[${i}] Waiting for new pods to be ready..."
-  kubectl rollout status sts/valkey -n "${NS}" --timeout=300s
+  echo "[${i}] Waiting for new pods valkey-${NEW_NODE_START}..valkey-${NEW_NODE_END} to be ready..."
+  if ! wait_for_pods_ready "${NEW_NODE_START}" "${NEW_NODE_END}" || ! wait_for_new_nodes_known 180; then
+    echo "[${i}] ERROR: New shard did not become ready; attempting restore." >&2
+    restore_cluster
+    exit 1
+  fi
   SCALE_END="$(date +%s)"
   echo "[${i}] Scale-up took $((SCALE_END - SCALE_START))s"
 
-  sleep 10
-
-  echo "[${i}] Rebalancing slots to include new shard..."
-  REBALANCE_START="$(date +%s)"
-  kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli --cluster rebalance "${HOST}:${PORT}" \
-      --cluster-use-empty-masters \
-      --cluster-yes 2>&1 | tail -20
-  REBALANCE_END="$(date +%s)"
-  REBALANCE_DURATION=$((REBALANCE_END - REBALANCE_START))
-  echo "[${i}] Rebalance completed in ${REBALANCE_DURATION}s"
-
-  NEW_MASTERS="$(kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli cluster nodes 2>/dev/null | grep master | wc -l)"
-  echo "[${i}] Masters after rebalance: ${NEW_MASTERS}"
-
-  echo "[${i}] Waiting for memtier to finish..."
-  if ! wait_for_pod_marker "${NS}" "${POD_NAME}" "${POD_DONE_FILE}" 600; then
-    echo "[${i}] ERROR: memtier pod did not signal completion."
-    print_pod_debug_info "${NS}" "${POD_NAME}"
+  EXTRA_MASTER_ID="$(extra_master_id || true)"
+  if [[ -z "${EXTRA_MASTER_ID}" ]]; then
+    echo "[${i}] ERROR: Could not find the extra master after scale-up; attempting restore." >&2
+    restore_cluster
     exit 1
   fi
 
-  exit_code="$(read_pod_exit_code "${NS}" "${POD_NAME}" "${POD_EXIT_CODE_FILE}")"
-  if [[ -z "${exit_code}" || "${exit_code}" != "0" ]]; then
-    echo "[${i}] ERROR: memtier exited with code ${exit_code:-unknown}."
-    print_pod_debug_info "${NS}" "${POD_NAME}"
+  EXPECTED_SLOTS_ON_NEW=$((16384 / TARGET_SHARDS))
+  AUTO_TRACE_FILE="reshard_auto_rebalance_${i}.csv"
+  echo "[${i}] Measuring chart auto-rebalance onto extra master ${EXTRA_MASTER_ID}..."
+  observe_auto_rebalance \
+    "${EXTRA_MASTER_ID}" \
+    "${EXPECTED_SLOTS_ON_NEW}" \
+    "${AUTO_REBALANCE_TIMEOUT}" \
+    "${MEMTIER_START}" \
+    "${LOCAL_OUT}/${AUTO_TRACE_FILE}" || true
+
+  if ! ensure_cluster_clean 180; then
+    echo "[${i}] ERROR: Cluster unhealthy after auto-rebalance observation; attempting restore." >&2
+    restore_cluster
     exit 1
   fi
 
-  echo "[${i}] Copying results..."
-  kubectl cp "${NS}/${POD_NAME}:${REMOTE_OUT}/${OUT_FILE}" "${LOCAL_OUT}/${OUT_FILE}"
+  if [[ "${AUTO_REBALANCE_STATUS}" == "partial" ]]; then
+    echo "[${i}] ERROR: Auto-rebalance was only partial; attempting restore." >&2
+    restore_cluster
+    exit 1
+  fi
+  echo "[${i}] Auto-rebalance status: ${AUTO_REBALANCE_STATUS}, duration=${AUTO_REBALANCE_DURATION}s, slots=${AUTO_REBALANCE_FINAL_SLOTS}/${EXPECTED_SLOTS_ON_NEW}"
+
+  NEW_MASTERS="$(cluster_nodes | awk '/master/ && !/fail/ {count++} END {print count + 0}')"
+  echo "[${i}] Masters after auto-rebalance observation: ${NEW_MASTERS}"
+
+  echo "[${i}] Waiting for reshard-up memtier to finish..."
+  if ! finish_memtier_pod "${POD_NAME}" "${OUT_FILE}"; then
+    kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
+    restore_cluster
+    exit 1
+  fi
 
   cat > "${LOCAL_OUT}/${TIMING_FILE}" <<EOF
 {
   "run": ${i},
+  "phase": "up",
   "scale_start": ${SCALE_START},
   "scale_end": ${SCALE_END},
   "scale_duration_s": $((SCALE_END - SCALE_START)),
-  "rebalance_start": ${REBALANCE_START},
-  "rebalance_end": ${REBALANCE_END},
-  "rebalance_duration_s": ${REBALANCE_DURATION},
+  "scale_start_s": $((SCALE_START - MEMTIER_START)),
+  "scale_end_s": $((SCALE_END - MEMTIER_START)),
+  "auto_rebalance_detected": ${AUTO_REBALANCE_DETECTED},
+  "auto_rebalance_status": "${AUTO_REBALANCE_STATUS}",
+  "auto_rebalance_start": $(json_number_or_null "${AUTO_REBALANCE_START}"),
+  "auto_rebalance_end": $(json_number_or_null "${AUTO_REBALANCE_END}"),
+  "auto_rebalance_duration_s": ${AUTO_REBALANCE_DURATION},
+  "auto_rebalance_start_s": $(relative_or_null "${AUTO_REBALANCE_START}" "${MEMTIER_START}"),
+  "auto_rebalance_end_s": $(relative_or_null "${AUTO_REBALANCE_END}" "${MEMTIER_START}"),
+  "auto_rebalance_trace": "${AUTO_TRACE_FILE}",
+  "expected_slots_on_new": ${EXPECTED_SLOTS_ON_NEW},
+  "slots_on_new_after": ${AUTO_REBALANCE_FINAL_SLOTS},
+  "rebalance_start": $(json_number_or_null "${AUTO_REBALANCE_START}"),
+  "rebalance_end": $(json_number_or_null "${AUTO_REBALANCE_END}"),
+  "rebalance_duration_s": ${AUTO_REBALANCE_DURATION},
+  "rebalance_start_s": $(relative_or_null "${AUTO_REBALANCE_START}" "${MEMTIER_START}"),
+  "rebalance_end_s": $(relative_or_null "${AUTO_REBALANCE_END}" "${MEMTIER_START}"),
+  "operation_start_s": $((SCALE_START - MEMTIER_START)),
+  "operation_end_s": $((AUTO_REBALANCE_END - MEMTIER_START)),
+  "operation_duration_s": $((AUTO_REBALANCE_END - SCALE_START)),
   "memtier_start": ${MEMTIER_START},
   "original_shards": ${ORIGINAL_SHARDS},
   "target_shards": ${TARGET_SHARDS},
@@ -220,16 +685,110 @@ EOF
   echo "[${i}] Cleaning up memtier pod..."
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
 
-  echo "[${i}] Restoring cluster to ${ORIGINAL_SHARDS} shards..."
-  restore_cluster
+  DOWN_POD_NAME="memtier-reshard-down-${i}"
+  DOWN_OUT_FILE="reshard_down_run_${i}.json"
+  DOWN_TIMING_FILE="reshard_down_timing_${i}.json"
 
-  echo "[${i}] Done. Results: ${LOCAL_OUT}/${OUT_FILE}, ${LOCAL_OUT}/${TIMING_FILE}"
+  echo "[${i}] Starting memtier pod for reshard-down (test-time=${TEST_TIME}s)..."
+  start_memtier_pod "${DOWN_POD_NAME}" "${DOWN_OUT_FILE}"
+  DOWN_MEMTIER_START="$(date +%s)"
+  echo "[${i}] Waiting ${STEADY_STATE_WAIT}s for downscale steady state..."
+  sleep "${STEADY_STATE_WAIT}"
+
+  echo "[${i}] Moving slots off the extra shard under load..."
+  DOWNSCALE_START="$(date +%s)"
+  DOWNSCALE_RESHARD_START="${DOWNSCALE_START}"
+  EXTRA_MASTER_ID="$(extra_master_id || true)"
+  if [[ -z "${EXTRA_MASTER_ID}" ]]; then
+    echo "[${i}] ERROR: Could not find the extra master before reshard-down." >&2
+    kubectl delete pod "${DOWN_POD_NAME}" -n "${NS}" --ignore-not-found
+    restore_cluster
+    exit 1
+  fi
+  SLOTS_ON_EXTRA="$(slot_count_for_node_id "${EXTRA_MASTER_ID}")"
+  if ! move_slots_off_extra_master "${EXTRA_MASTER_ID}"; then
+    echo "[${i}] ERROR: Reshard-down slot migration failed; attempting restore." >&2
+    kubectl delete pod "${DOWN_POD_NAME}" -n "${NS}" --ignore-not-found
+    restore_cluster
+    exit 1
+  fi
+  DOWNSCALE_RESHARD_END="$(date +%s)"
+  if ! ensure_cluster_clean 180; then
+    echo "[${i}] ERROR: Cluster unhealthy after reshard-down slot migration; attempting restore." >&2
+    kubectl delete pod "${DOWN_POD_NAME}" -n "${NS}" --ignore-not-found
+    restore_cluster
+    exit 1
+  fi
+
+  echo "[${i}] Removing extra cluster nodes under load..."
+  DEL_NODE_START="$(date +%s)"
+  delete_extra_cluster_nodes
+  DEL_NODE_END="$(date +%s)"
+
+  echo "[${i}] Scaling Helm release back to ${ORIGINAL_SHARDS} shards under load..."
+  SCALE_DOWN_START="$(date +%s)"
+  if ! scale_down_to_original_shards; then
+    echo "[${i}] ERROR: Helm scale-down failed; attempting restore." >&2
+    kubectl delete pod "${DOWN_POD_NAME}" -n "${NS}" --ignore-not-found
+    restore_cluster
+    exit 1
+  fi
+  SCALE_DOWN_END="$(date +%s)"
+  DOWNSCALE_END="${SCALE_DOWN_END}"
+
+  DOWN_MASTERS="$(cluster_nodes | awk '/master/ && !/fail/ {count++} END {print count + 0}')"
+  echo "[${i}] Masters after reshard-down: ${DOWN_MASTERS}"
+
+  echo "[${i}] Waiting for reshard-down memtier to finish..."
+  if ! finish_memtier_pod "${DOWN_POD_NAME}" "${DOWN_OUT_FILE}"; then
+    kubectl delete pod "${DOWN_POD_NAME}" -n "${NS}" --ignore-not-found
+    restore_cluster
+    exit 1
+  fi
+
+  cat > "${LOCAL_OUT}/${DOWN_TIMING_FILE}" <<EOF
+{
+  "run": ${i},
+  "phase": "down",
+  "reshard_down_start": ${DOWNSCALE_RESHARD_START},
+  "reshard_down_end": ${DOWNSCALE_RESHARD_END},
+  "reshard_down_duration_s": $((DOWNSCALE_RESHARD_END - DOWNSCALE_RESHARD_START)),
+  "reshard_down_start_s": $((DOWNSCALE_RESHARD_START - DOWN_MEMTIER_START)),
+  "reshard_down_end_s": $((DOWNSCALE_RESHARD_END - DOWN_MEMTIER_START)),
+  "del_node_start": ${DEL_NODE_START},
+  "del_node_end": ${DEL_NODE_END},
+  "del_node_duration_s": $((DEL_NODE_END - DEL_NODE_START)),
+  "del_node_start_s": $((DEL_NODE_START - DOWN_MEMTIER_START)),
+  "del_node_end_s": $((DEL_NODE_END - DOWN_MEMTIER_START)),
+  "scale_down_start": ${SCALE_DOWN_START},
+  "scale_down_end": ${SCALE_DOWN_END},
+  "scale_down_duration_s": $((SCALE_DOWN_END - SCALE_DOWN_START)),
+  "scale_down_start_s": $((SCALE_DOWN_START - DOWN_MEMTIER_START)),
+  "scale_down_end_s": $((SCALE_DOWN_END - DOWN_MEMTIER_START)),
+  "operation_start_s": $((DOWNSCALE_START - DOWN_MEMTIER_START)),
+  "operation_end_s": $((DOWNSCALE_END - DOWN_MEMTIER_START)),
+  "operation_duration_s": $((DOWNSCALE_END - DOWNSCALE_START)),
+  "memtier_start": ${DOWN_MEMTIER_START},
+  "original_shards": ${TARGET_SHARDS},
+  "target_shards": ${ORIGINAL_SHARDS},
+  "slots_moved": ${SLOTS_ON_EXTRA},
+  "masters_after": ${DOWN_MASTERS}
+}
+EOF
+  echo "[${i}] Timing data saved to ${LOCAL_OUT}/${DOWN_TIMING_FILE}"
+
+  echo "[${i}] Cleaning up reshard-down memtier pod..."
+  kubectl delete pod "${DOWN_POD_NAME}" -n "${NS}" --ignore-not-found
+  patch_rollout_partition 0
+
+  echo "[${i}] Done. Results: ${LOCAL_OUT}/${OUT_FILE}, ${LOCAL_OUT}/${TIMING_FILE}, ${LOCAL_OUT}/${DOWN_OUT_FILE}, ${LOCAL_OUT}/${DOWN_TIMING_FILE}"
 done
 
 echo ""
 echo "=========================================="
 echo "  All ${N} reshard runs complete."
 echo "  Results in: ${LOCAL_OUT}/"
+echo "  Each run contains reshard-up and reshard-down memtier/timing files."
 echo "  Analyse with:"
 echo "    python cli.py reshard --input ${LOCAL_OUT} --output-dir ./plots/reshard"
 echo "=========================================="

@@ -18,6 +18,8 @@ STRESS_START_SECOND = 30
 STRESS_DURATIONS = {
     "cpu": 30,
     "memory": 60,
+    "memory-extreme": 60,
+    "maxmemory": 60,
 }
 
 
@@ -41,6 +43,8 @@ def detect_degradation(ts: pd.DataFrame) -> Dict[str, Any]:
 
     if baseline_ops == 0:
         return _empty_result()
+
+    ts = _trim_terminal_partial_bucket(ts, baseline_ops)
 
     threshold = baseline_ops * DEGRADATION_THRESHOLD
     degraded = ts[(ts["second"] >= available_baseline) & (ts["count"] < threshold)]
@@ -102,6 +106,21 @@ def detect_degradation(ts: pd.DataFrame) -> Dict[str, Any]:
     }
 
 
+def _trim_terminal_partial_bucket(ts: pd.DataFrame, baseline_ops: float) -> pd.DataFrame:
+    """Ignore the final short bucket emitted when memtier exits."""
+    if len(ts) < 2:
+        return ts
+
+    last = ts.iloc[-1]
+    prev = ts.iloc[-2]
+    threshold = baseline_ops * DEGRADATION_THRESHOLD
+
+    if last["count"] < threshold and prev["count"] >= threshold:
+        return ts.iloc[:-1].copy()
+
+    return ts
+
+
 def _empty_result() -> Dict[str, Any]:
     return {
         "degradation_detected": False,
@@ -127,7 +146,13 @@ def analyse_resilience_runs(
     """Parse resilience_{scenario}_run_*.json files."""
     import json
 
-    prefix = "resilience_cpu" if scenario == "cpu" else "resilience_mem"
+    prefixes = {
+        "cpu": "resilience_cpu",
+        "memory": "resilience_mem",
+        "memory-extreme": "resilience_mem_extreme",
+        "maxmemory": "resilience_maxmemory",
+    }
+    prefix = prefixes[scenario]
     files = sorted(json_dir.glob(f"{prefix}_run_*.json"))
     if not files:
         raise FileNotFoundError(
@@ -153,6 +178,12 @@ def analyse_resilience_runs(
             continue
 
         ts = parse_time_series(run_result)
+        if not ts.empty:
+            available_baseline = min(BASELINE_SECONDS, len(ts) // 2)
+            if available_baseline >= 3:
+                baseline_ops = ts[ts["second"] < available_baseline]["count"].mean()
+                if baseline_ops > 0:
+                    ts = _trim_terminal_partial_bucket(ts, baseline_ops)
         all_ts.append(ts)
         metrics = detect_degradation(ts)
         metrics["file"] = f.name
@@ -208,7 +239,13 @@ def plot_resilience_timeseries(
     scenario: str,
 ) -> None:
     """Plot ops/sec and latency over time, highlighting degradation window."""
-    label = "CPU stress" if scenario == "cpu" else "Memory stress"
+    labels = {
+        "cpu": "CPU stress",
+        "memory": "Memory stress",
+        "memory-extreme": "Extreme memory stress",
+        "maxmemory": "Maxmemory pressure",
+    }
+    label = labels[scenario]
     stress_start = STRESS_START_SECOND
     stress_end = stress_start + STRESS_DURATIONS[scenario]
 
@@ -220,10 +257,6 @@ def plot_resilience_timeseries(
         ax1.set_title(f"Resilience [{label}] Run {i + 1}")
 
         if row.get("degradation_detected") and row["degradation_start_s"] is not None:
-            ax1.axvspan(
-                row["degradation_start_s"], row["degradation_end_s"],
-                alpha=0.2, color="orange", label="Degradation window",
-            )
             ax1.axhline(
                 row["baseline_ops"], linestyle="--", color="gray",
                 linewidth=0.7, label="Baseline",
@@ -238,15 +271,16 @@ def plot_resilience_timeseries(
         ax2.set_xlabel("Time (s)")
         ax2.legend(fontsize=8)
 
-        if row.get("degradation_detected") and row["degradation_start_s"] is not None:
-            ax2.axvspan(
-                row["degradation_start_s"], row["degradation_end_s"],
-                alpha=0.2, color="orange",
-            )
         mark_test_window(ax2, stress_start, stress_end)
 
         fig.tight_layout()
-        prefix = "cpu" if scenario == "cpu" else "mem"
+        plot_prefixes = {
+            "cpu": "cpu",
+            "memory": "mem",
+            "memory-extreme": "mem_extreme",
+            "maxmemory": "maxmemory",
+        }
+        prefix = plot_prefixes[scenario]
         fig.savefig(
             out_dir / f"resilience_{prefix}_run_{i + 1}.png",
             dpi=150, bbox_inches="tight",
@@ -262,8 +296,20 @@ def plot_resilience_comparison(
     if detected.empty:
         return
 
-    label = "CPU stress" if scenario == "cpu" else "Memory stress"
-    prefix = "cpu" if scenario == "cpu" else "mem"
+    labels = {
+        "cpu": "CPU stress",
+        "memory": "Memory stress",
+        "memory-extreme": "Extreme memory stress",
+        "maxmemory": "Maxmemory pressure",
+    }
+    prefixes = {
+        "cpu": "cpu",
+        "memory": "mem",
+        "memory-extreme": "mem_extreme",
+        "maxmemory": "maxmemory",
+    }
+    label = labels[scenario]
+    prefix = prefixes[scenario]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
 

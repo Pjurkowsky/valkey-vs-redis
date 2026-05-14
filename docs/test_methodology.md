@@ -201,7 +201,7 @@ Zbadac, czy podczas split-brain (network partition miedzy wezlami Valkey) dochod
 ### Mechanizm split-brain w Valkey/Redis Cluster
 
 Valkey Cluster nie gwarantuje strong consistency. Podczas split-brain:
-1. Wezly minority (1 shard: master + replica) sa odciete od majority (2 shardy: 4 pody).
+1. Minority master jednego shardu jest odciety od majority, a jego replika pozostaje po stronie majority.
 2. Minority master moze przez krotki czas (do `cluster-node-timeout`) nadal przyjmowac zapisy i zwracac ACK.
 3. Majority wykrywa niedostepnosc minority mastera i promuje jego replike na nowego mastera.
 4. Po naprawie partycji minority master wraca jako replika -- jego dane sa nadpisywane przez nowego mastera z majority.
@@ -218,8 +218,8 @@ N=5 bash k8s/scripts/split_brain_benchmark.sh ./results/valkey_split_brain
 ```
 
 **Sekwencja (per run)**:
-1. Skrypt odkrywa topologie klastra (`valkey-cli cluster nodes`) i wybiera 1 shard (master + replica) jako minority.
-2. Labeluje pody: `chaos-side=minority` (2 pody) i `chaos-side=majority` (4 pody).
+1. Skrypt odkrywa topologie klastra (`valkey-cli cluster nodes`) i wybiera master jednego shardu jako minority; jego replika zostaje po stronie majority.
+2. Labeluje pody: `chaos-side=minority` (1 pod) i `chaos-side=majority` (pozostale pody, w tym replika minority mastera).
 3. Uruchamia `split_brain_check.py` -- klient pisze klucze **bez hash tagow** (format `sb.RUN.cID.SEQ`) aby klucze byly rozproszone po wszystkich slotach/shardach.
 4. Checker rejestruje, ktory klucz trafia do slotu minority, a ktory do majority (na podstawie CRC16 i CLUSTER SLOTS).
 5. Po 30s steady state, skrypt aplikuje `split-brain-partition.yaml` -- obustronny network partition miedzy minority a majority (90s).
@@ -282,6 +282,7 @@ Zbadac, jak klaster Valkey zachowuje sie podczas niedostepnosci zasobow (CPU thr
 |---|---|---|---|
 | CPU stress | `StressChaos` | 4 workers, 100% CPU load | 30s |
 | Memory stress | `StressChaos` | 900 MB, 1 worker | 60s |
+| Memory extreme stress | `StressChaos` | 1800 MB, 2 workers | 60s |
 
 > **Uwaga dotyczaca OOM Kill**: aby rzeczywiscie wywolac OOM Kill poda Valkey, konieczne jest ustawienie `resources.limits.memory` w Helm values (np. `1.5Gi`) i zwiekszenie stress do wartosci przekraczajacej limit (np. 1.2 GB). Bez jawnego memory limitu kernel OOM killer nie zostanie uruchomiony przez Chaos Mesh.
 
@@ -290,6 +291,7 @@ Zbadac, jak klaster Valkey zachowuje sie podczas niedostepnosci zasobow (CPU thr
 ```bash
 N=5 bash k8s/scripts/resilience_benchmark.sh cpu  ./results/valkey_resilience
 N=5 bash k8s/scripts/resilience_benchmark.sh memory ./results/valkey_resilience
+N=5 bash k8s/scripts/resilience_benchmark.sh memory-extreme ./results/valkey_resilience
 ```
 
 **Sekwencja (per run)**:
@@ -314,6 +316,7 @@ N=5 bash k8s/scripts/resilience_benchmark.sh memory ./results/valkey_resilience
 ```bash
 python cli.py resilience --scenario cpu    --input ./results/valkey_resilience --output-dir ./plots/valkey_resilience
 python cli.py resilience --scenario memory --input ./results/valkey_resilience --output-dir ./plots/valkey_resilience
+python cli.py resilience --scenario memory-extreme --input ./results/valkey_resilience --output-dir ./plots/valkey_resilience
 ```
 
 **Schemat CSV**: `file, scenario, degradation_detected, baseline_ops, ops_drop_pct, degradation_duration_ms, peak_p99_during, recovery_detected, pod_restart_detected, ...`
@@ -326,6 +329,30 @@ python cli.py resilience --scenario memory --input ./results/valkey_resilience -
 **Wykresy**:
 - `resilience_{cpu|mem}_run_N.png`: ops/sec i p99/p50 z zaznaczonym oknem degradacji i oknem stresu (zielone/czerwone pionowe linie)
 - `resilience_{cpu|mem}_comparison.png`: slupki ops_drop_pct i peak_p99 per run
+
+---
+
+### 4a. Maxmemory -- eviction pressure
+
+Ten test sprawdza zachowanie konfiguracji Valkey `maxmemory 1gb` i `maxmemory-policy allkeys-lru`.
+Nie uzywa Chaos Mesh. Zamiast tego zapisuje przez Valkey wiecej danych niz klaster moze utrzymac
+w pamieci i mierzy liczniki eviction.
+
+```bash
+N=1 bash k8s/scripts/maxmemory_benchmark.sh 4096 ./results/valkey_maxmemory
+```
+
+**Sekwencja (per run)**:
+1. Zapisz snapshot `INFO memory stats` oraz `DBSIZE` z kazdego mastera.
+2. Wpisz `TARGET_MB` danych jako klucze 1 KB rozproszone po klastrze.
+3. Zapisz drugi snapshot `INFO memory stats` oraz `DBSIZE`.
+4. Zweryfikuj probke zapisanych kluczy.
+5. Zapisz `evicted_keys_delta`, `sample_missing_rate`, `used_memory_after`, `dbsize_after`.
+
+**Interpretacja**:
+- `evicted_keys_delta > 0` oznacza, ze Valkey osiagnal limit `maxmemory` i usuwal klucze zgodnie z `allkeys-lru`.
+- `sample_missing_rate > 0` jest oczekiwany po przekroczeniu pojemnosci, bo czesc zaakceptowanych kluczy zostala wyewiktowana.
+- To nie jest test OOM Kill. Do OOM Kill potrzebny jest Kubernetes `resources.limits.memory`.
 
 ---
 
@@ -342,7 +369,7 @@ N=5 bash k8s/scripts/upgrade_benchmark.sh ./results/valkey_upgrade
 ```
 
 **Sekwencja (per run)**:
-1. Start memtier: 300s, 4 watki, 16 klientow, ratio 1:1.
+1. Start memtier: 120s, 4 watki, 16 klientow, ratio 1:1.
 2. Odczekaj 30s steady state.
 3. Wykonaj `helm upgrade` z `podAnnotations.restart-trigger=<epoch>` -- wymusza rolling restart wszystkich podow Valkey.
 4. Memtier kontynuuje przez pozostale ~240s.
@@ -382,7 +409,7 @@ python cli.py upgrade --input ./results/valkey_upgrade --output-dir ./plots/valk
 
 ### Cel
 
-Zmierzyc czas i koszt operacyjny rozszerzenia klastra z 3 do 4 shardow (rebalancing slotow) pod ciaglym obciazeniem. Zbadac liczbe przerw widocznych dla klientow podczas rebalancingu.
+Zmierzyc czas i koszt operacyjny zmiany liczby shardow w obu kierunkach: rozszerzenia klastra z 3 do 4 shardow oraz powrotu z 4 do 3 shardow pod ciaglym obciazeniem. Zbadac wplyw migracji slotow na przepustowosc i latency widoczne dla klientow.
 
 ### Procedura
 
@@ -390,23 +417,37 @@ Zmierzyc czas i koszt operacyjny rozszerzenia klastra z 3 do 4 shardow (rebalanc
 N=5 bash k8s/scripts/reshard_benchmark.sh ./results/valkey_reshard
 ```
 
-**Sekwencja (per run)**:
-1. Start memtier: 300s, 4 watki, 16 klientow, ratio 1:1.
+**Sekwencja (per run, reshard up)**:
+1. Start memtier: 120s, 4 watki, 16 klientow, ratio 1:1.
 2. Odczekaj 30s steady state.
-3. `helm upgrade --set cluster.shards=4` -- dodaj nowy shard (2 pody).
-4. Czekaj na rollout nowych podow.
-5. `valkey-cli --cluster rebalance --cluster-use-empty-masters --cluster-yes` -- przebalansuj sloty.
-6. Memtier kontynuuje do konca (300s).
-7. Po tescie: przywroc klaster do 3 shardow.
+3. Sprawdz, czy klaster ma `cluster_state:ok` i czy nie ma aktywnych eksperymentow Chaos Mesh.
+4. Ustaw `rollingUpdate.partition=6` na StatefulSecie, aby stare pody `valkey-0..valkey-5` nie byly restartowane podczas scale-upu.
+5. `helm upgrade --set cluster.shards=4` -- dodaj nowy shard (pody `valkey-6` i `valkey-7`).
+6. Czekaj na gotowosc nowych podow oraz pojawienie sie ich w `CLUSTER NODES`.
+7. Nie uruchamiaj manualnego `valkey-cli --cluster rebalance`; obserwuj auto-rebalance wykonywany przez init/chart i zapisuj trace slotow na nowym masterze.
+8. Memtier kontynuuje do konca (120s), wynik trafia do `reshard_run_N.json`.
+
+**Sekwencja (per run, reshard down)**:
+1. Start drugiego memtier: 120s, 4 watki, 16 klientow, ratio 1:1.
+2. Odczekaj 30s steady state na klastrze 4-shardowym.
+3. Przenies sloty z nowego mastera rownomiernie na oryginalne mastery.
+4. Usun nowe wezly z metadanych klastra przez `valkey-cli --cluster del-node`.
+5. `helm upgrade --set cluster.shards=3` -- usun pody `valkey-6` i `valkey-7`.
+6. Memtier kontynuuje do konca (120s), wynik trafia do `reshard_down_run_N.json`.
 
 ### Metryki zbierane
 
 | Metryka | Definicja | Zrodlo |
 |---|---|---|
-| `scale_duration_s` | Czas od `helm upgrade` do `kubectl rollout status` OK | `reshard_timing_N.json` |
-| `rebalance_duration_s` | Czas trwania `valkey-cli --cluster rebalance` | `reshard_timing_N.json` |
-| `total_disrupted_ms` | Czas (ms) przez ktory ops/sec spada ponizej 80% basline'u | `reshard_summary.csv` |
-| `ops_lost` | Szacunkowe straty operacji | `reshard_summary.csv` |
+| `operation_duration_s` | Czas calej operacji reshardingu: scale-up + auto-rebalance dla fazy `up`, albo move-slots + del-node + scale-down dla fazy `down` | `reshard_summary.csv` |
+| `scale_duration_s` | Czas scale-upu dla fazy `up` | `reshard_summary.csv` |
+| `rebalance_duration_s` | Czas wykrytego auto-rebalance dla fazy `up` | `reshard_summary.csv` |
+| `reshard_down_duration_s` | Czas przenoszenia slotow z usuwanego sharda dla fazy `down` | `reshard_summary.csv` |
+| `del_node_duration_s` | Czas usuwania dodatkowych wezlow z metadanych klastra dla fazy `down` | `reshard_summary.csv` |
+| `scale_down_duration_s` | Czas scale-downu Helm/StatefulSet dla fazy `down` | `reshard_summary.csv` |
+| `wait_check_duration_s` | Pozostaly czas operacji, glownie oczekiwanie i sprawdzanie zdrowia klastra miedzy krokami | `reshard_summary.csv` |
+| `auto_rebalance_status` | Status obserwacji auto-rebalance: `complete`, `already_complete`, `timeout` albo `partial` | `reshard_summary.csv` |
+| `slots_on_new_after` | Liczba slotow na nowym masterze po obserwacji auto-rebalance | `reshard_summary.csv` |
 
 ### Wynik do analizy
 
@@ -414,16 +455,19 @@ N=5 bash k8s/scripts/reshard_benchmark.sh ./results/valkey_reshard
 python cli.py reshard --input ./results/valkey_reshard --output-dir ./plots/valkey_reshard
 ```
 
-**Schemat CSV**: `file, scale_duration_s, rebalance_duration_s, total_disrupted_ms, ops_lost, ...`
+**Schemat CSV**: `file, run, phase, operation_duration_s, scale_duration_s, rebalance_duration_s, reshard_down_duration_s, del_node_duration_s, scale_down_duration_s, wait_check_duration_s, auto_rebalance_status, slots_on_new_after, expected_slots_on_new, ...`
 
 **Analiza statystyczna**:
-- `rebalance_duration_s` mean ± std
-- `total_disrupted_ms` mean ± std
+- `operation_duration_s` per run i faza (`up`, `down`)
 - Komentarz jakosciowy: liczba krokow manualnych vs managed service (H4)
+
+Wykresy czasowe oznaczaja liniami poczatek i koniec operacji reshardingu oraz podfazy scale/auto-rebalance.
 
 **Wykresy**:
 - `reshard_run_N.png`: ops/sec i p99/p50 z zaznaczonym oknem rebalancingu
-- `reshard_comparison.png`: rebalance duration, total disrupted time, ops lost per run
+- `reshard_down_run_N.png`: ops/sec i p99/p50 z zaznaczonym oknem reshard-down
+- `reshard_comparison.png`: stacked operation duration, panel `up` i panel `down` obok siebie
+- `reshard_auto_rebalance_N.csv`: trace obserwacji auto-rebalance (`second`, sloty na nowym masterze, stan klastra)
 
 ---
 
@@ -498,7 +542,7 @@ Miernik ilosci krokow dla 3 scenariuszy:
 | Scenariusz | Valkey self-hosted | Memorystore |
 |---|---|---|
 | Upgrade | Kroki recznie (zmiana image.tag + helm upgrade + monitor) | Managed (1 klik lub API call) |
-| Resharding | Kroki recznie (helm upgrade + valkey-cli rebalance + monitor) | Managed (skalowanie) |
+| Resharding | Kroki recznie (helm upgrade + obserwacja auto-rebalance + monitor) | Managed (skalowanie) |
 | Backup/Restore | Kroki recznie (BGSAVE + kill + czekaj + verify) | PITR z konsoli/API |
 
 Wynik: tabela porownawcza liczby krokow i czasu potrzebnego operatorowi.
