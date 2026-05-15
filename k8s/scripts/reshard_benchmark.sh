@@ -8,14 +8,20 @@ LOCAL_OUT="${1:-./results/reshard}"
 REMOTE_OUT="/work/results/reshard"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+source "${SCRIPT_DIR}/target_config.sh"
 source "${SCRIPT_DIR}/pod_results.sh"
 
-HELM_CHART_PATH="${HELM_CHART_PATH:-../valkey-helm/valkey}"
-VALUES_FILE="${VALUES_FILE:-./k8s/manifests/values.yaml}"
+HELM_CHART_PATH="${TC_HELM_CHART}"
+VALUES_FILE="${TC_VALUES_FILE}"
+HELM_RELEASE="${TC_HELM_RELEASE}"
+STS="${TC_STS}"
+CLI="${TC_CLI}"
+ADMIN_POD="$(tc_admin_pod)"
+HEADLESS_SVC="${TC_HEADLESS_SVC}"
 
-HOST="valkey.vk.svc.cluster.local"
-PORT=6379
-ADMIN_HOST="valkey-0.valkey-headless.${NS}.svc.cluster.local"
+HOST="${TC_HOST}"
+PORT="${TC_PORT}"
+ADMIN_HOST="$(tc_admin_host)"
 CLUSTER_ENDPOINT="${ADMIN_HOST}:${PORT}"
 THREADS=4
 CLIENTS=16
@@ -38,15 +44,15 @@ mkdir -p "${LOCAL_OUT}"
 
 get_master_node_id() {
   local pod="$1"
-  kubectl exec "${pod}" -n "${NS}" -- valkey-cli cluster myid 2>/dev/null | tr -d '[:space:]'
+  kubectl exec "${pod}" -n "${NS}" -- ${CLI} cluster myid 2>/dev/null | tr -d '[:space:]'
 }
 
 cluster_info() {
-  kubectl exec valkey-0 -n "${NS}" -- valkey-cli cluster info 2>/dev/null
+  kubectl exec "${ADMIN_POD}" -n "${NS}" -- ${CLI} cluster info 2>/dev/null
 }
 
 cluster_nodes() {
-  kubectl exec valkey-0 -n "${NS}" -- valkey-cli cluster nodes 2>/dev/null
+  kubectl exec "${ADMIN_POD}" -n "${NS}" -- ${CLI} cluster nodes 2>/dev/null
 }
 
 cluster_info_field() {
@@ -55,8 +61,8 @@ cluster_info_field() {
 }
 
 cluster_check() {
-  kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli --cluster check "${CLUSTER_ENDPOINT}" 2>&1
+  kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+    ${CLI} --cluster check "${CLUSTER_ENDPOINT}" 2>&1
 }
 
 cluster_is_healthy_now() {
@@ -70,9 +76,9 @@ cluster_is_healthy_now() {
 }
 
 fix_cluster_slots() {
-  echo "  Running valkey-cli --cluster fix to clear open/importing/migrating slots..."
-  kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli --cluster fix "${CLUSTER_ENDPOINT}" \
+  echo "  Running ${CLI} --cluster fix to clear open/importing/migrating slots..."
+  kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+    ${CLI} --cluster fix "${CLUSTER_ENDPOINT}" \
       --cluster-yes 2>&1
 }
 
@@ -130,7 +136,7 @@ assert_no_chaos_experiments() {
 patch_rollout_partition() {
   local partition="$1"
   echo "  Setting StatefulSet rolling-update partition=${partition}"
-  kubectl patch sts valkey -n "${NS}" --type=merge \
+  kubectl patch "sts/${STS}" -n "${NS}" --type=merge \
     -p "{\"spec\":{\"updateStrategy\":{\"type\":\"RollingUpdate\",\"rollingUpdate\":{\"partition\":${partition}}}}}" \
     >/dev/null
 }
@@ -141,7 +147,7 @@ wait_for_pods_ready() {
   local ordinal
 
   for ordinal in $(seq "${start}" "${end}"); do
-    kubectl wait "pod/valkey-${ordinal}" -n "${NS}" \
+    kubectl wait "pod/$(tc_pod_name "${ordinal}")" -n "${NS}" \
       --for=condition=Ready \
       --timeout=300s
   done
@@ -155,9 +161,9 @@ wait_for_pods_absent() {
 
   for ordinal in $(seq "${start}" "${end}"); do
     deadline=$((SECONDS + timeout))
-    while kubectl get "pod/valkey-${ordinal}" -n "${NS}" >/dev/null 2>&1; do
+    while kubectl get "pod/$(tc_pod_name "${ordinal}")" -n "${NS}" >/dev/null 2>&1; do
       if (( SECONDS >= deadline )); then
-        echo "ERROR: pod/valkey-${ordinal} still exists after ${timeout}s" >&2
+        echo "ERROR: pod/$(tc_pod_name "${ordinal}") still exists after ${timeout}s" >&2
         return 1
       fi
       sleep 2
@@ -169,7 +175,7 @@ extra_pods_present() {
   local ordinal
 
   for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
-    if kubectl get "pod/valkey-${ordinal}" -n "${NS}" >/dev/null 2>&1; then
+    if kubectl get "pod/$(tc_pod_name "${ordinal}")" -n "${NS}" >/dev/null 2>&1; then
       return 0
     fi
   done
@@ -182,13 +188,13 @@ wait_for_new_nodes_known() {
   local waited=0
   local ordinal nodes found
 
-  echo "  Waiting for new nodes valkey-${NEW_NODE_START}..valkey-${NEW_NODE_END} to join cluster gossip..."
+  echo "  Waiting for new nodes $(tc_pod_name "${NEW_NODE_START}")..$(tc_pod_name "${NEW_NODE_END}") to join cluster gossip..."
   while [[ "${waited}" -lt "${max_wait}" ]]; do
     nodes="$(cluster_nodes || true)"
     found=0
 
     for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
-      if grep -q "valkey-${ordinal}\.valkey-headless" <<<"${nodes}"; then
+      if grep -q "$(tc_pod_name "${ordinal}")\\.${HEADLESS_SVC}" <<<"${nodes}"; then
         found=$((found + 1))
       fi
     done
@@ -208,19 +214,20 @@ wait_for_new_nodes_known() {
 
 node_id_for_pod() {
   local pod="$1"
-  cluster_nodes | awk -v pod="${pod}" '$0 ~ pod "\\.valkey-headless" {print $1; exit}'
+  cluster_nodes | awk -v pod="${pod}" -v svc="${HEADLESS_SVC}" '$0 ~ pod "\\." svc {print $1; exit}'
 }
 
 node_flags_for_pod() {
   local pod="$1"
-  cluster_nodes | awk -v pod="${pod}" '$0 ~ pod "\\.valkey-headless" {print $3; exit}'
+  cluster_nodes | awk -v pod="${pod}" -v svc="${HEADLESS_SVC}" '$0 ~ pod "\\." svc {print $3; exit}'
 }
 
 original_master_ids() {
-  cluster_nodes | awk -v max_ordinal="${NEW_NODE_START}" '
+  cluster_nodes | awk -v max_ordinal="${NEW_NODE_START}" -v prefix="${TC_POD_PREFIX}" -v svc="${HEADLESS_SVC}" '
     /master/ && !/fail/ {
       for (i = 0; i < max_ordinal; i++) {
-        if ($0 ~ "valkey-" i "\\.valkey-headless") {
+        pod = prefix i
+        if ($0 ~ pod "\\." svc) {
           print $1
           break
         }
@@ -340,7 +347,7 @@ extra_master_id() {
   local ordinal pod flags
 
   for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
-    pod="valkey-${ordinal}"
+    pod="$(tc_pod_name "${ordinal}")"
     flags="$(node_flags_for_pod "${pod}" || true)"
     if [[ "${flags}" == *master* ]]; then
       node_id_for_pod "${pod}"
@@ -377,8 +384,8 @@ move_slots_off_extra_master() {
 
     slots_for_target=$(((remaining + remaining_targets - 1) / remaining_targets))
     echo "  Moving ${slots_for_target} slots to ${target_id}..."
-    kubectl exec valkey-0 -n "${NS}" -- \
-      valkey-cli --cluster reshard "${CLUSTER_ENDPOINT}" \
+    kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+      ${CLI} --cluster reshard "${CLUSTER_ENDPOINT}" \
         --cluster-from "${new_master_id}" \
         --cluster-to "${target_id}" \
         --cluster-slots "${slots_for_target}" \
@@ -394,28 +401,28 @@ delete_extra_cluster_nodes() {
   local ordinal pod node_id flags
 
   for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
-    pod="valkey-${ordinal}"
+    pod="$(tc_pod_name "${ordinal}")"
     flags="$(node_flags_for_pod "${pod}" || true)"
     if [[ "${flags}" == *slave* ]]; then
       node_id="$(node_id_for_pod "${pod}" || true)"
       if [[ -n "${node_id}" ]]; then
         echo "  [restore] Removing extra replica ${pod} (${node_id})..."
-        kubectl exec valkey-0 -n "${NS}" -- \
-          valkey-cli --cluster del-node "${CLUSTER_ENDPOINT}" "${node_id}" 2>&1 || true
+        kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+          ${CLI} --cluster del-node "${CLUSTER_ENDPOINT}" "${node_id}" 2>&1 || true
         sleep 3
       fi
     fi
   done
 
   for ordinal in $(seq "${NEW_NODE_START}" "${NEW_NODE_END}"); do
-    pod="valkey-${ordinal}"
+    pod="$(tc_pod_name "${ordinal}")"
     flags="$(node_flags_for_pod "${pod}" || true)"
     if [[ "${flags}" == *master* ]]; then
       node_id="$(node_id_for_pod "${pod}" || true)"
       if [[ -n "${node_id}" ]]; then
         echo "  [restore] Removing extra master ${pod} (${node_id})..."
-        kubectl exec valkey-0 -n "${NS}" -- \
-          valkey-cli --cluster del-node "${CLUSTER_ENDPOINT}" "${node_id}" 2>&1 || true
+        kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+          ${CLI} --cluster del-node "${CLUSTER_ENDPOINT}" "${node_id}" 2>&1 || true
         sleep 3
       fi
     fi
@@ -424,10 +431,10 @@ delete_extra_cluster_nodes() {
 
 scale_down_to_original_shards() {
   patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
-  helm upgrade valkey "${HELM_CHART_PATH}" \
+  helm upgrade "${HELM_RELEASE}" "${HELM_CHART_PATH}" \
     -n "${NS}" \
     -f "${VALUES_FILE}" \
-    --set "cluster.shards=${ORIGINAL_SHARDS}" \
+    --set "${TC_SCALE_KEY}=$(tc_scale_value "${ORIGINAL_SHARDS}")" \
     --wait=false 2>&1 || true
   patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
 
@@ -507,12 +514,12 @@ restore_cluster() {
     fi
   fi
 
-  if ! kubectl get "pod/valkey-${NEW_NODE_START}" -n "${NS}" >/dev/null 2>&1; then
+  if ! kubectl get "pod/$(tc_pod_name "${NEW_NODE_START}")" -n "${NS}" >/dev/null 2>&1; then
     echo "  [restore] Extra shard pods are missing; scaling back to ${TARGET_SHARDS} shards before slot migration..."
-    helm upgrade valkey "${HELM_CHART_PATH}" \
+    helm upgrade "${HELM_RELEASE}" "${HELM_CHART_PATH}" \
       -n "${NS}" \
       -f "${VALUES_FILE}" \
-      --set "cluster.shards=${TARGET_SHARDS}" \
+      --set "${TC_SCALE_KEY}=$(tc_scale_value "${TARGET_SHARDS}")" \
       --wait=false
     patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
     wait_for_pods_ready "${NEW_NODE_START}" "${NEW_NODE_END}"
@@ -546,7 +553,7 @@ for i in $(seq 1 "${N}"); do
   TIMING_FILE="reshard_timing_${i}.json"
   echo ""
   echo "=========================================="
-  echo "  Reshard run ${i}/${N}"
+  echo "  Reshard run ${i}/${N} (target=${TARGET})"
   echo "=========================================="
 
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
@@ -586,19 +593,19 @@ for i in $(seq 1 "${N}"); do
   echo "[${i}] Waiting ${STEADY_STATE_WAIT}s for steady state..."
   sleep "${STEADY_STATE_WAIT}"
 
-  echo "[${i}] Guarding existing pods valkey-0..valkey-$((ORIGINAL_NODE_COUNT - 1)) from rolling restart..."
+  echo "[${i}] Guarding existing pods $(tc_pod_name 0)..$(tc_pod_name $((ORIGINAL_NODE_COUNT - 1))) from rolling restart..."
   patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
 
   echo "[${i}] Scaling up to ${TARGET_SHARDS} shards..."
   SCALE_START="$(date +%s)"
-  helm upgrade valkey "${HELM_CHART_PATH}" \
+  helm upgrade "${HELM_RELEASE}" "${HELM_CHART_PATH}" \
     -n "${NS}" \
     -f "${VALUES_FILE}" \
-    --set "cluster.shards=${TARGET_SHARDS}" \
+    --set "${TC_SCALE_KEY}=$(tc_scale_value "${TARGET_SHARDS}")" \
     --wait=false
   patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
 
-  echo "[${i}] Waiting for new pods valkey-${NEW_NODE_START}..valkey-${NEW_NODE_END} to be ready..."
+  echo "[${i}] Waiting for new pods $(tc_pod_name "${NEW_NODE_START}")..$(tc_pod_name "${NEW_NODE_END}") to be ready..."
   if ! wait_for_pods_ready "${NEW_NODE_START}" "${NEW_NODE_END}" || ! wait_for_new_nodes_known 180; then
     echo "[${i}] ERROR: New shard did not become ready; attempting restore." >&2
     restore_cluster

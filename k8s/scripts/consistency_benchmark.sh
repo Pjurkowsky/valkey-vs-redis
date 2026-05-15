@@ -7,12 +7,21 @@ IMAGE="${CONSISTENCY_IMAGE:-consistency_checker:1}"
 LOCAL_OUT="${1:-./results/consistency}"
 REMOTE_OUT="/work/results/consistency"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CHAOS_YAML="${CHAOS_YAML:-${SCRIPT_DIR}/../chaos/client-network-partition.yaml}"
+
+source "${SCRIPT_DIR}/target_config.sh"
+
+if [[ "${TARGET}" == "redis" ]]; then
+  DEFAULT_CHAOS_YAML="${SCRIPT_DIR}/../chaos/redis-client-network-partition.yaml"
+else
+  DEFAULT_CHAOS_YAML="${SCRIPT_DIR}/../chaos/client-network-partition.yaml"
+fi
+CHAOS_YAML="${CHAOS_YAML:-${DEFAULT_CHAOS_YAML}}"
 
 source "${SCRIPT_DIR}/pod_results.sh"
 
-HOST="${CONSISTENCY_HOST:-valkey.vk.svc.cluster.local}"
-PORT="${CONSISTENCY_PORT:-6379}"
+HOST="${CONSISTENCY_HOST:-${TC_HOST}}"
+PORT="${CONSISTENCY_PORT:-${TC_PORT}}"
+STS="${TC_STS}"
 DURATION="${CONSISTENCY_DURATION:-120}"
 STEADY_STATE_WAIT="${CONSISTENCY_STEADY_STATE_WAIT:-30}"
 CONSISTENCY_CLIENTS="${CONSISTENCY_CLIENTS:-50}"
@@ -99,7 +108,7 @@ for i in $(seq 1 "${N}"); do
   REMOTE_FILE="${REMOTE_OUT}/${OUT_FILE}"
   echo ""
   echo "=========================================="
-  echo "  Consistency run ${i}/${N}"
+  echo "  Consistency run ${i}/${N} (target=${TARGET})"
   echo "=========================================="
 
   kubectl delete networkchaos valkey-network-partition -n "${NS}" --ignore-not-found 2>/dev/null || true
@@ -175,8 +184,8 @@ for i in $(seq 1 "${N}"); do
   kubectl delete networkchaos valkey-network-partition -n "${NS}" --ignore-not-found 2>/dev/null || true
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
 
-  echo "[${i}] Waiting for Valkey cluster to stabilize..."
-  kubectl rollout status sts/valkey -n "${NS}" --timeout=120s
+  echo "[${i}] Waiting for cluster to stabilize..."
+  kubectl rollout status "sts/${STS}" -n "${NS}" --timeout=120s
   sleep 15
 
   echo "[${i}] Done. Result: ${LOCAL_OUT}/${OUT_FILE}"

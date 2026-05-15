@@ -9,10 +9,15 @@ IMAGE="${BACKUP_IMAGE:-backup_restore:1}"
 REMOTE_OUT="/work/results/backup"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-HOST="valkey.vk.svc.cluster.local"
-PORT=6379
-
+source "${SCRIPT_DIR}/target_config.sh"
 source "${SCRIPT_DIR}/pod_results.sh"
+
+HOST="${TC_HOST}"
+PORT="${TC_PORT}"
+STS="${TC_STS}"
+CLI="${TC_CLI}"
+ADMIN_POD="$(tc_admin_pod)"
+APP_NAME_LABEL="${TC_APP_NAME_LABEL}"
 
 mkdir -p "${LOCAL_OUT}"
 
@@ -49,12 +54,12 @@ wait_cluster_healthy() {
   echo "  Waiting for cluster to become healthy (max ${max_wait}s)..."
   while [[ ${elapsed} -lt ${max_wait} ]]; do
     local state
-    state="$(kubectl exec valkey-0 -n "${NS}" -- \
-      valkey-cli cluster info 2>/dev/null | grep cluster_state | tr -d '[:space:]')" || true
+    state="$(kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+      ${CLI} cluster info 2>/dev/null | grep cluster_state | tr -d '[:space:]')" || true
     if [[ "${state}" == "cluster_state:ok" ]]; then
       local masters
-      masters="$(kubectl exec valkey-0 -n "${NS}" -- \
-        valkey-cli cluster nodes 2>/dev/null | grep master | wc -l)" || true
+      masters="$(kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+        ${CLI} cluster nodes 2>/dev/null | grep master | wc -l)" || true
       if [[ "${masters}" -ge 3 ]]; then
         echo "  Cluster healthy (${masters} masters) after ${elapsed}s"
         return 0
@@ -70,8 +75,8 @@ wait_cluster_healthy() {
 trigger_bgsave() {
   echo "  Triggering BGSAVE on all master pods..."
   local master_pods
-  master_pods="$(kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli cluster nodes 2>/dev/null \
+  master_pods="$(kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+    ${CLI} cluster nodes 2>/dev/null \
     | grep master | awk '{print $2}' | cut -d@ -f1)"
 
   local save_start
@@ -80,7 +85,7 @@ trigger_bgsave() {
   for addr in ${master_pods}; do
     local h="${addr%%:*}"
     local p="${addr##*:}"
-    kubectl exec valkey-0 -n "${NS}" -- valkey-cli -h "${h}" -p "${p}" bgsave 2>/dev/null || true
+    kubectl exec "${ADMIN_POD}" -n "${NS}" -- ${CLI} -h "${h}" -p "${p}" bgsave 2>/dev/null || true
   done
 
   echo "  Waiting for BGSAVE to complete on all masters..."
@@ -94,8 +99,8 @@ trigger_bgsave() {
       local h="${addr%%:*}"
       local p="${addr##*:}"
       local saving
-      saving="$(kubectl exec valkey-0 -n "${NS}" -- \
-        valkey-cli -h "${h}" -p "${p}" info persistence 2>/dev/null \
+      saving="$(kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+        ${CLI} -h "${h}" -p "${p}" info persistence 2>/dev/null \
         | grep rdb_bgsave_in_progress | tr -d '[:space:]')" || true
       if [[ "${saving}" == *"1"* ]]; then
         all_done=false
@@ -125,7 +130,7 @@ for i in $(seq 1 "${N}"); do
 
   echo ""
   echo "=========================================="
-  echo "  Backup/Restore run ${i}/${N} (${SIZE_MB} MB/shard)"
+  echo "  Backup/Restore run ${i}/${N} (${SIZE_MB} MB/shard, target=${TARGET})"
   echo "=========================================="
 
   kubectl delete pod "${SEED_POD}" -n "${NS}" --ignore-not-found 2>/dev/null || true
@@ -166,15 +171,15 @@ for i in $(seq 1 "${N}"); do
   SAVE_DURATION="$(echo "${SAVE_OUTPUT}" | tail -1 | awk '{print $3}')"
 
   # -- Kill phase --
-  echo "[${i}] Killing all Valkey pods (PVCs preserved)..."
+  echo "[${i}] Killing all ${TARGET} pods (PVCs preserved)..."
   DELETE_TS="$(date +%s)"
-  kubectl delete pods -n "${NS}" -l app.kubernetes.io/name=valkey --wait=false
+  kubectl delete pods -n "${NS}" -l "app.kubernetes.io/name=${APP_NAME_LABEL}" --wait=false
 
   echo "[${i}] Waiting for pods to terminate..."
   sleep 10
 
   echo "[${i}] Waiting for pods to restart..."
-  kubectl rollout status sts/valkey -n "${NS}" --timeout=300s
+  kubectl rollout status "sts/${STS}" -n "${NS}" --timeout=300s
 
   echo "[${i}] Waiting for cluster to become healthy..."
   wait_cluster_healthy 300

@@ -1,0 +1,21 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: valkey-network-partition
+  namespace: vk
+spec:
+  action: partition
+  mode: one
+  selector:
+    pods:
+      vk:
+        - consistency-checker-1
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - vk
+      labelSelectors:
+        app.kubernetes.io/name: redis-cluster
+  duration: "90s"

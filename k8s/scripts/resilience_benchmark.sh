@@ -10,10 +10,13 @@ IMAGE="${MEMTIER_IMAGE:-memtier_k8s:1}"
 REMOTE_OUT="/work/results/resilience"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+source "${SCRIPT_DIR}/target_config.sh"
 source "${SCRIPT_DIR}/pod_results.sh"
 
-HOST="valkey.vk.svc.cluster.local"
-PORT=6379
+HOST="${TC_HOST}"
+PORT="${TC_PORT}"
+STS="${TC_STS}"
+APP_NAME_LABEL="${TC_APP_NAME_LABEL}"
 THREADS=4
 CLIENTS=16
 TEST_TIME=120
@@ -47,6 +50,23 @@ case "${SCENARIO}" in
     ;;
 esac
 
+if [[ "${TARGET}" == "redis" ]]; then
+  case "${SCENARIO}" in
+    cpu)
+      CHAOS_YAML="${SCRIPT_DIR}/../chaos/redis-stress-cpu.yaml"
+      CHAOS_NAME="redis-cpu-stress"
+      ;;
+    memory)
+      CHAOS_YAML="${SCRIPT_DIR}/../chaos/redis-stress-memory.yaml"
+      CHAOS_NAME="redis-memory-stress"
+      ;;
+    memory-extreme)
+      CHAOS_YAML="${SCRIPT_DIR}/../chaos/redis-stress-memory-extreme.yaml"
+      CHAOS_NAME="redis-memory-extreme-stress"
+      ;;
+  esac
+fi
+
 mkdir -p "${LOCAL_OUT}"
 
 for i in $(seq 1 "${N}"); do
@@ -54,7 +74,7 @@ for i in $(seq 1 "${N}"); do
   OUT_FILE="${FILE_PREFIX}_run_${i}.json"
   echo ""
   echo "=========================================="
-  echo "  Resilience [${SCENARIO}] run ${i}/${N}"
+  echo "  Resilience [${SCENARIO}] run ${i}/${N} (target=${TARGET})"
   echo "=========================================="
 
   kubectl delete "${CHAOS_KIND}" "${CHAOS_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
@@ -116,8 +136,8 @@ for i in $(seq 1 "${N}"); do
   kubectl delete "${CHAOS_KIND}" "${CHAOS_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
 
-  echo "[${i}] Waiting for Valkey cluster to stabilize..."
-  kubectl rollout status sts/valkey -n "${NS}" --timeout=120s
+  echo "[${i}] Waiting for cluster to stabilize..."
+  kubectl rollout status "sts/${STS}" -n "${NS}" --timeout=120s
   sleep 10
 
   echo "[${i}] Done. Result: ${LOCAL_OUT}/${OUT_FILE}"

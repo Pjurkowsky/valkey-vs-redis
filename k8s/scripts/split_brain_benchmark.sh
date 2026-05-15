@@ -4,7 +4,7 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Split-brain consistency benchmark
 #
-# Partitions Valkey nodes into minority (1 shard) and majority (2 shards),
+# Partitions cluster nodes into minority (1 shard) and majority (2 shards),
 # writes keys spread across all hash slots, then verifies which ACK'd keys
 # on minority-side slots were lost after the partition heals.
 # ---------------------------------------------------------------------------
@@ -15,14 +15,25 @@ IMAGE="${CONSISTENCY_IMAGE:-consistency_checker:2}"
 LOCAL_OUT="${1:-./results/split_brain}"
 REMOTE_OUT="/work/results/split_brain"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CHAOS_YAML="${CHAOS_YAML:-${SCRIPT_DIR}/../chaos/split-brain-partition.yaml}"
+
+source "${SCRIPT_DIR}/target_config.sh"
+
+if [[ "${TARGET}" == "redis" ]]; then
+  DEFAULT_CHAOS_YAML="${SCRIPT_DIR}/../chaos/redis-split-brain-partition.yaml"
+else
+  DEFAULT_CHAOS_YAML="${SCRIPT_DIR}/../chaos/split-brain-partition.yaml"
+fi
+CHAOS_YAML="${CHAOS_YAML:-${DEFAULT_CHAOS_YAML}}"
 CHAOS_NAME="valkey-split-brain"
-VALKEY_POD_SELECTOR="${VALKEY_POD_SELECTOR:-app.kubernetes.io/name=valkey}"
+POD_SELECTOR="${POD_SELECTOR:-app.kubernetes.io/name=${TC_APP_NAME_LABEL}}"
 
 source "${SCRIPT_DIR}/pod_results.sh"
 
-HOST="${SPLIT_BRAIN_HOST:-valkey.vk.svc.cluster.local}"
-PORT="${SPLIT_BRAIN_PORT:-6379}"
+HOST="${SPLIT_BRAIN_HOST:-${TC_HOST}}"
+PORT="${SPLIT_BRAIN_PORT:-${TC_PORT}}"
+STS="${TC_STS}"
+CLI="${TC_CLI}"
+ADMIN_POD="$(tc_admin_pod)"
 DURATION="${SPLIT_BRAIN_DURATION:-120}"
 STEADY_STATE_WAIT="${SPLIT_BRAIN_STEADY_STATE_WAIT:-30}"
 SPLIT_BRAIN_CLIENTS="${SPLIT_BRAIN_CLIENTS:-50}"
@@ -33,13 +44,13 @@ SPLIT_BRAIN_SLOW_THRESHOLD_MS="${SPLIT_BRAIN_SLOW_THRESHOLD_MS:-1000}"
 SPLIT_BRAIN_TLS="${SPLIT_BRAIN_TLS:-false}"
 SPLIT_BRAIN_TLS_SKIP_VERIFY="${SPLIT_BRAIN_TLS_SKIP_VERIFY:-true}"
 
-VALKEY_CLI_TLS="${VALKEY_CLI_TLS:-${SPLIT_BRAIN_TLS}}"
-VALKEY_CLI_TLS_SKIP_VERIFY="${VALKEY_CLI_TLS_SKIP_VERIFY:-${SPLIT_BRAIN_TLS_SKIP_VERIFY}}"
-VALKEY_CLI_CACERT="${VALKEY_CLI_CACERT:-/tls/ca.crt}"
+CLI_TLS="${CLI_TLS:-${SPLIT_BRAIN_TLS}}"
+CLI_TLS_SKIP_VERIFY="${CLI_TLS_SKIP_VERIFY:-${SPLIT_BRAIN_TLS_SKIP_VERIFY}}"
+CLI_CACERT="${CLI_CACERT:-/tls/ca.crt}"
 
 mkdir -p "${LOCAL_OUT}"
 
-# -- TLS args for checker and valkey-cli ---------------------------------
+# -- TLS args for checker and cli ---------------------------------
 
 CHECKER_TLS_ARGS=()
 case "${SPLIT_BRAIN_TLS}" in
@@ -55,16 +66,16 @@ case "${SPLIT_BRAIN_RETRY_ON_TIMEOUT}" in
     ;;
 esac
 
-VALKEY_CLI_ARGS=()
-case "${VALKEY_CLI_TLS}" in
+CLI_TLS_ARGS=()
+case "${CLI_TLS}" in
   1|true|TRUE|yes|YES|on|ON)
-    VALKEY_CLI_ARGS+=(--tls)
-    case "${VALKEY_CLI_TLS_SKIP_VERIFY}" in
+    CLI_TLS_ARGS+=(--tls)
+    case "${CLI_TLS_SKIP_VERIFY}" in
       1|true|TRUE|yes|YES|on|ON)
-        VALKEY_CLI_ARGS+=(--insecure)
+        CLI_TLS_ARGS+=(--insecure)
         ;;
       *)
-        VALKEY_CLI_ARGS+=(--cacert "${VALKEY_CLI_CACERT}")
+        CLI_TLS_ARGS+=(--cacert "${CLI_CACERT}")
         ;;
     esac
     ;;
@@ -73,12 +84,9 @@ esac
 # -- Topology discovery --------------------------------------------------
 
 discover_minority() {
-  # Isolate one master as the minority partition while leaving its replica
-  # in the majority partition so the majority can promote it during the split.
-  # Returns one pod name.
   local nodes_output
-  nodes_output="$(kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli "${VALKEY_CLI_ARGS[@]}" cluster nodes 2>/dev/null)"
+  nodes_output="$(kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+    ${CLI} "${CLI_TLS_ARGS[@]}" cluster nodes 2>/dev/null)"
 
   local target_master_id target_master_pod
   target_master_id="$(echo "${nodes_output}" | awk '$3 ~ /master/ && $3 !~ /fail/ {print $1; exit}')"
@@ -107,7 +115,7 @@ discover_minority() {
 
 resolve_address_to_pod() {
   local addr="$1"
-  if [[ "${addr}" == valkey-* ]]; then
+  if [[ "${addr}" == ${TC_POD_PREFIX}* ]]; then
     echo "${addr%%.*}"
     return 0
   fi
@@ -125,11 +133,11 @@ resolve_address_to_pod() {
 label_pods() {
   local -a minority_pods=("$@")
   local all_pods
-  all_pods="$(kubectl get pods -n "${NS}" -l "${VALKEY_POD_SELECTOR}" \
+  all_pods="$(kubectl get pods -n "${NS}" -l "${POD_SELECTOR}" \
     -o jsonpath='{.items[*].metadata.name}')"
 
   if [[ -z "${all_pods}" ]]; then
-    echo "ERROR: no Valkey pods matched selector '${VALKEY_POD_SELECTOR}'" >&2
+    echo "ERROR: no pods matched selector '${POD_SELECTOR}'" >&2
     return 1
   fi
 
@@ -201,7 +209,7 @@ for i in $(seq 1 "${N}"); do
 
   echo ""
   echo "=========================================="
-  echo "  Split-brain run ${i}/${N}"
+  echo "  Split-brain run ${i}/${N} (target=${TARGET})"
   echo "=========================================="
 
   # Cleanup from previous run
@@ -218,7 +226,7 @@ for i in $(seq 1 "${N}"); do
   echo "[${i}] Labeling pods (minority/majority)..."
   label_pods "${MINORITY_PODS[@]}"
 
-  kubectl get pods -n "${NS}" -l "${VALKEY_POD_SELECTOR}" \
+  kubectl get pods -n "${NS}" -l "${POD_SELECTOR}" \
     --show-labels --no-headers | grep -E 'chaos-side' || true
 
   # Start checker pod
@@ -307,8 +315,8 @@ EOF
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
   remove_labels
 
-  echo "[${i}] Waiting for Valkey cluster to stabilize..."
-  kubectl rollout status sts/valkey -n "${NS}" --timeout=120s
+  echo "[${i}] Waiting for cluster to stabilize..."
+  kubectl rollout status "sts/${STS}" -n "${NS}" --timeout=120s
   sleep 15
 
   echo "[${i}] Done. Result: ${LOCAL_OUT}/${OUT_FILE}"

@@ -9,16 +9,19 @@ IMAGE="${BACKUP_IMAGE:-backup_restore:1}"
 REMOTE_OUT="/work/results/maxmemory"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+source "${SCRIPT_DIR}/target_config.sh"
 source "${SCRIPT_DIR}/pod_results.sh"
 
-HOST="valkey.vk.svc.cluster.local"
-PORT=6379
+HOST="${TC_HOST}"
+PORT="${TC_PORT}"
+CLI="${TC_CLI}"
+ADMIN_POD="$(tc_admin_pod)"
 
 mkdir -p "${LOCAL_OUT}"
 
 master_addrs() {
-  kubectl exec valkey-0 -n "${NS}" -- \
-    valkey-cli cluster nodes 2>/dev/null \
+  kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+    ${CLI} cluster nodes 2>/dev/null \
     | awk '$3 ~ /master/ && $3 !~ /fail/ {print $2}' \
     | cut -d@ -f1
 }
@@ -39,8 +42,8 @@ snapshot_cluster() {
       local host="${addr%%:*}"
       local port="${addr##*:}"
       local info
-      info="$(kubectl exec valkey-0 -n "${NS}" -- \
-        valkey-cli -h "${host}" -p "${port}" info all 2>/dev/null || true)"
+      info="$(kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+        ${CLI} -h "${host}" -p "${port}" info all 2>/dev/null || true)"
 
       local used_memory maxmemory evicted_keys keyspace_hits keyspace_misses total_keys
       used_memory="$(awk -F: '$1=="used_memory" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
@@ -48,8 +51,8 @@ snapshot_cluster() {
       evicted_keys="$(awk -F: '$1=="evicted_keys" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
       keyspace_hits="$(awk -F: '$1=="keyspace_hits" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
       keyspace_misses="$(awk -F: '$1=="keyspace_misses" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
-      total_keys="$(kubectl exec valkey-0 -n "${NS}" -- \
-        valkey-cli -h "${host}" -p "${port}" dbsize 2>/dev/null | tr -d '\r' || echo 0)"
+      total_keys="$(kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+        ${CLI} -h "${host}" -p "${port}" dbsize 2>/dev/null | tr -d '\r' || echo 0)"
 
       if [[ "${first}" == "true" ]]; then
         first=false
@@ -122,7 +125,7 @@ for i in $(seq 1 "${N}"); do
 
   echo ""
   echo "=========================================="
-  echo "  Maxmemory run ${i}/${N} (${TARGET_MB} MB writes)"
+  echo "  Maxmemory run ${i}/${N} (${TARGET_MB} MB writes, target=${TARGET})"
   echo "=========================================="
 
   kubectl delete pod "${SEED_POD}" "${VERIFY_POD}" "${CLEANUP_POD}" \
@@ -131,7 +134,7 @@ for i in $(seq 1 "${N}"); do
   echo "[${i}] Capturing before snapshot..."
   snapshot_cluster "${LOCAL_OUT}/${BEFORE_FILE}" "before"
 
-  echo "[${i}] Writing ${TARGET_MB} MB of 1KB values through Valkey..."
+  echo "[${i}] Writing ${TARGET_MB} MB of 1KB values..."
   SEED_START="$(date +%s)"
   kubectl run "${SEED_POD}" -n "${NS}" \
     --image="${IMAGE}" \

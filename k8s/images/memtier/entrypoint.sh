@@ -7,11 +7,26 @@ read -r -a CPUs <<< "${MEMTIER_CPUS:-1 2 4}"
 read -r -a PAYLOADS <<< "${MEMTIER_PAYLOADS:-1 10 1000}"
 read -r -a RATIOS <<< "${MEMTIER_RATIOS:-0:1 1:0 1:1}"
 
+TARGET="${TARGET:-valkey}"
 NS="vk"
-STS="valkey"
-CONTAINER="valkey"
 
-HOST="valkey.vk.svc.cluster.local"
+case "${TARGET}" in
+  valkey)
+    STS="${STS:-valkey}"
+    CONTAINER="${CONTAINER:-valkey}"
+    HOST="${HOST:-valkey.vk.svc.cluster.local}"
+    ;;
+  redis)
+    STS="${STS:-redis-redis-cluster}"
+    CONTAINER="${CONTAINER:-redis-cluster}"
+    HOST="${HOST:-redis-redis-cluster.vk.svc.cluster.local}"
+    ;;
+  *)
+    echo "ERROR: TARGET must be 'valkey' or 'redis', got '${TARGET}'" >&2
+    exit 1
+    ;;
+esac
+
 PORT=6379
 THREADS="${MEMTIER_THREADS:-4}"
 CLIENTS="${MEMTIER_CLIENTS:-25}"
@@ -57,6 +72,7 @@ case "${MEMTIER_TLS}" in
 esac
 
 echo "==> Benchmark configuration"
+echo "TARGET=${TARGET}"
 echo "MEMTIER_CPUS=${CPUs[*]}"
 echo "MEMTIER_PAYLOADS=${PAYLOADS[*]}"
 echo "MEMTIER_RATIOS=${RATIOS[*]}"

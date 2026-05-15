@@ -4,18 +4,23 @@ set -euo pipefail
 N="${N:-5}"
 NS="vk"
 IMAGE="${MEMTIER_IMAGE:-memtier_k8s:1}"
-PROBE_IMAGE="${PROBE_IMAGE:-docker.io/valkey/valkey:9.0.1}"
 LOCAL_OUT="${1:-./results/upgrade}"
 REMOTE_OUT="/work/results/upgrade"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+source "${SCRIPT_DIR}/target_config.sh"
 source "${SCRIPT_DIR}/pod_results.sh"
 
-HELM_CHART_PATH="${HELM_CHART_PATH:-../valkey-helm/valkey}"
-VALUES_FILE="${VALUES_FILE:-./k8s/manifests/values.yaml}"
+HELM_CHART_PATH="${TC_HELM_CHART}"
+VALUES_FILE="${TC_VALUES_FILE}"
+HELM_RELEASE="${TC_HELM_RELEASE}"
+STS="${TC_STS}"
+CLI="${TC_CLI}"
+ADMIN_POD="$(tc_admin_pod)"
+PROBE_IMAGE="${TC_PROBE_IMAGE}"
 
-HOST="valkey.vk.svc.cluster.local"
-PORT=6379
+HOST="${TC_HOST}"
+PORT="${TC_PORT}"
 THREADS=4
 CLIENTS=16
 TEST_TIME=300
@@ -30,11 +35,11 @@ wait_cluster_client_ready() {
   local max_wait="${1:-300}"
   local elapsed=0
 
-  echo "  Waiting for Valkey cluster client readiness (max ${max_wait}s)..."
+  echo "  Waiting for cluster client readiness (max ${max_wait}s)..."
   while [[ "${elapsed}" -lt "${max_wait}" ]]; do
     local info state slots_ok slots_assigned
-    info="$(kubectl exec valkey-0 -n "${NS}" -- \
-      valkey-cli cluster info 2>/dev/null || true)"
+    info="$(kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+      ${CLI} cluster info 2>/dev/null || true)"
     state="$(awk -F: '$1=="cluster_state" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
     slots_ok="$(awk -F: '$1=="cluster_slots_ok" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
     slots_assigned="$(awk -F: '$1=="cluster_slots_assigned" {gsub(/\r/,"",$2); print $2}' <<<"${info}")"
@@ -48,7 +53,7 @@ wait_cluster_client_ready() {
         --rm \
         --attach \
         --command -- \
-        /bin/sh -c "valkey-cli -c -h '${HOST}' -p '${PORT}' set '${probe_key}' ok >/dev/null && test \"\$(valkey-cli -c -h '${HOST}' -p '${PORT}' get '${probe_key}')\" = ok && valkey-cli -c -h '${HOST}' -p '${PORT}' del '${probe_key}' >/dev/null" \
+        /bin/sh -c "${CLI} -c -h '${HOST}' -p '${PORT}' set '${probe_key}' ok >/dev/null && test \"\$(${CLI} -c -h '${HOST}' -p '${PORT}' get '${probe_key}')\" = ok && ${CLI} -c -h '${HOST}' -p '${PORT}' del '${probe_key}' >/dev/null" \
         >/dev/null 2>&1; then
         echo "  Cluster client-ready after ${elapsed}s"
         return 0
@@ -59,10 +64,18 @@ wait_cluster_client_ready() {
     elapsed=$((elapsed + 5))
   done
 
-  echo "ERROR: Valkey cluster was not client-ready after ${max_wait}s" >&2
-  kubectl exec valkey-0 -n "${NS}" -- valkey-cli cluster info || true
-  kubectl exec valkey-0 -n "${NS}" -- valkey-cli cluster slots || true
+  echo "ERROR: Cluster was not client-ready after ${max_wait}s" >&2
+  kubectl exec "${ADMIN_POD}" -n "${NS}" -- ${CLI} cluster info || true
+  kubectl exec "${ADMIN_POD}" -n "${NS}" -- ${CLI} cluster slots || true
   return 1
+}
+
+upgrade_annotation_key() {
+  if [[ "${TARGET}" == "redis" ]]; then
+    echo "redis.podAnnotations.restart-trigger"
+  else
+    echo "podAnnotations.restart-trigger"
+  fi
 }
 
 for i in $(seq 1 "${N}"); do
@@ -70,7 +83,7 @@ for i in $(seq 1 "${N}"); do
   OUT_FILE="upgrade_run_${i}.json"
   echo ""
   echo "=========================================="
-  echo "  Upgrade run ${i}/${N}"
+  echo "  Upgrade run ${i}/${N} (target=${TARGET})"
   echo "=========================================="
 
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
@@ -110,11 +123,12 @@ for i in $(seq 1 "${N}"); do
   sleep "${STEADY_STATE_WAIT}"
 
   TRIGGER="$(date +%s)"
-  echo "[${i}] Triggering rolling upgrade (restart-trigger=${TRIGGER})..."
-  helm upgrade valkey "${HELM_CHART_PATH}" \
+  ANNOTATION_KEY="$(upgrade_annotation_key)"
+  echo "[${i}] Triggering rolling upgrade (${ANNOTATION_KEY}=${TRIGGER})..."
+  helm upgrade "${HELM_RELEASE}" "${HELM_CHART_PATH}" \
     -n "${NS}" \
     -f "${VALUES_FILE}" \
-    --set-string "podAnnotations.restart-trigger=${TRIGGER}" \
+    --set-string "${ANNOTATION_KEY}=${TRIGGER}" \
     --wait=false
 
   echo "[${i}] Waiting for memtier to finish..."
@@ -137,8 +151,8 @@ for i in $(seq 1 "${N}"); do
   echo "[${i}] Cleaning up memtier pod..."
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
 
-  echo "[${i}] Waiting for Valkey rollout to fully complete..."
-  kubectl rollout status sts/valkey -n "${NS}" --timeout=300s
+  echo "[${i}] Waiting for rollout to fully complete..."
+  kubectl rollout status "sts/${STS}" -n "${NS}" --timeout=300s
   wait_cluster_client_ready 300
   sleep 15
 

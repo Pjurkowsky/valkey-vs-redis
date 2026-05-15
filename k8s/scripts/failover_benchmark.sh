@@ -8,10 +8,16 @@ LOCAL_OUT="${1:-./results/failover}"
 REMOTE_OUT="/work/results/failover"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+source "${SCRIPT_DIR}/target_config.sh"
 source "${SCRIPT_DIR}/pod_results.sh"
 
-HOST="valkey.vk.svc.cluster.local"
-PORT=6379
+HOST="${TC_HOST}"
+PORT="${TC_PORT}"
+STS="${TC_STS}"
+CLI="${TC_CLI}"
+ADMIN_POD="$(tc_admin_pod)"
+APP_INSTANCE_LABEL="${TC_APP_INSTANCE_LABEL}"
+
 THREADS=4
 CLIENTS=1
 TEST_TIME=120
@@ -29,9 +35,9 @@ MEMTIER_TLS_CACERT="${MEMTIER_TLS_CACERT:-}"
 MEMTIER_TLS_CERT="${MEMTIER_TLS_CERT:-}"
 MEMTIER_TLS_KEY="${MEMTIER_TLS_KEY:-}"
 MEMTIER_TLS_SNI="${MEMTIER_TLS_SNI:-}"
-VALKEY_CLI_TLS="${VALKEY_CLI_TLS:-${MEMTIER_TLS}}"
-VALKEY_CLI_TLS_SKIP_VERIFY="${VALKEY_CLI_TLS_SKIP_VERIFY:-${MEMTIER_TLS_SKIP_VERIFY}}"
-VALKEY_CLI_CACERT="${VALKEY_CLI_CACERT:-/tls/ca.crt}"
+CLI_TLS="${CLI_TLS:-${MEMTIER_TLS}}"
+CLI_TLS_SKIP_VERIFY="${CLI_TLS_SKIP_VERIFY:-${MEMTIER_TLS_SKIP_VERIFY}}"
+CLI_CACERT="${CLI_CACERT:-/tls/ca.crt}"
 
 mkdir -p "${LOCAL_OUT}"
 
@@ -59,16 +65,16 @@ case "${MEMTIER_TLS}" in
     ;;
 esac
 
-VALKEY_CLI_ARGS=()
-case "${VALKEY_CLI_TLS}" in
+CLI_TLS_ARGS=()
+case "${CLI_TLS}" in
   1|true|TRUE|yes|YES|on|ON)
-    VALKEY_CLI_ARGS+=(--tls)
-    case "${VALKEY_CLI_TLS_SKIP_VERIFY}" in
+    CLI_TLS_ARGS+=(--tls)
+    case "${CLI_TLS_SKIP_VERIFY}" in
       1|true|TRUE|yes|YES|on|ON)
-        VALKEY_CLI_ARGS+=(--insecure)
+        CLI_TLS_ARGS+=(--insecure)
         ;;
       *)
-        VALKEY_CLI_ARGS+=(--cacert "${VALKEY_CLI_CACERT}")
+        CLI_TLS_ARGS+=(--cacert "${CLI_CACERT}")
         ;;
     esac
     ;;
@@ -78,7 +84,7 @@ resolve_pod_name() {
   local host="$1"
   local pod_table pod_name
 
-  if [[ "${host}" == valkey-* ]]; then
+  if [[ "${host}" == ${TC_POD_PREFIX}* ]]; then
     echo "${host%%.*}"
     return 0
   fi
@@ -126,8 +132,8 @@ get_target_master_pods() {
       break
     fi
   done < <(
-    kubectl exec valkey-0 -n "${NS}" -- \
-      valkey-cli "${VALKEY_CLI_ARGS[@]}" cluster nodes 2>/dev/null \
+    kubectl exec "${ADMIN_POD}" -n "${NS}" -- \
+      ${CLI} "${CLI_TLS_ARGS[@]}" cluster nodes 2>/dev/null \
       | awk '$3 ~ /master/ && $3 !~ /fail/ {print $2}'
   )
 
@@ -145,7 +151,7 @@ write_podchaos_manifest() {
 
   local target_pod chaos_name first_doc=1
   for target_pod in "$@"; do
-    chaos_name="valkey-master-kill-${target_pod}"
+    chaos_name="${TARGET}-master-kill-${target_pod}"
     if [[ "${first_doc}" -eq 0 ]]; then
       printf -- '---\n' >> "${manifest_path}"
     fi
@@ -174,14 +180,14 @@ write_podchaos_all_manifest() {
 apiVersion: chaos-mesh.org/v1alpha1
 kind: PodChaos
 metadata:
-  name: valkey-kill-all
+  name: ${TARGET}-kill-all
   namespace: ${NS}
 spec:
   selector:
     namespaces:
       - ${NS}
     labelSelectors:
-      app.kubernetes.io/instance: valkey
+      app.kubernetes.io/instance: ${APP_INSTANCE_LABEL}
   mode: all
   action: pod-kill
   gracePeriod: ${FAILOVER_GRACE_PERIOD}
@@ -191,7 +197,7 @@ EOF
 expected_master_chaos_names() {
   local target_pod
   for target_pod in "$@"; do
-    echo "valkey-master-kill-${target_pod}"
+    echo "${TARGET}-master-kill-${target_pod}"
   done
 }
 
@@ -215,8 +221,8 @@ for i in $(seq 1 "${N}"); do
     mapfile -t TARGET_MASTER_PODS < <(get_target_master_pods "${FAILOVER_MASTERS}")
     if [[ "${#TARGET_MASTER_PODS[@]}" -lt "${FAILOVER_MASTERS}" ]]; then
       echo "[${i}] ERROR: could not determine ${FAILOVER_MASTERS} target master pod(s)."
-      echo "[${i}] INFO: visible master nodes from valkey-0:"
-      kubectl exec valkey-0 -n "${NS}" -- valkey-cli "${VALKEY_CLI_ARGS[@]}" cluster nodes 2>/dev/null | grep master || true
+      echo "[${i}] INFO: visible master nodes from ${ADMIN_POD}:"
+      kubectl exec "${ADMIN_POD}" -n "${NS}" -- ${CLI} "${CLI_TLS_ARGS[@]}" cluster nodes 2>/dev/null | grep master || true
       exit 1
     fi
     TARGET_DESC="killing ${FAILOVER_MASTERS} master pod(s): ${TARGET_MASTER_PODS[*]}"
@@ -227,11 +233,11 @@ for i in $(seq 1 "${N}"); do
     write_podchaos_manifest "${CHAOS_FILE}" "${TARGET_MASTER_PODS[@]}"
   else
     write_podchaos_all_manifest "${CHAOS_FILE}"
-    TARGET_DESC="killing all Valkey pods"
+    TARGET_DESC="killing all ${TARGET} pods"
   fi
   echo ""
   echo "=========================================="
-  echo "  Failover run ${i}/${N}"
+  echo "  Failover run ${i}/${N} (target=${TARGET})"
   echo "=========================================="
 
   kubectl delete -f "${CHAOS_FILE}" -n "${NS}" --ignore-not-found 2>/dev/null || true
@@ -322,7 +328,7 @@ EOF
   if [[ "${FAILOVER_MODE}" == "masters" ]]; then
     mapfile -t CHAOS_NAMES < <(expected_master_chaos_names "${TARGET_MASTER_PODS[@]}")
   else
-    CHAOS_NAMES=("valkey-kill-all")
+    CHAOS_NAMES=("${TARGET}-kill-all")
   fi
   for chaos_name in "${CHAOS_NAMES[@]}"; do
     if ! kubectl get podchaos "${chaos_name}" -n "${NS}" >/dev/null 2>&1; then
@@ -358,8 +364,8 @@ EOF
   rm -f "${CHAOS_FILE}"
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
 
-  echo "[${i}] Waiting for Valkey cluster to stabilize..."
-  kubectl rollout status sts/valkey -n "${NS}" --timeout=120s
+  echo "[${i}] Waiting for cluster to stabilize..."
+  kubectl rollout status "sts/${STS}" -n "${NS}" --timeout=120s
   sleep 10
 
   echo "[${i}] Done. Result: ${LOCAL_OUT}/${OUT_FILE}"

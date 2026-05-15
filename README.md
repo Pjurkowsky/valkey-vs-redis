@@ -11,15 +11,15 @@
 ## Stack Overview
 
 - Kubernetes
-- Valkey Helm Chart
+- Valkey Helm Chart + Bitnami Redis Cluster Helm Chart
 - Prometheus + Grafana (kube-prometheus-stack)
 - ServiceMonitor enabled for metrics scraping
 - memtier_benchmark (run as a pod via custom Docker image)
 
-Valkey deployed in cluster mode:
+Both Valkey and Redis 7.2 are deployed in cluster mode with identical topology:
 
 - 3 shards
-- 1 replica per shard
+- 1 replica per shard (6 pods total)
 - Persistence enabled (5Gi)
 - maxmemory (1Gi)
 
@@ -91,6 +91,17 @@ git checkout pr-116
 helm install valkey ../valkey-helm/valkey -n vk -f ./k8s/manifests/values.yaml --create-namespace
 ```
 
+### Install Redis 7.2
+
+```bash
+helm install redis oci://registry-1.docker.io/bitnamicharts/redis-cluster \
+  -n vk -f ./k8s/manifests/redis-values.yaml --create-namespace
+```
+
+The Redis cluster uses the Bitnami redis-cluster chart with the image pinned to Redis 7.2
+(`image.tag: 7.2.7-debian-12-r0`). The topology matches Valkey: 6 nodes (3 masters + 3 replicas),
+`maxmemory 1gb`, `allkeys-lru`, 5Gi persistence, and metrics with ServiceMonitor.
+
 ### Deploy StatsD exporter
 
 ```bash
@@ -105,44 +116,53 @@ docker build -t memtier_k8s:1 ./k8s/images/memtier
 minikube image load memtier_k8s:1
 ```
 
-Grant the benchmark pod permission to update and observe the Valkey StatefulSet during CPU sweep runs:
+Grant the benchmark pod permission to update and observe StatefulSets during CPU sweep runs:
 
 ```bash
 kubectl apply -f ./k8s/memtier_rbac.yaml
 ```
 
-Run the full benchmark and copy results to the host:
+Run the full benchmark against Valkey (default) and copy results to the host:
 
 ```bash
-./k8s/scripts/run_benchmark.sh ./results/memtier
+./k8s/scripts/run_benchmark.sh ./results/valkey/memtier
 ```
 
-This launches a pod with the `memtier-sa` service account, executes all benchmark configurations, copies the JSON results back to `./results/memtier/`, and cleans up the pod.
+Run the same benchmark against Redis 7.2:
+
+```bash
+TARGET=redis ./k8s/scripts/run_benchmark.sh ./results/redis/memtier
+```
+
+All benchmark scripts accept a `TARGET` environment variable (`valkey` or `redis`).
+When `TARGET=redis`, the scripts automatically use the Redis service name, StatefulSet,
+container name, CLI binary, and Helm chart path. The default is `valkey`.
 
 To use a different image, set `MEMTIER_IMAGE`:
 
 ```bash
-MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/run_benchmark.sh ./results/memtier
+MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/run_benchmark.sh ./results/valkey/memtier
 ```
 
 ### Persistence and TLS benchmark variants
 
-`run_benchmark.sh` can optionally apply Valkey runtime variants before creating the benchmark pod.
+`run_benchmark.sh` can optionally apply runtime variants before creating the benchmark pod.
+The environment variables have been renamed from `VALKEY_*` to `SERVER_*` for target-agnostic usage.
 
-Persistence controls Valkey RDB/AOF behavior in `valkey.conf`:
+Persistence controls RDB/AOF behavior:
 
 ```bash
 # No RDB snapshots, no AOF
-VALKEY_PERSISTENCE=off ./k8s/scripts/run_benchmark.sh ./results/memtier_no_persistence
+SERVER_PERSISTENCE=off ./k8s/scripts/run_benchmark.sh ./results/memtier_no_persistence
 
 # RDB snapshots only
-VALKEY_PERSISTENCE=rdb ./k8s/scripts/run_benchmark.sh ./results/memtier_rdb
+SERVER_PERSISTENCE=rdb ./k8s/scripts/run_benchmark.sh ./results/memtier_rdb
 
 # AOF only
-VALKEY_PERSISTENCE=aof ./k8s/scripts/run_benchmark.sh ./results/memtier_aof
+SERVER_PERSISTENCE=aof ./k8s/scripts/run_benchmark.sh ./results/memtier_aof
 
 # RDB + AOF
-VALKEY_PERSISTENCE=both ./k8s/scripts/run_benchmark.sh ./results/memtier_persistence
+SERVER_PERSISTENCE=both ./k8s/scripts/run_benchmark.sh ./results/memtier_persistence
 ```
 
 Supported values:
@@ -152,7 +172,7 @@ off, rdb, aof, both
 ```
 
 In cluster mode the Helm chart still creates PVCs for the pods. The flag above controls whether
-Valkey writes RDB/AOF persistence data, not whether the StatefulSet has volumes.
+the server writes RDB/AOF persistence data, not whether the StatefulSet has volumes.
 
 To enable TLS, first create a Kubernetes secret with `server.crt`, `server.key`, and `ca.crt`:
 
@@ -166,8 +186,8 @@ kubectl create secret generic valkey-tls-secret -n vk \
 Then run the benchmark with server-side TLS and memtier TLS enabled:
 
 ```bash
-VALKEY_TLS=true \
-VALKEY_TLS_SECRET=valkey-tls-secret \
+SERVER_TLS=true \
+SERVER_TLS_SECRET=valkey-tls-secret \
 MEMTIER_TLS=true \
 MEMTIER_TLS_SKIP_VERIFY=true \
 ./k8s/scripts/run_benchmark.sh ./results/memtier_tls
@@ -176,7 +196,7 @@ MEMTIER_TLS_SKIP_VERIFY=true \
 To disable TLS again:
 
 ```bash
-VALKEY_TLS=false ./k8s/scripts/run_benchmark.sh ./results/memtier_plain
+SERVER_TLS=false ./k8s/scripts/run_benchmark.sh ./results/memtier_plain
 ```
 
 For a production-like TLS test, prefer using a real CA and set `MEMTIER_TLS_SKIP_VERIFY=false`
@@ -210,19 +230,20 @@ using [Chaos Mesh](https://chaos-mesh.org/) for fault injection.
 
 ### Run failover benchmark
 
-Runs memtier_benchmark under sustained load, kills a Valkey master pod at ~30s, and captures
+Runs memtier_benchmark under sustained load, kills a master pod at ~30s, and captures
 the per-second ops/latency time series plus a timestamped memtier stdout/stderr log. The script
 waits until memtier's timed run has started, then waits for the steady-state interval before
 injecting chaos. It runs once by default.
 
 ```bash
-./k8s/scripts/failover_benchmark.sh ./results/failover
+./k8s/scripts/failover_benchmark.sh ./results/valkey/failover
+TARGET=redis ./k8s/scripts/failover_benchmark.sh ./results/redis/failover
 ```
 
 Override the number of runs or image:
 
 ```bash
-N=3 MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/failover_benchmark.sh ./results/failover
+N=3 MEMTIER_IMAGE=memtier_k8s:2 ./k8s/scripts/failover_benchmark.sh ./results/valkey/failover
 ```
 
 ### Analyse failover results
@@ -255,26 +276,28 @@ using Chaos Mesh StressChaos experiments. Requires Chaos Mesh to be installed (s
 
 ### Run CPU stress test
 
-Saturates CPU on one Valkey pod for 30s during sustained load:
+Saturates CPU on one pod for 30s during sustained load:
 
 ```bash
-./k8s/scripts/resilience_benchmark.sh cpu ./results/resilience
+./k8s/scripts/resilience_benchmark.sh cpu ./results/valkey/resilience
+TARGET=redis ./k8s/scripts/resilience_benchmark.sh cpu ./results/redis/resilience
 ```
 
 ### Run memory stress test
 
-Allocates 900 MB on one Valkey pod for 60s (against the 1 GB maxmemory limit):
+Allocates 900 MB on one pod for 60s (against the 1 GB maxmemory limit):
 
 ```bash
-./k8s/scripts/resilience_benchmark.sh memory ./results/resilience
+./k8s/scripts/resilience_benchmark.sh memory ./results/valkey/resilience
+TARGET=redis ./k8s/scripts/resilience_benchmark.sh memory ./results/redis/resilience
 ```
 
 ### Run extreme memory stress test
 
-Allocates 1800 MB per worker with 2 workers on one Valkey pod for 60s:
+Allocates 1800 MB per worker with 2 workers on one pod for 60s:
 
 ```bash
-./k8s/scripts/resilience_benchmark.sh memory-extreme ./results/resilience
+./k8s/scripts/resilience_benchmark.sh memory-extreme ./results/valkey/resilience
 ```
 
 ### Analyse resilience results
@@ -291,11 +314,12 @@ recovery status, and pod restart detection (OOM).
 
 ## Maxmemory Testing
 
-Measures Valkey's configured `maxmemory 1gb` behavior by writing more data than the
+Measures the configured `maxmemory 1gb` behavior by writing more data than the
 cluster can retain and checking eviction counters plus a sample of written keys.
 
 ```bash
-N=1 ./k8s/scripts/maxmemory_benchmark.sh 4096 ./results/maxmemory
+N=1 ./k8s/scripts/maxmemory_benchmark.sh 4096 ./results/valkey/maxmemory
+N=1 TARGET=redis ./k8s/scripts/maxmemory_benchmark.sh 4096 ./results/redis/maxmemory
 ```
 
 With 3 masters and `maxmemory 1gb`, `4096` MB of 1 KB values should push the cluster
@@ -305,26 +329,28 @@ To measure resilience while maxmemory pressure is happening, run memtier continu
 and start the maxmemory writer after the steady-state window:
 
 ```bash
-N=1 ./k8s/scripts/maxmemory_resilience_benchmark.sh 4096 ./results/maxmemory_resilience
-python cli.py resilience --input ./results/maxmemory_resilience --scenario maxmemory --output-dir ./plots/maxmemory_resilience
+N=1 ./k8s/scripts/maxmemory_resilience_benchmark.sh 4096 ./results/valkey/maxmemory_resilience
+N=1 TARGET=redis ./k8s/scripts/maxmemory_resilience_benchmark.sh 4096 ./results/redis/maxmemory_resilience
+python cli.py resilience --input ./results/valkey/maxmemory_resilience --scenario maxmemory --output-dir ./plots/maxmemory_resilience
 ```
 
 ## Zero-Downtime Upgrade Testing
 
-Measures whether a rolling update of the Valkey StatefulSet causes request errors or latency spikes.
+Measures whether a rolling update of the StatefulSet causes request errors or latency spikes.
 A `helm upgrade` with a dummy annotation bump forces Kubernetes to restart all 6 pods one-by-one
 (the same mechanism as a real version upgrade). Memtier runs continuous load throughout.
 
 ### Run upgrade benchmark
 
 ```bash
-./k8s/scripts/upgrade_benchmark.sh ./results/upgrade
+./k8s/scripts/upgrade_benchmark.sh ./results/valkey/upgrade
+TARGET=redis ./k8s/scripts/upgrade_benchmark.sh ./results/redis/upgrade
 ```
 
-Override the Helm chart path, values file, or number of runs:
+Override the number of runs:
 
 ```bash
-HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 ./k8s/scripts/upgrade_benchmark.sh ./results/upgrade
+N=3 ./k8s/scripts/upgrade_benchmark.sh ./results/valkey/upgrade
 ```
 
 The script starts a 5-minute memtier load, waits 30s for steady state, triggers the rolling
@@ -363,13 +389,14 @@ minikube image load consistency_checker:1
 ### Run consistency benchmark
 
 ```bash
-./k8s/scripts/consistency_benchmark.sh ./results/consistency
+./k8s/scripts/consistency_benchmark.sh ./results/valkey/consistency
+TARGET=redis ./k8s/scripts/consistency_benchmark.sh ./results/redis/consistency
 ```
 
 Override the number of runs or image:
 
 ```bash
-N=3 CONSISTENCY_IMAGE=consistency_checker:2 ./k8s/scripts/consistency_benchmark.sh ./results/consistency
+N=3 CONSISTENCY_IMAGE=consistency_checker:2 ./k8s/scripts/consistency_benchmark.sh ./results/valkey/consistency
 ```
 
 Each run writes keys continuously for 120s. At ~30s, a 30s network partition isolates one
@@ -401,14 +428,14 @@ impact during slot migration (ASK/MOVED redirections, latency spikes).
 ### Run resharding benchmark
 
 ```bash
-./k8s/scripts/reshard_benchmark.sh ./results/reshard
+./k8s/scripts/reshard_benchmark.sh ./results/valkey/reshard
+TARGET=redis ./k8s/scripts/reshard_benchmark.sh ./results/redis/reshard
 ```
 
-Each memtier phase runs for 120s by default. Override the Helm chart path, values file,
-number of runs, or test time:
+Each memtier phase runs for 120s by default. Override the number of runs or test time:
 
 ```bash
-HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 TEST_TIME=120 ./k8s/scripts/reshard_benchmark.sh ./results/reshard
+N=3 TEST_TIME=120 ./k8s/scripts/reshard_benchmark.sh ./results/valkey/reshard
 ```
 
 Each run has two measured phases:
@@ -427,8 +454,13 @@ while the benchmark is measuring slot movement.
 ### Check cluster state
 
 ```bash
+# Valkey
 kubectl exec -n vk valkey-0 -- valkey-cli cluster info
 kubectl exec -n vk valkey-0 -- valkey-cli cluster nodes
+
+# Redis
+kubectl exec -n vk redis-redis-cluster-0 -- redis-cli cluster info
+kubectl exec -n vk redis-redis-cluster-0 -- redis-cli cluster nodes
 ```
 
 ### Analyse resharding results
@@ -471,15 +503,16 @@ minikube image load backup_restore:1
 Test with different dataset sizes (MB per shard):
 
 ```bash
-./k8s/scripts/backup_restore_benchmark.sh 100 ./results/backup     # 100 MB/shard
-./k8s/scripts/backup_restore_benchmark.sh 500 ./results/backup     # 500 MB/shard
-./k8s/scripts/backup_restore_benchmark.sh 1000 ./results/backup    # 1 GB/shard
+./k8s/scripts/backup_restore_benchmark.sh 100 ./results/valkey/backup     # 100 MB/shard
+./k8s/scripts/backup_restore_benchmark.sh 500 ./results/valkey/backup     # 500 MB/shard
+
+TARGET=redis ./k8s/scripts/backup_restore_benchmark.sh 100 ./results/redis/backup
 ```
 
 Override the number of runs or image:
 
 ```bash
-N=5 BACKUP_IMAGE=backup_restore:2 ./k8s/scripts/backup_restore_benchmark.sh 100 ./results/backup
+N=5 BACKUP_IMAGE=backup_restore:2 ./k8s/scripts/backup_restore_benchmark.sh 100 ./results/valkey/backup
 ```
 
 Each run seeds data, triggers BGSAVE, deletes all Valkey pods, waits for the cluster to

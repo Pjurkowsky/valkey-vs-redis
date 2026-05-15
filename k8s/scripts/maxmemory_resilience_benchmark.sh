@@ -10,10 +10,11 @@ BACKUP_IMAGE="${BACKUP_IMAGE:-backup_restore:1}"
 REMOTE_OUT="/work/results/maxmemory_resilience"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+source "${SCRIPT_DIR}/target_config.sh"
 source "${SCRIPT_DIR}/pod_results.sh"
 
-HOST="valkey.vk.svc.cluster.local"
-PORT=6379
+HOST="${TC_HOST}"
+PORT="${TC_PORT}"
 THREADS="${THREADS:-4}"
 CLIENTS="${CLIENTS:-16}"
 TEST_TIME="${TEST_TIME:-120}"
@@ -54,7 +55,7 @@ for i in $(seq 1 "${N}"); do
 
   echo ""
   echo "=========================================="
-  echo "  Maxmemory resilience run ${i}/${N} (${TARGET_MB} MB pressure)"
+  echo "  Maxmemory resilience run ${i}/${N} (${TARGET_MB} MB pressure, target=${TARGET})"
   echo "=========================================="
 
   kubectl delete pod "${MEMTIER_POD}" "${SEED_POD}" "${CLEANUP_POD}" \

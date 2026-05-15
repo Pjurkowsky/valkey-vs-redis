@@ -10,14 +10,16 @@ SERVICE_ACCOUNT="memtier-sa"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RBAC_MANIFEST="${SCRIPT_DIR}/../memtier_rbac.yaml"
 ROLLOUT_TIMEOUT="${ROLLOUT_TIMEOUT:-300s}"
-HELM_CHART_PATH="${HELM_CHART_PATH:-../valkey-helm/valkey}"
-VALUES_FILE="${VALUES_FILE:-./k8s/manifests/values.yaml}"
-VALKEY_MAXMEMORY="${VALKEY_MAXMEMORY:-1gb}"
-VALKEY_MAXMEMORY_POLICY="${VALKEY_MAXMEMORY_POLICY:-allkeys-lru}"
-VALKEY_TLS_SECRET="${VALKEY_TLS_SECRET:-valkey-tls-secret}"
-VALKEY_TLS_REQUIRE_CLIENT_CERT="${VALKEY_TLS_REQUIRE_CLIENT_CERT:-false}"
 
+source "${SCRIPT_DIR}/target_config.sh"
 source "${SCRIPT_DIR}/pod_results.sh"
+
+HELM_CHART_PATH="${TC_HELM_CHART}"
+VALUES_FILE="${TC_VALUES_FILE}"
+SERVER_MAXMEMORY="${SERVER_MAXMEMORY:-1gb}"
+SERVER_MAXMEMORY_POLICY="${SERVER_MAXMEMORY_POLICY:-allkeys-lru}"
+SERVER_TLS_SECRET="${SERVER_TLS_SECRET:-${TC_HELM_RELEASE}-tls-secret}"
+SERVER_TLS_REQUIRE_CLIENT_CERT="${SERVER_TLS_REQUIRE_CLIENT_CERT:-false}"
 
 normalize_bool() {
   case "${1:-}" in
@@ -33,14 +35,14 @@ normalize_bool() {
   esac
 }
 
-write_valkey_config() {
+write_server_config() {
   local persistence="$1"
   local config_file="$2"
   local tls_enabled="$3"
 
   {
-    echo "maxmemory ${VALKEY_MAXMEMORY}"
-    echo "maxmemory-policy ${VALKEY_MAXMEMORY_POLICY}"
+    echo "maxmemory ${SERVER_MAXMEMORY}"
+    echo "maxmemory-policy ${SERVER_MAXMEMORY_POLICY}"
 
     if [ -n "${persistence}" ]; then
       case "${persistence}" in
@@ -63,7 +65,7 @@ write_valkey_config() {
           echo "appendfsync everysec"
           ;;
         *)
-          echo "ERROR: VALKEY_PERSISTENCE must be one of: off, rdb, aof, both" >&2
+          echo "ERROR: SERVER_PERSISTENCE must be one of: off, rdb, aof, both" >&2
           return 1
           ;;
       esac
@@ -75,41 +77,43 @@ write_valkey_config() {
   } > "${config_file}"
 }
 
-apply_valkey_runtime_flags() {
+apply_runtime_flags() {
   local tls_enabled
   local config_file=""
   local helm_args=(
-    helm upgrade --install valkey "${HELM_CHART_PATH}"
+    helm upgrade --install "${TC_HELM_RELEASE}" "${HELM_CHART_PATH}"
     -n "${NS}"
     -f "${VALUES_FILE}"
   )
 
-  if [ -n "${VALKEY_TLS:-}" ]; then
-    tls_enabled="$(normalize_bool "${VALKEY_TLS}")"
+  if [ -n "${SERVER_TLS:-}" ]; then
+    tls_enabled="$(normalize_bool "${SERVER_TLS}")"
     if [ -z "${tls_enabled}" ]; then
-      echo "ERROR: VALKEY_TLS must be true or false" >&2
+      echo "ERROR: SERVER_TLS must be true or false" >&2
       return 1
     fi
     helm_args+=(--set "tls.enabled=${tls_enabled}")
     if [ "${tls_enabled}" = "true" ]; then
-      helm_args+=(--set "tls.existingSecret=${VALKEY_TLS_SECRET}")
-      helm_args+=(--set "tls.requireClientCertificate=${VALKEY_TLS_REQUIRE_CLIENT_CERT}")
+      helm_args+=(--set "tls.existingSecret=${SERVER_TLS_SECRET}")
+      if [[ "${TARGET}" == "valkey" ]]; then
+        helm_args+=(--set "tls.requireClientCertificate=${SERVER_TLS_REQUIRE_CLIENT_CERT}")
+      fi
     fi
   fi
 
-  if [ -n "${VALKEY_PERSISTENCE:-}" ] || [ "${tls_enabled:-}" = "true" ]; then
-    config_file="$(mktemp /tmp/valkey-config.XXXXXX.conf)"
-    write_valkey_config "${VALKEY_PERSISTENCE:-}" "${config_file}" "${tls_enabled:-false}"
-    helm_args+=(--set-file "valkeyConfig=${config_file}")
+  if [ -n "${SERVER_PERSISTENCE:-}" ] || [ "${tls_enabled:-}" = "true" ]; then
+    config_file="$(mktemp /tmp/server-config.XXXXXX.conf)"
+    write_server_config "${SERVER_PERSISTENCE:-}" "${config_file}" "${tls_enabled:-false}"
+    helm_args+=(--set-file "${TC_CONFIG_KEY}=${config_file}")
   fi
 
-  if [ -n "${VALKEY_PERSISTENCE:-}" ] || [ -n "${VALKEY_TLS:-}" ]; then
-    echo "==> Applying Valkey runtime flags..."
-    echo "VALKEY_PERSISTENCE=${VALKEY_PERSISTENCE:-unchanged}"
-    echo "VALKEY_TLS=${VALKEY_TLS:-unchanged}"
-    echo "VALKEY_TLS_SECRET=${VALKEY_TLS_SECRET}"
+  if [ -n "${SERVER_PERSISTENCE:-}" ] || [ -n "${SERVER_TLS:-}" ]; then
+    echo "==> Applying ${TARGET} runtime flags..."
+    echo "SERVER_PERSISTENCE=${SERVER_PERSISTENCE:-unchanged}"
+    echo "SERVER_TLS=${SERVER_TLS:-unchanged}"
+    echo "SERVER_TLS_SECRET=${SERVER_TLS_SECRET}"
     "${helm_args[@]}"
-    kubectl rollout status "sts/valkey" -n "${NS}" --timeout="${ROLLOUT_TIMEOUT}"
+    kubectl rollout status "sts/${TC_STS}" -n "${NS}" --timeout="${ROLLOUT_TIMEOUT}"
   fi
 
   if [ -n "${config_file}" ]; then
@@ -117,9 +121,9 @@ apply_valkey_runtime_flags() {
   fi
 }
 
-apply_valkey_runtime_flags
+apply_runtime_flags
 
-if [ "$(normalize_bool "${VALKEY_TLS:-}")" = "true" ] && [ -z "${MEMTIER_TLS:-}" ]; then
+if [ "$(normalize_bool "${SERVER_TLS:-}")" = "true" ] && [ -z "${MEMTIER_TLS:-}" ]; then
   MEMTIER_TLS=true
 fi
 
@@ -156,6 +160,7 @@ done
 
 RUN_ARGS+=(--env="ROLLOUT_TIMEOUT=${ROLLOUT_TIMEOUT}")
 RUN_ARGS+=(--env="MEMTIER_OUTDIR=${REMOTE_OUT}")
+RUN_ARGS+=(--env="TARGET=${TARGET}")
 RUN_ARGS+=(
   --command --
   /bin/sh -c
@@ -168,7 +173,7 @@ kubectl apply -f "${RBAC_MANIFEST}"
 echo "==> Cleaning up any previous benchmark pod..."
 kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found >/dev/null
 
-echo "==> Creating benchmark pod (image=${IMAGE})..."
+echo "==> Creating benchmark pod (image=${IMAGE}, target=${TARGET})..."
 "${RUN_ARGS[@]}"
 
 echo "==> Waiting for benchmark pod to finish writing results..."
