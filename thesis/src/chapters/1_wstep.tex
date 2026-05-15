@@ -14,6 +14,7 @@ Problem badawczy można sformułować następująco: czy samodzielnie zarządzan
 
 Istotnym elementem przedmiotu badań jest środowisko uruchomieniowe. Testy zakładają pracę w Kubernetes, ponieważ jest to obecnie jeden z podstawowych sposobów wdrażania usług stanowych i bezstanowych w środowiskach chmurowych. W takim modelu sam mechanizm działania bazy in-memory nie jest jedynym czynnikiem wpływającym na wynik. Znaczenie mają również limity zasobów, sposób rozmieszczenia podów, narzut sieciowy wewnątrz klastra, mechanizmy odtwarzania replik oraz integracja z monitoringiem. Z tego powodu praca nie ogranicza się do syntetycznego uruchomienia pojedynczego procesu Redis lub Valkey, lecz traktuje badany system jako usługę działającą w rzeczywistym modelu wdrożeniowym.
 
+
 \section{Cele pracy}
 
 Celem głównym pracy jest przeprowadzenie kompleksowej analizy porównawczej samodzielnie zarządzanego klastra Valkey uruchomionego w Kubernetes z rozwiązaniami opartymi o Redis, z uwzględnieniem wydajności, opóźnień, odporności na awarie, kosztów oraz nakładu pracy operacyjnej. Wyniki badań mają umożliwić ocenę, w jakich warunkach Valkey może być traktowany jako technicznie i ekonomicznie uzasadniona alternatywa dla Redis Cluster lub usługi zarządzanej.
@@ -37,6 +38,24 @@ W pracy przyjęto cztery hipotezy badawcze:
     \item \textbf{H3:} czas odtworzenia mastera po awarii w rozwiązaniach zintegrowanych z Kubernetes jest krótszy niż w klasycznym podejściu Redis Sentinel oraz porównywalny z mechanizmami usług zarządzanych;
     \item \textbf{H4:} samodzielnie utrzymywany klaster Valkey wymaga większego nakładu pracy operacyjnej niż usługa zarządzana, mimo potencjalnych korzyści wydajnościowych i kosztowych.
 \end{itemize}
+
+\section{Zastosowane technologie}
+
+Środowisko testowe zostało uruchomione na platformie Google Cloud Platform (GCP), z wykorzystaniem usługi Google Kubernetes Engine (GKE) jako klastra orkiestracji kontenerów. Jako usługę zarządzaną w ramach porównania wykorzystano GCP Memorystore.
+
+Głównym językiem programowania użytym w pracy był Python w wersji 3.12. Skrypty analityczne, odpowiedzialne za przetwarzanie wyników pomiarów oraz generowanie wykresów, korzystały z bibliotek pandas, NumPy oraz Matplotlib. Do pobierania metryk z systemu monitoringu wykorzystano bibliotekę prometheus\_api\_client. Skrypty pomocnicze służące do automatyzacji uruchamiania testów, zarządzania klastrem oraz orkiestracji scenariuszy testowych zostały napisane w języku Bash.
+
+Badane systemy -- Valkey w wersji 9.0.1 oraz Redis -- zostały wdrożone w postaci klastrów na Kubernetes z wykorzystaniem narzędzia Helm do zarządzania konfiguracją i cyklem życia instalacji. Do wdrożenia Valkey wykorzystano oficjalny chart \texttt{valkey-io/valkey-helm} w wersji 0.9.3. W momencie realizacji pracy wsparcie dla trybu klastrowego (cluster mode) w tym charcie nie było jeszcze częścią oficjalnego wydania i było dostępne wyłącznie w formie otwartego pull requesta w repozytorium projektu. Obrazy kontenerów budowano przy użyciu Dockera. Obraz bazowy narzędzia obciążeniowego opierał się na \texttt{redislabs/memtier\_benchmark}, rozszerzonym o \texttt{kubectl} w wersji 1.30.0 umożliwiający interakcję z klastrem Kubernetes z poziomu podów testowych.
+
+Generowanie obciążenia realizowano za pomocą narzędzia \texttt{memtier\_benchmark} firmy Redis Labs, skonfigurowanego do pracy w trybie klastrowym z protokołem Redis. Wyniki pomiarów były eksportowane w formacie JSON, a metryki w czasie rzeczywistym przesyłane do systemu Prometheus za pośrednictwem eksportera StatsD (\texttt{prom/statsd-exporter}). Monitoring klastra oparto na stosie kube-prometheus-stack obejmującym Prometheus oraz Grafanę. Do testów odporności na awarie wykorzystano narzędzie Chaos Mesh, umożliwiające symulację zakłóceń w środowisku Kubernetes, takich jak awarie podów, ograniczenia sieciowe oraz obciążenie zasobów.
+
+\section{Wykorzystanie AI}
+
+W trakcie realizacji pracy korzystano z narzędzi opartych na sztucznej inteligencji. Wykorzystywano asystenta programistycznego Cursor z modelem Claude firmy Anthropic oraz narzędzie Codex firmy OpenAI w wersji o5-high. Narzędzia te były używane w dwóch obszarach.
+
+Po pierwsze, AI wspomagała generowanie fragmentów kodu odpowiedzialnych za wizualizację wyników pomiarów w postaci wykresów. Dotyczy to skryptów przetwarzających dane z testów wydajnościowych i tworzących ich graficzną reprezentację. Fragmenty kodu, w które ingerowała AI, zostały oznaczone odpowiednimi komentarzami w kodzie źródłowym.
+
+Po drugie, narzędzia AI były wykorzystywane jako pomoc w diagnostyce problemów napotykanych podczas tworzenia i uruchamiania benchmarków. Obejmowało to analizę błędów konfiguracyjnych, identyfikację przyczyn niespodziewanych wyników pomiarowych oraz weryfikację poprawności procedur testowych.
 
 \section{Zakres i ograniczenia pracy}
 
