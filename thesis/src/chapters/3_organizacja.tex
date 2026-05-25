@@ -127,6 +127,8 @@ helm install valkey ../valkey-helm/valkey \
 
 Do generowania obciążenia wybrano narzędzie \texttt{memtier\_benchmark}. Umożliwia ono wykonywanie testów dla protokołu Redis, pracę w trybie klastrowym, sterowanie liczbą wątków i klientów, ustawienie pipeline oraz zapis wyników w formacie JSON. Jest to istotne, ponieważ wyniki muszą być możliwe do automatycznej agregacji i porównania między powtórzeniami.
 
+W wybranych scenariuszach wykorzystywany jest również klient kontrolny uruchamiany jako osobny pod. Nie generuje on głównego obciążenia, lecz wykonuje cykliczne operacje testowe i zapisuje ich status oraz czas odpowiedzi. Dzięki temu można oddzielić przepustowość raportowaną przez \texttt{memtier\_benchmark} od obserwacji dostępności klastra z perspektywy prostego klienta aplikacyjnego.
+
 Monitoring realizowany jest przez Prometheus, który zbiera metryki kontenerów i podów. Dane te są wykorzystywane do obliczania średniego zużycia CPU i pamięci podczas okna testowego. Wykresy oraz pliki CSV generowane są po zakończeniu testów, aby oddzielić fazę pomiaru od fazy analizy. Dzięki temu surowe wyniki mogą zostać ponownie przetworzone bez konieczności powtarzania kosztownych eksperymentów.
 
 Do testów odpornościowych przewidziano mechanizmy chaos engineering. Zakłócenia powinny być wprowadzane dopiero po osiągnięciu przez system stanu ustalonego, na przykład po 30 sekundach od rozpoczęcia obciążenia. Pozwala to odróżnić naturalny rozruch testu od wpływu awarii lub presji zasobowej.
