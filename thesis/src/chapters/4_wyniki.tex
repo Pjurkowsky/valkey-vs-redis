@@ -6,7 +6,7 @@ Celem testu było porównanie czasu i wpływu reshardingu na opóźnienia klient
 
 Dla każdego wariantu wykonano po pięć powtórzeń skalowania z trzech do czterech shardów oraz po pięć powtórzeń skalowania z czterech do trzech shardów. Na rysunkach~\ref{fig:reshard-up-comparison} i~\ref{fig:reshard-down-comparison} przedstawiono rozbicie czasu operacji na widoczne fazy. W przypadku Valkey self-hosted osobno widoczny jest czas skalowania infrastruktury, przenoszenia slotów, usuwania dodatkowych węzłów oraz oczekiwania na stabilny stan klastra. W przypadku Memorystore cały czas operacji jest pokazany jako pojedynczy blok zarządzany przez usługę.
 
-Procedura wykonania testu, kolejność faz oraz parametry obciążenia zostały opisane w podrozdziale~\ref{subsec:resharding}. Poniżej przedstawiono już tylko zmierzone czasy operacji oraz wpływ reshardingu na klienta.
+Procedura wykonania testu, kolejność faz oraz parametry obciążenia zostały opisane w podrozdziale~\ref{subsec:resharding}. Poniżej przedstawiono zmierzone czasy operacji oraz wpływ reshardingu na klienta.
 
 \begin{figure}[!htbp]
     \centering
@@ -46,7 +46,7 @@ Faza & Legacy [s] & Atomic [s] & Memorystore [s] & Atomic / legacy & Memorystore
 
 Największa różnica między trybem legacy i atomic pojawia się w fazie wykonywanej przez \texttt{valkey-cli --cluster rebalance}. Przy skalowaniu w górę klasyczna migracja zajmowała średnio 76{,}6~s, podczas gdy migracja atomowa 4{,}4~s. Przy skalowaniu w dół różnica była jeszcze bardziej widoczna w części odpowiedzialnej za opróżnienie dodatkowego sharda: 96{,}0~s dla legacy oraz 4{,}0~s dla atomic.
 
-Wynik Memorystore jest asymetryczny. Skalowanie z trzech do czterech shardów trwało średnio 166{,}8~s, czyli dłużej niż oba warianty Valkey self-hosted. Skalowanie z czterech do trzech shardów trwało jednak średnio 46{,}8~s i było szybsze od obu wariantów self-hosted liczonych jako pełna operacja administracyjna. Nie oznacza to bezpośrednio, że wewnętrzna migracja slotów w usłudze jest zawsze szybsza; pomiar obejmuje jedynie publicznie obserwowalny czas od żądania zmiany liczby shardów do momentu, w którym usługa ponownie raportuje docelową konfigurację.
+Wynik Memorystore jest asymetryczny. Skalowanie z trzech do czterech shardów trwało średnio 166{,}8~s, czyli dłużej niż oba warianty Valkey self-hosted. Skalowanie z czterech do trzech shardów trwało jednak średnio 46{,}8~s i było szybsze od obu wariantów self-hosted liczonych jako pełna operacja administracyjna.
 
 Wpływ reshardingu na klienta przedstawia tabela~\ref{tab:reshard-latency-throughput}. Wartości percentyli są średnimi z wyników raportowanych przez \texttt{memtier\_benchmark} dla pięciu powtórzeń, natomiast kolumna \textit{ops/sec} zawiera średnią oraz odchylenie standardowe.
 

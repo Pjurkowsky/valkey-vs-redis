@@ -1,17 +1,232 @@
 \chapter{Teoretyczne podstawy problematyki badań}\label{ch:tematyka}
-W tej sekcji powinny zostać przedstawione powiązane prace z tematem. Przedstaw tło i kontekst badań.
 
-\section{\dots}
-Dzięki technice X~\cite{nowak2016} uzyskujemy (\dots). Zgodnie ze standardem bibliografia powinna być uszeregowana alfabetycznie według haseł autorskich, dlatego może się zażyć, że wcześniejsze odwołanie ma wyższą cyfrę. 
+Niniejszy rozdział przedstawia teoretyczne podstawy niezbędne do zrozumienia dalszych części pracy. Omówiono w nim rolę systemów cache'owania w architekturze aplikacji, architekturę Redis i jego model klastrowy, genezę projektu Valkey, kontekst zmian licencyjnych, środowisko Kubernetes jako platformę uruchomieniową oraz różnice między rozwiązaniami zarządzanymi a self-hosted. Rozdział kończy przegląd prac pokrewnych i identyfikacja luki badawczej.
 
-\section{\dots}
-Dzięki technice X~\cite{nowak2016} uzyskujemy (\dots). Zgodnie ze standardem bibliografia powinna być uszeregowana alfabetycznie według haseł autorskich, dlatego może się zażyć, że wcześniejsze odwołanie ma wyższą cyfrę. 
+\section{Systemy cache'owania w pamięci operacyjnej}
 
-\section{\dots}
-Dzięki technice X~\cite{nowak2016} uzyskujemy (\dots). Zgodnie ze standardem bibliografia powinna być uszeregowana alfabetycznie według haseł autorskich, dlatego może się zażyć, że wcześniejsze odwołanie ma wyższą cyfrę. 
+Systemy cache'owania danych w pamięci operacyjnej pełnią rolę pośredniej warstwy między aplikacją a trwałym źródłem danych. Ich głównym zadaniem jest ograniczenie liczby kosztownych odwołań do baz danych, usług zewnętrznych lub warstw dyskowych poprzez utrzymywanie często wykorzystywanych danych w strukturach dostępnych z opóźnieniem rzędu mikrosekund lub niskich milisekund. W praktyce warstwa cache wpływa bezpośrednio na czas odpowiedzi aplikacji, stabilność systemu podczas skoków obciążenia oraz koszty działania infrastruktury~\cite{kaptosv2025}.
 
-\section{\dots}
-Dzięki technice X~\cite{nowak2016} uzyskujemy (\dots). Zgodnie ze standardem bibliografia powinna być uszeregowana alfabetycznie według haseł autorskich, dlatego może się zażyć, że wcześniejsze odwołanie ma wyższą cyfrę. 
+\subsection{Strategie cache'owania}
 
-\section{Podsumowanie przeglądu literaturowego}
-Zauważ, że strona pierwsza rozdziału ma inny styl niż kolejne. Rozdział powinien zawsze rozpoczynać się na nieparzystej stronie. Parzyste strony w nagłówku mają podkreślony wydział: ,,Faculty of Information and Communication Technology''; nieparzyste (z wyjątkiem pierwszych stron tytułowych): ,,Wrocław University of Science and Technology''. Jeśli rozdział kończy się na stronie nieparzystej powinna zostać dodana pusta strona bez formatowania, tak aby kolejny rozdział rozpoczynał się ponownie od strony nieparzystej. Jakkolwiek staramy się unikać pustych stron.
+W literaturze wyróżnia się kilka podstawowych strategii integracji cache z aplikacją:
+
+\begin{itemize}
+    \item \textbf{Cache-aside} (lazy loading) -- aplikacja najpierw sprawdza cache, a w przypadku braku danych (cache miss) pobiera je ze źródła trwałego i zapisuje w cache. Jest to najprostsza i najczęściej stosowana strategia, ponieważ nie wymaga dodatkowej infrastruktury między aplikacją a bazą danych.
+    \item \textbf{Read-through} -- cache sam pobiera dane ze źródła w przypadku braku klucza. Z perspektywy aplikacji cache zachowuje się jak jedyne źródło danych.
+    \item \textbf{Write-through} -- każdy zapis trafia jednocześnie do cache i do trwałego źródła. Strategia ta zapewnia spójność, ale zwiększa opóźnienie operacji zapisu.
+    \item \textbf{Write-behind} (write-back) -- zapis trafia najpierw do cache, a następnie jest asynchronicznie propagowany do źródła trwałego. Zmniejsza opóźnienie zapisu kosztem ryzyka utraty danych w przypadku awarii cache przed propagacją.
+\end{itemize}
+
+W systemach produkcyjnych najczęściej stosuje się strategię cache-aside w połączeniu z polityką wygasania kluczy (TTL), ponieważ łączy ona prostotę implementacji z akceptowalnym poziomem spójności danych.
+
+\subsection{Wymagania wobec systemów cache}
+
+Systemy cache wykorzystywane w środowiskach produkcyjnych muszą spełniać jednocześnie kilka wymagań. Podstawowym jest niska latencja odczytu i zapisu, ponieważ celem istnienia warstwy cache jest właśnie skrócenie czasu odpowiedzi. Równie istotna jest wysoka przepustowość, wyrażana jako liczba operacji na sekundę (ops/sec), pozwalająca obsługiwać duży wolumen żądań bez degradacji. Skalowalność horyzontalna umożliwia zwiększanie pojemności i przepustowości przez dodawanie kolejnych węzłów. Opcjonalna trwałość danych pozwala na odtworzenie stanu po restarcie, co jest istotne w scenariuszach, w których ponowne zasilenie cache ze źródła trwałego jest kosztowne czasowo.
+
+\subsection{Metryki oceny systemów cache}
+
+Do oceny wydajności systemów cache stosuje się przede wszystkim liczbę operacji na sekundę (ops/sec) oraz rozkład opóźnień. Wartość średnia opóźnienia jest niewystarczająca, ponieważ może ukrywać problemy widoczne dopiero w ogonie rozkładu. Z tego powodu standardem branżowym jest raportowanie percentyli: p50 (mediana), p95, p99 oraz p99.9. Percentyl p99 oznacza, że 99\% żądań otrzymało odpowiedź w czasie nie dłuższym niż podana wartość, natomiast pozostały 1\% żądań doświadczył wyższych opóźnień. W systemach obsługujących miliony żądań dziennie nawet 0{,}1\% wolnych odpowiedzi może dotyczyć tysięcy użytkowników.
+
+Kontekst powyższych pojęć jest istotny dla dalszych rozdziałów, w których wyniki pomiarowe są prezentowane z wykorzystaniem percentyli opóźnień i średniej przepustowości.
+
+\section{Architektura Redis}
+
+Redis (Remote Dictionary Server) to system bazy danych typu klucz-wartość przechowujący dane w pamięci operacyjnej. Został stworzony przez Salvatore Sanfilippo w 2009 roku i przez ponad dekadę był jednym z najczęściej wybieranych rozwiązań typu in-memory data store~\cite{redisDocumentation}.
+
+\subsection{Model danych}
+
+Redis oferuje bogaty zestaw struktur danych wykraczający poza prosty model klucz-wartość. Podstawowe typy obejmują: ciągi znaków (strings), listy (lists), zbiory (sets), zbiory uporządkowane (sorted sets), tablice mieszające (hashes), bitmapy, strumienie (streams) oraz struktury probabilistyczne (HyperLogLog). Każda z tych struktur udostępnia dedykowane operacje wykonywane atomowo po stronie serwera, co eliminuje konieczność pobierania danych, modyfikowania ich po stronie klienta i odsyłania z powrotem.
+
+\subsection{Model przetwarzania żądań}
+
+Redis wykorzystuje jednowątkowy model obsługi żądań oparty na pętli zdarzeń (event loop) z multipleksowaniem wejścia-wyjścia. Wszystkie operacje na danych wykonywane są sekwencyjnie w jednym wątku, co eliminuje potrzebę synchronizacji i zapewnia atomowość pojedynczych poleceń. Model ten jest wydajny dla operacji o krótkim czasie wykonania, ponieważ unika narzutu przełączania kontekstu między wątkami. Ograniczeniem jest natomiast niemożność wykorzystania wielu rdzeni CPU przez pojedynczą instancję do obsługi poleceń klientów. W wersjach Redis 6.0 i nowszych wprowadzono wielowątkowe przetwarzanie operacji wejścia-wyjścia sieci (I/O threading), jednak sam rdzeń obsługi poleceń pozostaje jednowątkowy~\cite{redisDocumentation}.
+
+\subsection{Mechanizmy trwałości}
+
+Redis oferuje dwa mechanizmy utrwalania danych na dysku:
+
+\begin{itemize}
+    \item \textbf{RDB} (Redis Database) -- tworzenie migawki (snapshot) całego zbioru danych w określonym momencie. Operacja \texttt{BGSAVE} uruchamia proces potomny, który serializuje dane do pliku \texttt{dump.rdb}. Mechanizm ten zapewnia kompaktowy format kopii zapasowej, ale dane zapisane po ostatnim snapshoty są tracone w przypadku awarii.
+    \item \textbf{AOF} (Append Only File) -- rejestrowanie każdej operacji zapisu w pliku dziennika. Umożliwia odtworzenie stanu przez ponowne odtworzenie sekwencji poleceń. Oferuje lepszą trwałość (konfigurowalną do poziomu fsync po każdej operacji), ale kosztem większego rozmiaru pliku i wyższego obciążenia I/O.
+\end{itemize}
+
+Oba mechanizmy mogą działać równocześnie. W scenariuszach backupu i odtwarzania opisywanych w dalszej części pracy wykorzystywany jest mechanizm RDB, ponieważ umożliwia szybkie tworzenie spójnej kopii danych bez zatrzymywania serwera.
+
+\subsection{Replikacja i wysoka dostępność}
+
+Redis wspiera asynchroniczną replikację master-replica, w której jeden węzeł master obsługuje operacje zapisu i odczytu, a węzły repliki utrzymują kopie danych i mogą obsługiwać operacje odczytu. Replikacja jest asynchroniczna, co oznacza, że potwierdzenie zapisu jest zwracane klientowi przed propagacją do replik. W przypadku awarii mastera dane, które nie zostały jeszcze zreplikowane, mogą zostać utracone.
+
+Mechanizm Redis Sentinel zapewnia automatyczne wykrywanie awarii mastera i promocję repliki do roli mastera (failover). Sentinel monitoruje instancje Redis, powiadamia administratorów o problemach i przeprowadza automatyczną rekonfigurację topologii. W konfiguracji klastrowej Redis Cluster mechanizm failover jest wbudowany bezpośrednio w protokół klastra i nie wymaga osobnych instancji Sentinel.
+
+\subsection{Redis Cluster}
+
+Redis Cluster to mechanizm partycjonowania danych i zapewniania wysokiej dostępności wbudowany w Redis od wersji 3.0. Przestrzeń kluczy jest podzielona na 16384 hash slotów. Każdy klucz jest przypisywany do slotu według wzoru:
+
+\[
+\text{HASH\_SLOT} = \text{CRC16}(\text{key}) \mod 16384
+\]
+
+Każdy węzeł master w klastrze jest odpowiedzialny za podzbiór slotów. Przykładowo w klastrze trzywęzłowym węzeł A może obsługiwać sloty 0--5460, węzeł B sloty 5461--10922, a węzeł C sloty 10923--16383~\cite{redisClusterSpec}.
+
+Gdy klient wysyła żądanie do węzła, który nie jest odpowiedzialny za dany slot, otrzymuje odpowiedź przekierowującą:
+
+\begin{itemize}
+    \item \textbf{MOVED} -- przekierowanie trwałe wskazujące, że slot jest przypisany do innego węzła. Klient powinien zaktualizować lokalną mapę slotów i ponowić żądanie pod wskazanym adresem.
+    \item \textbf{ASK} -- przekierowanie tymczasowe stosowane podczas migracji slotów. Klient powinien wysłać polecenie \texttt{ASKING} do wskazanego węzła, a następnie ponowić żądanie, nie aktualizując trwale mapy slotów.
+\end{itemize}
+
+Mechanizm migracji slotów umożliwia przenoszenie danych między węzłami (resharding) w celu skalowania klastra. W klasycznym podejściu migracja odbywa się klucz po kluczu z wykorzystaniem poleceń \texttt{CLUSTER SETSLOT} i \texttt{MIGRATE}. Proces ten jest złożony operacyjnie i podatny na błędy, szczególnie przy dużej liczbie kluczy lub wysokim obciążeniu.
+
+Zrozumienie architektury Redis Cluster jest kluczowe dla dalszych rozdziałów, w których opisano testy reshardingu, rolling upgrade oraz failover.
+
+\section{Valkey -- geneza i architektura}\label{sec:valkey}
+
+Valkey to otwartoźródłowy system typu in-memory data store, będący forkiem Redis 7.2.4. Projekt został ogłoszony 28 marca 2024 roku pod patronatem Linux Foundation jako bezpośrednia odpowiedź społeczności na zmianę licencji Redis~\cite{linuxFoundationValkey}. Nazwa Valkey nawiązuje do podstawowej funkcji systemu jako magazynu klucz-wartość (key-value, odwrócone).
+
+\subsection{Geneza projektu}
+
+Inicjatorką projektu była Madelyn Olson, inżynier AWS i jedna z głównych kontrybutorów Redis. Po ogłoszeniu zmiany licencji Redis 20 marca 2024 roku, grupa byłych kontrybutorów podjęła decyzję o kontynuowaniu rozwoju systemu na otwartej licencji. W ciągu tygodnia Linux Foundation formalnie ogłosiła patronat nad projektem, a wsparcie zadeklarowały Amazon Web Services, Google Cloud, Oracle, Ericsson i Snap Inc.~\cite{linuxFoundationValkey}.
+
+Pierwsza wersja, Valkey 7.2.5-rc1, została opublikowana 16 kwietnia 2024 roku jako bezpośrednia kontynuacja Redis 7.2.4 bez zmian łamiących kompatybilność API. Kolejne wydania wprowadziły nowe funkcjonalności wykraczające poza ścieżkę rozwoju Redis:
+
+\begin{itemize}
+    \item Valkey 8.0 (15 września 2024) -- poprawiona niezawodność migracji slotów, optymalizacje pamięci, repliki zwracające \texttt{ASK} i \texttt{TRYAGAIN} podczas migracji~\cite{valkey80release}.
+    \item Valkey 8.1 (31 marca 2025) -- dalsze usprawnienia wydajności i stabilności.
+    \item Valkey 9.0 (21 października 2025) -- atomowa migracja slotów, znaczące przyspieszenie reshardingu~\cite{valkeyAtomicSlotMigration}.
+\end{itemize}
+
+\subsection{Zgodność z Redis}
+
+Valkey zachowuje pełną zgodność protokołu RESP (Redis Serialization Protocol) oraz kompatybilność na poziomie poleceń z Redis 7.2.4. Oznacza to, że istniejące biblioteki klienckie Redis (redis-py, Jedis, ioredis, Lettuce) mogą łączyć się z klastrem Valkey bez zmian w kodzie aplikacji. Narzędzia wiersza poleceń (\texttt{valkey-cli}, \texttt{valkey-benchmark}) są funkcjonalnymi odpowiednikami \texttt{redis-cli} i \texttt{redis-benchmark}, rozszerzonymi o nowe flagi specyficzne dla Valkey.
+
+\subsection{Atomowa migracja slotów}
+
+Jednym z najistotniejszych rozwinięć Valkey względem Redis jest mechanizm atomowej migracji slotów, wprowadzony w wersji 9.0~\cite{valkeyAtomicSlotMigration}. W klasycznym podejściu Redis migracja slotów wymaga ręcznej orkiestracji wielu poleceń (\texttt{CLUSTER SETSLOT MIGRATING}, \texttt{CLUSTER SETSLOT IMPORTING}, \texttt{MIGRATE} dla każdego klucza, \texttt{CLUSTER SETSLOT NODE}). Proces jest podatny na błędy, trudny do anulowania i powoduje degradację opóźnień klienta w czasie trwania migracji.
+
+Atomowa migracja slotów w Valkey 9.0 wprowadza:
+
+\begin{itemize}
+    \item jednopoleceniowy interfejs wspierający wiele zakresów slotów w jednej operacji;
+    \item wbudowane wsparcie dla anulowania migracji z automatycznym cofnięciem zmian;
+    \item poprawioną obsługę dużych kluczy;
+    \item przyspieszenie migracji do 9-krotnego względem mechanizmu klasycznego;
+    \item zmniejszony wpływ na opóźnienia klientów podczas migracji.
+\end{itemize}
+
+Mechanizm opiera się na koncepcji replikacji -- dane są asynchronicznie przesyłane z węzła źródłowego do docelowego, a po zakończeniu transferu mutacje na węźle źródłowym są wstrzymywane na krótki czas potrzebny do finalizacji. Do koordynacji między węzłami wprowadzono wewnętrzne polecenie \texttt{CLUSTER SYNCSLOTS}. Stan migracji jest obserwowalny przez polecenie \texttt{CLUSTER GETSLOTMIGRATIONS}, co umożliwia programowe monitorowanie postępu.
+
+Mechanizm ten jest bezpośrednio wykorzystywany w testach reshardingu opisanych w rozdziale~\ref{ch:wyniki}, gdzie porównywana jest wydajność migracji klasycznej z atomową.
+
+\section{Zmiana licencji Redis i jej konsekwencje}\label{sec:licencja}
+
+\subsection{Chronologia zmian}
+
+Redis od momentu powstania w 2009 roku był dystrybuowany na licencji BSD 3-Clause, która pozwalała na nieograniczone wykorzystanie, modyfikację i redystrybucję kodu źródłowego, w tym w produktach komercyjnych i usługach chmurowych. Chronologia zmian licencyjnych przedstawia się następująco:
+
+\begin{itemize}
+    \item 2018 -- Redis Labs wprowadza Commons Clause dla modułów Redis (RedisJSON, RedisGraph, RedisTimeSeries), ograniczając ich wykorzystanie w konkurencyjnych usługach.
+    \item 2019 -- moduły zostają przeniesione na Redis Source Available License (RSALv1).
+    \item 2022 -- moduły są relicencjonowane na podwójną licencję RSALv2/SSPLv1.
+    \item 20 marca 2024 -- Redis Ltd. ogłasza, że począwszy od wersji 7.4, rdzeń Redis będzie dystrybuowany na podwójnej licencji RSALv2 lub SSPLv1. Wcześniejsze wersje (do 7.2.x) zachowują licencję BSD-3~\cite{redisLicenseChange}.
+\end{itemize}
+
+\subsection{Treść ograniczeń}
+
+Redis Source Available License v2 (RSALv2) zabrania wykorzystywania kodu do tworzenia produktów konkurencyjnych wobec Redis, w szczególności udostępniania Redis jako usługi zarządzanej. Server Side Public License v1 (SSPLv1), stworzona przez MongoDB, wymaga udostępnienia kodu źródłowego wszystkich komponentów tworzących usługę, jeżeli oprogramowanie jest oferowane jako usługa sieciowa. Żadna z tych licencji nie jest uznawana przez Open Source Initiative (OSI) za licencję open-source~\cite{han2026}.
+
+\subsection{Reakcja ekosystemu}
+
+Zmiana licencji wywołała natychmiastową reakcję społeczności i dostawców chmurowych. W ciągu tygodnia od ogłoszenia powstały dwa główne forki: Valkey pod patronatem Linux Foundation oraz Redict na licencji LGPL-3.0. Dystrybucje Linux (Debian, Fedora, Alpine) rozpoczęły proces zastępowania Redis pakietami Valkey w repozytoriach. Dostawcy chmurowi (AWS, Google Cloud) zadeklarowali wsparcie dla Valkey jako podstawy swoich usług zarządzanych~\cite{han2026}.
+
+Han i współautorzy w analizie konsekwencji zmiany licencji Redis wskazują, że decyzja ta stanowi przykład napięcia między modelem biznesowym opartym na oprogramowaniu open-source a interesami dostawców chmurowych, którzy oferują to oprogramowanie jako usługę bez proporcjonalnego wkładu w rozwój projektu~\cite{han2026}.
+
+Kontekst licencyjny jest istotny dla niniejszej pracy, ponieważ stanowi bezpośrednią motywację do poszukiwania alternatyw dla Redis. Valkey, jako fork utrzymywany na licencji BSD-3, jest kandydatem do zastąpienia Redis w organizacjach, które wymagają pewności prawnej co do możliwości swobodnego wykorzystania, modyfikacji i dystrybucji oprogramowania.
+
+\section{Kubernetes jako środowisko uruchomieniowe}\label{sec:kubernetes}
+
+Kubernetes to system orkiestracji kontenerów, który automatyzuje wdrażanie, skalowanie i zarządzanie aplikacjami kontenerowymi. W kontekście niniejszej pracy Kubernetes stanowi środowisko uruchomieniowe dla klastra Valkey i definiuje ograniczenia oraz możliwości związane z zarządzaniem stanowymi obciążeniami.
+
+\subsection{StatefulSet}
+
+StatefulSet to obiekt Kubernetes zaprojektowany do zarządzania aplikacjami stanowymi. W odróżnieniu od Deployment, StatefulSet zapewnia:
+
+\begin{itemize}
+    \item stabilne, przewidywalne nazwy podów (np. \texttt{valkey-0}, \texttt{valkey-1}, \texttt{valkey-2});
+    \item stałą tożsamość sieciową dzięki headless service;
+    \item gwarancję kolejności uruchamiania i zamykania podów;
+    \item trwałe powiązanie między podem a wolumenem danych.
+\end{itemize}
+
+Właściwości te są kluczowe dla klastra Valkey, w którym każdy węzeł musi utrzymywać swoją tożsamość (adres, identyfikator w klastrze) oraz dane na wolumenie trwałym pomiędzy restartami. Rolling update StatefulSetu odbywa się w odwrotnej kolejności numerycznej (od najwyższego indeksu), co pozwala na kontrolowane aktualizowanie replik przed masterami~\cite{k8sStatefulSet}.
+
+\subsection{Persistent Volume Claims}
+
+Persistent Volume Claim (PVC) to abstrakcja w Kubernetes umożliwiająca podowi żądanie trwałego wolumenu o określonym rozmiarze i klasie storage. W przypadku klastra Valkey każdy pod StatefulSetu posiada własny PVC, na którym przechowywane są pliki RDB, konfiguracja węzła (\texttt{nodes.conf}) oraz opcjonalnie plik AOF. Wolumen PVC przeżywa restart poda, co umożliwia odtworzenie stanu węzła bez ponownej synchronizacji z masterem.
+
+Klasy storage (StorageClass) definiują typ dysku oraz parametry wydajności. W środowisku Google Cloud dostępne są między innymi dyski \texttt{pd-balanced} i \texttt{pd-ssd}, różniące się przepustowością i opóźnieniem operacji I/O. Wybór klasy storage wpływa na czas operacji BGSAVE oraz czas odtwarzania z kopii zapasowej.
+
+\subsection{Helm}
+
+Helm to menedżer pakietów dla Kubernetes, który pozwala na definiowanie, instalowanie i aktualizowanie zestawów zasobów Kubernetes jako spójnych jednostek nazywanych chartami. Chart zawiera szablony manifestów Kubernetes parametryzowane plikiem wartości (\texttt{values.yaml}). Operacja \texttt{helm upgrade} umożliwia aktualizację wdrożenia z nowymi parametrami lub wersjami obrazów kontenerowych, przy czym Kubernetes realizuje tę zmianę jako rolling update podów StatefulSetu.
+
+W kontekście niniejszej pracy Helm jest wykorzystywany zarówno do instalacji klastra Valkey, jak i do wykonywania operacji administracyjnych: zmiany wersji obrazu (rolling upgrade), zmiany liczby shardów (resharding) oraz modyfikacji konfiguracji klastra.
+
+\subsection{Wyzwania uruchamiania baz danych w Kubernetes}
+
+Uruchamianie stanowych systemów in-memory w Kubernetes wprowadza specyficzne wyzwania:
+
+\begin{itemize}
+    \item \textbf{Odkrywanie klastra} -- węzły klastra Valkey muszą znać swoje adresy sieciowe, które w Kubernetes są przydzielane dynamicznie. Headless service rozwiązuje ten problem, przypisując stabilne nazwy DNS podom StatefulSetu.
+    \item \textbf{Rolling update} -- aktualizacja podów StatefulSetu wymaga sekwencyjnego restartu, co w klastrze z replikacją oznacza tymczasową degradację dostępności. Każdy restart poda wymusza failover, jeśli pod pełnił rolę mastera.
+    \item \textbf{Limity zasobów} -- Kubernetes pozwala na ograniczenie CPU i pamięci przydzielonej podowi. Przekroczenie limitu pamięci skutkuje zabiciem poda (OOM Kill), co w systemie in-memory jest szczególnie groźne.
+    \item \textbf{Liveness i readiness probes} -- mechanizmy monitorowania zdrowia poda, które decydują o restartach i gotowości do przyjmowania ruchu. Nieprawidłowa konfiguracja może prowadzić do niepotrzebnych restartów lub kierowania ruchu do niegotowych węzłów.
+\end{itemize}
+
+Powyższe aspekty bezpośrednio wpływają na wyniki testów opisanych w rozdziale~\ref{ch:wyniki}, w szczególności na czas failover, zachowanie podczas rolling upgrade oraz procedurę backupu opartą o snapshoty PVC.
+
+\section{Usługi zarządzane a rozwiązania self-hosted}\label{sec:managed_vs_selfhosted}
+
+W środowiskach chmurowych systemy cache mogą być uruchamiane na dwa sposoby: jako usługa zarządzana dostarczana przez dostawcę chmurowego lub jako rozwiązanie self-hosted utrzymywane samodzielnie przez zespół operacyjny.
+
+\subsection{Model odpowiedzialności}
+
+W modelu usługi zarządzanej dostawca przejmuje odpowiedzialność za infrastrukturę fizyczną, aktualizacje systemu operacyjnego, patching oprogramowania, replikację, failover, backup oraz monitoring bazowy. Użytkownik zarządza jedynie konfiguracją aplikacyjną, rozmiarem klastra i politykami dostępu. Model ten zmniejsza nakład pracy operacyjnej kosztem ograniczonej elastyczności konfiguracji i wyższych kosztów infrastruktury.
+
+W modelu self-hosted zespół operacyjny przejmuje pełną odpowiedzialność za cykl życia systemu: instalację, konfigurację, monitoring, aktualizacje, skalowanie, backup, odtwarzanie po awarii oraz reagowanie na incydenty. Model ten daje pełną kontrolę nad konfiguracją i potencjalnie niższe koszty infrastruktury, ale wymaga wiedzy eksperckiej i dedykowanego nakładu pracy.
+
+\subsection{Google Cloud Memorystore for Redis}
+
+Google Cloud Memorystore for Redis jest usługą zarządzaną, która udostępnia klaster Redis w trybie klastrowym bez konieczności zarządzania infrastrukturą. Usługa oferuje automatyczny failover, replikację, skalowanie liczby shardów przez API, zarządzane kopie zapasowe oraz integrację z monitoringiem Google Cloud~\cite{gcpMemorystore}.
+
+Z perspektywy użytkownika Memorystore udostępnia zestaw operacji administracyjnych wywoływanych przez narzędzie \texttt{gcloud} lub API REST:
+
+\begin{itemize}
+    \item tworzenie i usuwanie klastra z określoną liczbą shardów i replik;
+    \item zmiana liczby shardów (resharding) przez \texttt{gcloud redis clusters update --shard-count};
+    \item tworzenie kopii zapasowej przez \texttt{gcloud redis clusters create-backup};
+    \item odtwarzanie klastra z kopii przez \texttt{gcloud redis clusters create --import-managed-backup}.
+\end{itemize}
+
+Wewnętrzna implementacja tych operacji nie jest dokumentowana publicznie, co sprawia, że porównanie z rozwiązaniem self-hosted ma częściowo charakter black-box. Użytkownik obserwuje jedynie czas od wywołania operacji do osiągnięcia stanu gotowości, bez wglądu w poszczególne fazy realizacji.
+
+\subsection{Porównanie modeli}
+
+Decyzja między modelem zarządzanym a self-hosted zależy od wielu czynników organizacyjnych i technicznych. Awaysheh i Awad wskazują, że nowa generacja chmurowo-natywnych magazynów danych, w tym Valkey, oferuje alternatywę pozwalającą na samodzielne utrzymanie systemu z zachowaniem korzyści architektury kontenerowej~\cite{awaysheh2025}. Jednocześnie koszt utrzymania nie ogranicza się do zasobów obliczeniowych -- obejmuje również czas poświęcony na procedury operacyjne, ryzyko błędu ludzkiego oraz dostępność kompetencji w zespole.
+
+W niniejszej pracy oba modele są porównywane w scenariuszach reshardingu, rolling upgrade oraz backupu i odtwarzania, z uwzględnieniem zarówno metryk wydajnościowych, jak i złożoności procedury operacyjnej.
+
+\section{Przegląd prac pokrewnych}\label{sec:prace_pokrewne}
+
+Problematyka wydajności i niezawodności systemów in-memory jest przedmiotem wielu badań, jednak prace porównujące bezpośrednio Valkey z Redis w kontekście operacyjnym są nieliczne ze względu na stosunkowo krótką historię projektu Valkey.
+
+Kaptosv analizuje wykorzystanie Redis jako warstwy cache w aplikacjach o dużym ruchu, wskazując na znaczenie odpowiedniego doboru strategii cache'owania, polityk wygasania oraz monitorowania metryk hit/miss ratio dla osiągnięcia optymalnej wydajności~\cite{kaptosv2025}. Praca ta koncentruje się jednak na pojedynczej instancji Redis i nie uwzględnia aspektów klastrowych ani operacyjnych.
+
+Han i współautorzy przeprowadzają eksploracyjne studium konsekwencji zmiany licencji Redis, analizując reakcję społeczności open-source, dostawców chmurowych oraz użytkowników końcowych. Ich praca identyfikuje napięcie między modelem biznesowym firm utrzymujących projekty open-source a oczekiwaniami ekosystemu dotyczącymi swobody wykorzystania kodu~\cite{han2026}. Kontekst ten stanowi motywację organizacyjną do poszukiwania alternatyw dla Redis.
+
+Awaysheh i Awad prezentują przegląd nowej generacji chmurowo-natywnych magazynów danych in-memory, umieszczając Valkey w kontekście szerszego trendu rozwoju systemów optymalizowanych pod kątem środowisk kontenerowych i orkiestratorów~\cite{awaysheh2025}. Ich praca ma charakter przeglądowy i nie zawiera szczegółowych pomiarów wydajnościowych ani porównań operacyjnych.
+
+\subsection{Luka badawcza}
+
+Analiza dostępnej literatury wskazuje na brak prac łączących porównanie wydajnościowe Valkey i Redis z oceną aspektów operacyjnych (resharding, rolling upgrade, backup/restore) oraz kosztowych w realistycznym środowisku Kubernetes. Istniejące benchmarki systemów in-memory koncentrują się typowo na samych metrykach przepustowości i opóźnień, pomijając złożoność utrzymania systemu, zachowanie podczas operacji administracyjnych oraz porównanie z usługami zarządzanymi.
+
+Niniejsza praca wypełnia tę lukę, łącząc testy wydajnościowe z oceną utrzymywalności i kosztów w kontrolowanym środowisku GKE, z uwzględnieniem zarówno wariantu self-hosted (Valkey), jak i zarządzanego (Memorystore for Redis).
