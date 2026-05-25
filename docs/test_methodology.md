@@ -334,25 +334,55 @@ python cli.py resilience --scenario memory-extreme --input ./results/valkey_resi
 
 ### 4a. Maxmemory -- eviction pressure
 
-Ten test sprawdza zachowanie konfiguracji Valkey `maxmemory 1gb` i `maxmemory-policy allkeys-lru`.
-Nie uzywa Chaos Mesh. Zamiast tego zapisuje przez Valkey wiecej danych niz klaster moze utrzymac
-w pamieci i mierzy liczniki eviction.
+Ten test sprawdza zachowanie polityk `maxmemory-policy allkeys-lru` oraz
+`maxmemory-policy volatile-lru`. Nie uzywa Chaos Mesh. Zamiast tego zapisuje
+wiecej danych niz klaster moze utrzymac w pamieci i mierzy liczniki eviction,
+bledy `OOM command not allowed`, liczbe zaakceptowanych zapisow oraz odsetek
+brakujacych kluczy w probce weryfikacyjnej.
 
 ```bash
-N=1 bash k8s/scripts/maxmemory_benchmark.sh 4096 ./results/valkey_maxmemory
+BACKUP_IMAGE=europe-central2-docker.pkg.dev/redis-vs-valkey/valkey-bench/backup_restore:1 \
+VALKEY_MAXMEMORY=1gb \
+MAXMEMORY_POLICIES="allkeys-lru volatile-lru" \
+N=1 \
+bash k8s/scripts/maxmemory_benchmark.sh 4096 ./results/valkey_maxmemory
+```
+
+Dla Memorystore mozna uzyc tego samego mechanizmu. Aby test byl porownywalny
+z klastrem Valkey, skrypt moze ustawic `maxmemory` na 1 GiB per shard przez
+konfiguracje zarzadzanej instancji:
+
+```bash
+BACKUP_IMAGE=europe-central2-docker.pkg.dev/redis-vs-valkey/valkey-bench/backup_restore:1 \
+PROVIDER=memorystore \
+MEMORYSTORE_CLUSTER_ID=redis-ms-2 \
+MEMORYSTORE_MAXMEMORY=1073741824 \
+MAXMEMORY_POLICIES="allkeys-lru volatile-lru" \
+N=1 \
+bash k8s/scripts/maxmemory_benchmark.sh 4096 ./results/memorystore_maxmemory
 ```
 
 **Sekwencja (per run)**:
-1. Zapisz snapshot `INFO memory stats` oraz `DBSIZE` z kazdego mastera.
-2. Wpisz `TARGET_MB` danych jako klucze 1 KB rozproszone po klastrze.
-3. Zapisz drugi snapshot `INFO memory stats` oraz `DBSIZE`.
-4. Zweryfikuj probke zapisanych kluczy.
-5. Zapisz `evicted_keys_delta`, `sample_missing_rate`, `used_memory_after`, `dbsize_after`.
+1. Ustaw badana polityke `maxmemory-policy`.
+2. Wyczysc klucze testowe i zresetuj statystyki.
+3. Zapisz snapshot `INFO memory stats` oraz `DBSIZE` z kazdego mastera.
+4. Wpisz `TARGET_MB` danych jako klucze 1 KB rozproszone po klastrze.
+   Domyslnie klucze nie maja TTL.
+5. Zapisz drugi snapshot `INFO memory stats` oraz `DBSIZE`.
+6. Zweryfikuj probke zaakceptowanych zapisow.
+7. Zapisz `evicted_keys_delta`, `oom_errors`, `write_errors`,
+   `sample_missing_rate`, `used_memory_after`, `dbsize_after`.
 
 **Interpretacja**:
-- `evicted_keys_delta > 0` oznacza, ze Valkey osiagnal limit `maxmemory` i usuwal klucze zgodnie z `allkeys-lru`.
-- `sample_missing_rate > 0` jest oczekiwany po przekroczeniu pojemnosci, bo czesc zaakceptowanych kluczy zostala wyewiktowana.
-- To nie jest test OOM Kill. Do OOM Kill potrzebny jest Kubernetes `resources.limits.memory`.
+- `allkeys-lru` moze usuwac dowolne klucze, wiec zapis powinien byc kontynuowany
+  po osiagnieciu limitu pamieci, kosztem eviction.
+- `volatile-lru` usuwa tylko klucze z TTL. Przy domyslnym generatorze bez TTL
+  oczekiwane sa bledy `OOM command not allowed`, poniewaz Redis/Valkey nie ma
+  kandydatow do usuniecia.
+- `KEY_TTL_SECONDS=<n>` pozwala uruchomic wariant, w ktorym zapisywane klucze sa
+  kandydatami do eviction rowniez dla `volatile-lru`.
+- To nie jest test OOM Kill. Do OOM Kill potrzebny jest Kubernetes
+  `resources.limits.memory`.
 
 ---
 

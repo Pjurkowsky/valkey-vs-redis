@@ -29,6 +29,10 @@ def analyse_backup_runs(json_dir: Path) -> pd.DataFrame:
             "seed_keys": doc.get("seed_keys"),
             "seed_duration_s": doc.get("seed_duration_s"),
             "save_duration_s": doc.get("save_duration_s"),
+            "backup_copy_duration_s": doc.get("backup_copy_duration_s"),
+            "pvc_restore_copy_duration_s": doc.get("pvc_restore_copy_duration_s"),
+            "pod_recreate_duration_s": doc.get("pod_recreate_duration_s"),
+            "cluster_recovery_after_pods_s": doc.get("cluster_recovery_after_pods_s"),
             "restore_duration_s": doc.get("restore_duration_s"),
             "integrity_ok": doc.get("integrity_ok"),
         })
@@ -47,6 +51,10 @@ def print_backup_summary(df: pd.DataFrame) -> None:
     metrics = [
         ("Seed duration (s)", "seed_duration_s"),
         ("Save duration (s)", "save_duration_s"),
+        ("Backup copy duration (s)", "backup_copy_duration_s"),
+        ("PVC restore copy duration (s)", "pvc_restore_copy_duration_s"),
+        ("Pod recreate duration (s)", "pod_recreate_duration_s"),
+        ("Cluster recovery after pods (s)", "cluster_recovery_after_pods_s"),
         ("Restore duration (s)", "restore_duration_s"),
         ("Keys seeded", "seed_keys"),
     ]

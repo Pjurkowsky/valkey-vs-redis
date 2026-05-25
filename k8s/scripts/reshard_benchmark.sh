@@ -2,6 +2,8 @@
 set -euo pipefail
 
 N="${N:-5}"
+RESHARD_MODES="${RESHARD_MODES:-legacy atomic}"
+RESHARD_MODES="${RESHARD_MODES//,/ }"
 NS="vk"
 IMAGE="${MEMTIER_IMAGE:-memtier_k8s:1}"
 LOCAL_OUT="${1:-./results/reshard}"
@@ -25,6 +27,8 @@ DATA_SIZE=1024
 RATIO="1:1"
 STEADY_STATE_WAIT=30
 AUTO_REBALANCE_TIMEOUT="${AUTO_REBALANCE_TIMEOUT:-180}"
+CURRENT_RESHARD_MODE=""
+ORIGINAL_MASTER_IDS_SNAPSHOT=""
 
 ORIGINAL_SHARDS=3
 TARGET_SHARDS=4
@@ -47,6 +51,39 @@ cluster_info() {
 
 cluster_nodes() {
   kubectl exec valkey-0 -n "${NS}" -- valkey-cli cluster nodes 2>/dev/null
+}
+
+validate_reshard_mode() {
+  local mode="$1"
+
+  case "${mode}" in
+    legacy|atomic)
+      ;;
+    *)
+      echo "ERROR: Unsupported RESHARD_MODES entry '${mode}'. Use legacy, atomic, or both." >&2
+      return 1
+      ;;
+  esac
+}
+
+is_atomic_mode() {
+  [[ "${CURRENT_RESHARD_MODE}" == "atomic" ]]
+}
+
+atomic_mode_json() {
+  if is_atomic_mode; then
+    echo "true"
+  else
+    echo "false"
+  fi
+}
+
+slot_migration_command_name() {
+  if is_atomic_mode; then
+    echo "cluster_rebalance_atomic"
+  else
+    echo "cluster_rebalance"
+  fi
 }
 
 cluster_info_field() {
@@ -216,7 +253,24 @@ node_flags_for_pod() {
   cluster_nodes | awk -v pod="${pod}" '$0 ~ pod "\\.valkey-headless" {print $3; exit}'
 }
 
+node_host_for_id() {
+  local node_id="$1"
+  cluster_nodes | awk -v node_id="${node_id}" '
+    $1 == node_id {
+      split($2, bus, "@")
+      split(bus[1], host_port, ":")
+      print host_port[1]
+      exit
+    }
+  '
+}
+
 original_master_ids() {
+  if [[ -n "${ORIGINAL_MASTER_IDS_SNAPSHOT}" ]]; then
+    printf "%s\n" ${ORIGINAL_MASTER_IDS_SNAPSHOT}
+    return 0
+  fi
+
   cluster_nodes | awk -v max_ordinal="${NEW_NODE_START}" '
     /master/ && !/fail/ {
       for (i = 0; i < max_ordinal; i++) {
@@ -224,6 +278,41 @@ original_master_ids() {
           print $1
           break
         }
+      }
+    }
+  '
+}
+
+slot_ranges_for_node_id() {
+  local node_id="$1"
+  local slots_needed="$2"
+
+  cluster_nodes | awk -v node_id="${node_id}" -v slots_needed="${slots_needed}" '
+    $1 == node_id {
+      remaining = slots_needed
+      for (i = 9; i <= NF; i++) {
+        token = $i
+        if (remaining <= 0) {
+          break
+        }
+        if (token !~ /^[0-9]+(-[0-9]+)?$/) {
+          continue
+        }
+        if (token ~ /-/) {
+          split(token, range, "-")
+          start = range[1] + 0
+          end = range[2] + 0
+        } else {
+          start = token + 0
+          end = token + 0
+        }
+        count = end - start + 1
+        if (count > remaining) {
+          end = start + remaining - 1
+          count = remaining
+        }
+        print start, end, count
+        remaining -= count
       }
     }
   '
@@ -269,6 +358,15 @@ relative_or_null() {
   else
     echo "null"
   fi
+}
+
+reset_auto_rebalance_state() {
+  AUTO_REBALANCE_DETECTED=false
+  AUTO_REBALANCE_STATUS="skipped"
+  AUTO_REBALANCE_START=0
+  AUTO_REBALANCE_END=0
+  AUTO_REBALANCE_DURATION=0
+  AUTO_REBALANCE_FINAL_SLOTS=0
 }
 
 observe_auto_rebalance() {
@@ -336,6 +434,174 @@ observe_auto_rebalance() {
   return 1
 }
 
+rebalance_weight_args() {
+  local extra_master_id="$1"
+  local extra_weight="$2"
+  local master_id
+
+  for master_id in $(original_master_ids); do
+    printf "%s=1\n" "${master_id}"
+  done
+  printf "%s=%s\n" "${extra_master_id}" "${extra_weight}"
+}
+
+weighted_rebalance_to_extra_master() {
+  local new_master_id="$1"
+  local use_atomic="${2:-false}"
+  local weight_args=()
+  local weight
+  local atomic_args=()
+
+  mapfile -t weight_args < <(rebalance_weight_args "${new_master_id}" 1)
+  if [[ "${#weight_args[@]}" -lt 2 ]]; then
+    echo "ERROR: Not enough masters available for weighted rebalance." >&2
+    return 1
+  fi
+  if [[ "${use_atomic}" == "true" ]]; then
+    atomic_args=(--cluster-use-atomic-slot-migration)
+  fi
+
+  echo "  ${CURRENT_RESHARD_MODE^} rebalance: equal weights across original masters and extra master ${new_master_id}..."
+  for weight in "${weight_args[@]}"; do
+    echo "    --cluster-weight ${weight}"
+  done
+
+  kubectl exec valkey-0 -n "${NS}" -- \
+    valkey-cli --cluster rebalance "${CLUSTER_ENDPOINT}" \
+      --cluster-use-empty-primaries \
+      "${atomic_args[@]}" \
+      --cluster-weight "${weight_args[@]}" \
+      --cluster-yes 2>&1
+}
+
+weighted_rebalance_off_extra_master() {
+  local new_master_id="$1"
+  local use_atomic="${2:-false}"
+  local weight_args=()
+  local weight
+  local atomic_args=()
+
+  mapfile -t weight_args < <(rebalance_weight_args "${new_master_id}" 0)
+  if [[ "${#weight_args[@]}" -lt 2 ]]; then
+    echo "ERROR: Not enough masters available for weighted scale-in rebalance." >&2
+    return 1
+  fi
+  if [[ "${use_atomic}" == "true" ]]; then
+    atomic_args=(--cluster-use-atomic-slot-migration)
+  fi
+
+  echo "  ${CURRENT_RESHARD_MODE^} rebalance: draining extra master ${new_master_id} with weight 0..."
+  for weight in "${weight_args[@]}"; do
+    echo "    --cluster-weight ${weight}"
+  done
+
+  kubectl exec valkey-0 -n "${NS}" -- \
+    valkey-cli --cluster rebalance "${CLUSTER_ENDPOINT}" \
+      "${atomic_args[@]}" \
+      --cluster-weight "${weight_args[@]}" \
+      --cluster-yes 2>&1
+}
+
+reset_fallback_rebalance_state() {
+  FALLBACK_REBALANCE_USED=false
+  FALLBACK_REBALANCE_STATUS="not_needed"
+  FALLBACK_REBALANCE_START=0
+  FALLBACK_REBALANCE_END=0
+  FALLBACK_REBALANCE_DURATION=0
+  FALLBACK_REBALANCE_SLOTS_BEFORE=0
+  FALLBACK_REBALANCE_FINAL_SLOTS=0
+}
+
+move_slots_to_extra_master() {
+  local new_master_id="$1"
+  local slots_to_move="$2"
+
+  if [[ "${slots_to_move}" -le 0 ]]; then
+    echo "  Explicit ${CURRENT_RESHARD_MODE} rebalance: no missing slots to move."
+    return 0
+  fi
+
+  case "${CURRENT_RESHARD_MODE}" in
+    legacy)
+      weighted_rebalance_to_extra_master "${new_master_id}" false
+      ;;
+    atomic)
+      weighted_rebalance_to_extra_master "${new_master_id}" true
+      ;;
+    *)
+      echo "ERROR: CURRENT_RESHARD_MODE is not set to legacy or atomic." >&2
+      return 1
+      ;;
+  esac
+}
+
+run_fallback_rebalance_if_needed() {
+  local new_master_id="$1"
+  local expected_slots="$2"
+  local max_wait="$3"
+  local waited=0 slots missing
+
+  reset_fallback_rebalance_state
+
+  FALLBACK_REBALANCE_SLOTS_BEFORE="$(slot_count_for_node_id "${new_master_id}" || echo 0)"
+  FALLBACK_REBALANCE_FINAL_SLOTS="${FALLBACK_REBALANCE_SLOTS_BEFORE}"
+
+  if [[ "${FALLBACK_REBALANCE_SLOTS_BEFORE}" -ge "${expected_slots}" ]] && cluster_is_healthy_now; then
+    FALLBACK_REBALANCE_STATUS="already_complete"
+    FALLBACK_REBALANCE_START="$(date +%s)"
+    FALLBACK_REBALANCE_END="${FALLBACK_REBALANCE_START}"
+    FALLBACK_REBALANCE_DURATION=0
+    return 0
+  fi
+
+  FALLBACK_REBALANCE_USED=true
+  FALLBACK_REBALANCE_STATUS="in_progress"
+  FALLBACK_REBALANCE_START="$(date +%s)"
+
+  missing=$((expected_slots - FALLBACK_REBALANCE_SLOTS_BEFORE))
+  if [[ "${missing}" -lt 0 ]]; then
+    missing=0
+  fi
+
+  echo "  Explicit ${CURRENT_RESHARD_MODE} rebalance required: extra master has ${FALLBACK_REBALANCE_SLOTS_BEFORE}/${expected_slots} slots."
+
+  if ! move_slots_to_extra_master "${new_master_id}" "${missing}"; then
+    FALLBACK_REBALANCE_STATUS="failed"
+    FALLBACK_REBALANCE_END="$(date +%s)"
+    FALLBACK_REBALANCE_DURATION=$((FALLBACK_REBALANCE_END - FALLBACK_REBALANCE_START))
+    FALLBACK_REBALANCE_FINAL_SLOTS="$(slot_count_for_node_id "${new_master_id}" || echo 0)"
+    return 1
+  fi
+
+  echo "  Waiting for explicit ${CURRENT_RESHARD_MODE} rebalance to settle (max ${max_wait}s)..."
+  while [[ "${waited}" -lt "${max_wait}" ]]; do
+    slots="$(slot_count_for_node_id "${new_master_id}" || echo 0)"
+    FALLBACK_REBALANCE_FINAL_SLOTS="${slots}"
+
+    if [[ "${slots}" -ge "${expected_slots}" ]] && cluster_is_healthy_now; then
+      FALLBACK_REBALANCE_STATUS="complete"
+      FALLBACK_REBALANCE_END="$(date +%s)"
+      FALLBACK_REBALANCE_DURATION=$((FALLBACK_REBALANCE_END - FALLBACK_REBALANCE_START))
+      echo "  Explicit ${CURRENT_RESHARD_MODE} rebalance complete; extra master has ${slots}/${expected_slots} slots."
+      return 0
+    fi
+
+    sleep 5
+    waited=$((waited + 5))
+  done
+
+  FALLBACK_REBALANCE_END="$(date +%s)"
+  FALLBACK_REBALANCE_DURATION=$((FALLBACK_REBALANCE_END - FALLBACK_REBALANCE_START))
+  if [[ "${FALLBACK_REBALANCE_FINAL_SLOTS}" -gt "${FALLBACK_REBALANCE_SLOTS_BEFORE}" ]]; then
+    FALLBACK_REBALANCE_STATUS="partial"
+  else
+    FALLBACK_REBALANCE_STATUS="timeout"
+  fi
+
+  echo "  Explicit ${CURRENT_RESHARD_MODE} rebalance ${FALLBACK_REBALANCE_STATUS}; extra master has ${FALLBACK_REBALANCE_FINAL_SLOTS}/${expected_slots} slots."
+  return 1
+}
+
 extra_master_id() {
   local ordinal pod flags
 
@@ -359,35 +625,18 @@ move_slots_off_extra_master() {
     return 0
   fi
 
-  mapfile -t target_ids < <(original_master_ids)
-  if [[ "${#target_ids[@]}" -eq 0 ]]; then
-    echo "ERROR: No original masters available as reshard targets." >&2
-    return 1
-  fi
-
-  local remaining="${slots_on_new}"
-  local remaining_targets="${#target_ids[@]}"
-  local target_id slots_for_target
-
-  echo "  Moving ${slots_on_new} slots from extra master across ${#target_ids[@]} original masters..."
-  for target_id in "${target_ids[@]}"; do
-    if [[ "${remaining}" -le 0 ]]; then
-      break
-    fi
-
-    slots_for_target=$(((remaining + remaining_targets - 1) / remaining_targets))
-    echo "  Moving ${slots_for_target} slots to ${target_id}..."
-    kubectl exec valkey-0 -n "${NS}" -- \
-      valkey-cli --cluster reshard "${CLUSTER_ENDPOINT}" \
-        --cluster-from "${new_master_id}" \
-        --cluster-to "${target_id}" \
-        --cluster-slots "${slots_for_target}" \
-        --cluster-yes 2>&1
-
-    remaining=$((remaining - slots_for_target))
-    remaining_targets=$((remaining_targets - 1))
-    sleep 2
-  done
+  case "${CURRENT_RESHARD_MODE}" in
+    legacy)
+      weighted_rebalance_off_extra_master "${new_master_id}" false
+      ;;
+    atomic)
+      weighted_rebalance_off_extra_master "${new_master_id}" true
+      ;;
+    *)
+      echo "ERROR: CURRENT_RESHARD_MODE is not set to legacy or atomic." >&2
+      return 1
+      ;;
+  esac
 }
 
 delete_extra_cluster_nodes() {
@@ -428,6 +677,7 @@ scale_down_to_original_shards() {
     -n "${NS}" \
     -f "${VALUES_FILE}" \
     --set "cluster.shards=${ORIGINAL_SHARDS}" \
+    --set "cluster.autoRebalance.enabled=false" \
     --wait=false 2>&1 || true
   patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
 
@@ -513,6 +763,7 @@ restore_cluster() {
       -n "${NS}" \
       -f "${VALUES_FILE}" \
       --set "cluster.shards=${TARGET_SHARDS}" \
+      --set "cluster.autoRebalance.enabled=false" \
       --wait=false
     patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
     wait_for_pods_ready "${NEW_NODE_START}" "${NEW_NODE_END}"
@@ -540,13 +791,18 @@ restore_cluster() {
   echo "  [restore] Cluster restored."
 }
 
+for mode in ${RESHARD_MODES}; do
+  validate_reshard_mode "${mode}"
+done
+
+for CURRENT_RESHARD_MODE in ${RESHARD_MODES}; do
 for i in $(seq 1 "${N}"); do
-  POD_NAME="memtier-reshard-${i}"
-  OUT_FILE="reshard_run_${i}.json"
-  TIMING_FILE="reshard_timing_${i}.json"
+  POD_NAME="memtier-reshard-${CURRENT_RESHARD_MODE}-${i}"
+  OUT_FILE="reshard_${CURRENT_RESHARD_MODE}_run_${i}.json"
+  TIMING_FILE="reshard_${CURRENT_RESHARD_MODE}_timing_${i}.json"
   echo ""
   echo "=========================================="
-  echo "  Reshard run ${i}/${N}"
+  echo "  Reshard run ${i}/${N} (${CURRENT_RESHARD_MODE})"
   echo "=========================================="
 
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
@@ -579,6 +835,7 @@ for i in $(seq 1 "${N}"); do
       exit 1
     fi
   fi
+  ORIGINAL_MASTER_IDS_SNAPSHOT="$(cluster_nodes | awk '/master/ && !/fail/ {print $1}')"
 
   echo "[${i}] Starting memtier pod for reshard-up (test-time=${TEST_TIME}s)..."
   start_memtier_pod "${POD_NAME}" "${OUT_FILE}"
@@ -595,6 +852,7 @@ for i in $(seq 1 "${N}"); do
     -n "${NS}" \
     -f "${VALUES_FILE}" \
     --set "cluster.shards=${TARGET_SHARDS}" \
+    --set "cluster.autoRebalance.enabled=false" \
     --wait=false
   patch_rollout_partition "${ORIGINAL_NODE_COUNT}"
 
@@ -615,27 +873,44 @@ for i in $(seq 1 "${N}"); do
   fi
 
   EXPECTED_SLOTS_ON_NEW=$((16384 / TARGET_SHARDS))
-  AUTO_TRACE_FILE="reshard_auto_rebalance_${i}.csv"
-  echo "[${i}] Measuring chart auto-rebalance onto extra master ${EXTRA_MASTER_ID}..."
-  observe_auto_rebalance \
-    "${EXTRA_MASTER_ID}" \
-    "${EXPECTED_SLOTS_ON_NEW}" \
-    "${AUTO_REBALANCE_TIMEOUT}" \
-    "${MEMTIER_START}" \
-    "${LOCAL_OUT}/${AUTO_TRACE_FILE}" || true
+  AUTO_TRACE_FILE="reshard_${CURRENT_RESHARD_MODE}_auto_rebalance_${i}.csv"
+  echo "[${i}] Running explicit ${CURRENT_RESHARD_MODE} slot migration onto extra master ${EXTRA_MASTER_ID}..."
+  reset_auto_rebalance_state
+  reset_fallback_rebalance_state
+  AUTO_REBALANCE_FINAL_SLOTS="$(slot_count_for_node_id "${EXTRA_MASTER_ID}" || echo 0)"
+  {
+    echo "timestamp,second,slots_on_extra_master,cluster_state,cluster_slots_ok,cluster_slots_assigned"
+    now="$(date +%s)"
+    printf "%s,%s,%s,%s,%s,%s\n" \
+      "${now}" \
+      "$((now - MEMTIER_START))" \
+      "${AUTO_REBALANCE_FINAL_SLOTS}" \
+      "$(cluster_info_field cluster_state || echo unknown)" \
+      "$(cluster_info_field cluster_slots_ok || echo unknown)" \
+      "$(cluster_info_field cluster_slots_assigned || echo unknown)"
+  } > "${LOCAL_OUT}/${AUTO_TRACE_FILE}"
+
+  if ! ensure_cluster_clean 60; then
+    echo "[${i}] WARN: Cluster is not fully clean before explicit ${CURRENT_RESHARD_MODE} migration; trying migration anyway."
+  fi
+
+  if ! run_fallback_rebalance_if_needed "${EXTRA_MASTER_ID}" "${EXPECTED_SLOTS_ON_NEW}" "${AUTO_REBALANCE_TIMEOUT}"; then
+    echo "[${i}] ERROR: Explicit ${CURRENT_RESHARD_MODE} rebalance did not complete; attempting restore." >&2
+    restore_cluster
+    exit 1
+  fi
 
   if ! ensure_cluster_clean 180; then
-    echo "[${i}] ERROR: Cluster unhealthy after auto-rebalance observation; attempting restore." >&2
+    echo "[${i}] ERROR: Cluster unhealthy after rebalance; attempting restore." >&2
     restore_cluster
     exit 1
   fi
 
-  if [[ "${AUTO_REBALANCE_STATUS}" == "partial" ]]; then
-    echo "[${i}] ERROR: Auto-rebalance was only partial; attempting restore." >&2
-    restore_cluster
-    exit 1
+  AUTO_REBALANCE_FINAL_SLOTS="${FALLBACK_REBALANCE_FINAL_SLOTS}"
+  echo "[${i}] Auto-rebalance status: ${AUTO_REBALANCE_STATUS}, duration=${AUTO_REBALANCE_DURATION}s"
+  if [[ "${FALLBACK_REBALANCE_USED}" == "true" ]]; then
+    echo "[${i}] Explicit ${CURRENT_RESHARD_MODE} rebalance status: ${FALLBACK_REBALANCE_STATUS}, duration=${FALLBACK_REBALANCE_DURATION}s, slots=${FALLBACK_REBALANCE_FINAL_SLOTS}/${EXPECTED_SLOTS_ON_NEW}"
   fi
-  echo "[${i}] Auto-rebalance status: ${AUTO_REBALANCE_STATUS}, duration=${AUTO_REBALANCE_DURATION}s, slots=${AUTO_REBALANCE_FINAL_SLOTS}/${EXPECTED_SLOTS_ON_NEW}"
 
   NEW_MASTERS="$(cluster_nodes | awk '/master/ && !/fail/ {count++} END {print count + 0}')"
   echo "[${i}] Masters after auto-rebalance observation: ${NEW_MASTERS}"
@@ -647,10 +922,19 @@ for i in $(seq 1 "${N}"); do
     exit 1
   fi
 
+  OPERATION_END="${AUTO_REBALANCE_END}"
+  if [[ "${FALLBACK_REBALANCE_END}" -gt 0 ]]; then
+    OPERATION_END="${FALLBACK_REBALANCE_END}"
+  fi
+
   cat > "${LOCAL_OUT}/${TIMING_FILE}" <<EOF
 {
   "run": ${i},
   "phase": "up",
+  "provider": "selfhosted_valkey",
+  "slot_migration_mode": "${CURRENT_RESHARD_MODE}",
+  "atomic_slot_migration": $(atomic_mode_json),
+  "slot_migration_command": "$(slot_migration_command_name)",
   "scale_start": ${SCALE_START},
   "scale_end": ${SCALE_END},
   "scale_duration_s": $((SCALE_END - SCALE_START)),
@@ -666,14 +950,26 @@ for i in $(seq 1 "${N}"); do
   "auto_rebalance_trace": "${AUTO_TRACE_FILE}",
   "expected_slots_on_new": ${EXPECTED_SLOTS_ON_NEW},
   "slots_on_new_after": ${AUTO_REBALANCE_FINAL_SLOTS},
-  "rebalance_start": $(json_number_or_null "${AUTO_REBALANCE_START}"),
-  "rebalance_end": $(json_number_or_null "${AUTO_REBALANCE_END}"),
-  "rebalance_duration_s": ${AUTO_REBALANCE_DURATION},
-  "rebalance_start_s": $(relative_or_null "${AUTO_REBALANCE_START}" "${MEMTIER_START}"),
-  "rebalance_end_s": $(relative_or_null "${AUTO_REBALANCE_END}" "${MEMTIER_START}"),
+  "explicit_rebalance_used": ${FALLBACK_REBALANCE_USED},
+  "explicit_rebalance_status": "${FALLBACK_REBALANCE_STATUS}",
+  "explicit_rebalance_start": $(json_number_or_null "${FALLBACK_REBALANCE_START}"),
+  "explicit_rebalance_end": $(json_number_or_null "${FALLBACK_REBALANCE_END}"),
+  "explicit_rebalance_duration_s": ${FALLBACK_REBALANCE_DURATION},
+  "explicit_rebalance_start_s": $(relative_or_null "${FALLBACK_REBALANCE_START}" "${MEMTIER_START}"),
+  "explicit_rebalance_end_s": $(relative_or_null "${FALLBACK_REBALANCE_END}" "${MEMTIER_START}"),
+  "explicit_rebalance_slots_before": ${FALLBACK_REBALANCE_SLOTS_BEFORE},
+  "explicit_rebalance_slots_after": ${FALLBACK_REBALANCE_FINAL_SLOTS},
+  "fallback_rebalance_used": false,
+  "fallback_rebalance_status": "not_used",
+  "fallback_rebalance_duration_s": 0,
+  "rebalance_start": $(json_number_or_null "${FALLBACK_REBALANCE_START}"),
+  "rebalance_end": $(json_number_or_null "${FALLBACK_REBALANCE_END}"),
+  "rebalance_duration_s": ${FALLBACK_REBALANCE_DURATION},
+  "rebalance_start_s": $(relative_or_null "${FALLBACK_REBALANCE_START}" "${MEMTIER_START}"),
+  "rebalance_end_s": $(relative_or_null "${FALLBACK_REBALANCE_END}" "${MEMTIER_START}"),
   "operation_start_s": $((SCALE_START - MEMTIER_START)),
-  "operation_end_s": $((AUTO_REBALANCE_END - MEMTIER_START)),
-  "operation_duration_s": $((AUTO_REBALANCE_END - SCALE_START)),
+  "operation_end_s": $((OPERATION_END - MEMTIER_START)),
+  "operation_duration_s": $((OPERATION_END - SCALE_START)),
   "memtier_start": ${MEMTIER_START},
   "original_shards": ${ORIGINAL_SHARDS},
   "target_shards": ${TARGET_SHARDS},
@@ -685,9 +981,9 @@ EOF
   echo "[${i}] Cleaning up memtier pod..."
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
 
-  DOWN_POD_NAME="memtier-reshard-down-${i}"
-  DOWN_OUT_FILE="reshard_down_run_${i}.json"
-  DOWN_TIMING_FILE="reshard_down_timing_${i}.json"
+  DOWN_POD_NAME="memtier-reshard-${CURRENT_RESHARD_MODE}-down-${i}"
+  DOWN_OUT_FILE="reshard_${CURRENT_RESHARD_MODE}_down_run_${i}.json"
+  DOWN_TIMING_FILE="reshard_${CURRENT_RESHARD_MODE}_down_timing_${i}.json"
 
   echo "[${i}] Starting memtier pod for reshard-down (test-time=${TEST_TIME}s)..."
   start_memtier_pod "${DOWN_POD_NAME}" "${DOWN_OUT_FILE}"
@@ -750,6 +1046,10 @@ EOF
 {
   "run": ${i},
   "phase": "down",
+  "provider": "selfhosted_valkey",
+  "slot_migration_mode": "${CURRENT_RESHARD_MODE}",
+  "atomic_slot_migration": $(atomic_mode_json),
+  "slot_migration_command": "$(slot_migration_command_name)",
   "reshard_down_start": ${DOWNSCALE_RESHARD_START},
   "reshard_down_end": ${DOWNSCALE_RESHARD_END},
   "reshard_down_duration_s": $((DOWNSCALE_RESHARD_END - DOWNSCALE_RESHARD_START)),
@@ -783,10 +1083,11 @@ EOF
 
   echo "[${i}] Done. Results: ${LOCAL_OUT}/${OUT_FILE}, ${LOCAL_OUT}/${TIMING_FILE}, ${LOCAL_OUT}/${DOWN_OUT_FILE}, ${LOCAL_OUT}/${DOWN_TIMING_FILE}"
 done
+done
 
 echo ""
 echo "=========================================="
-echo "  All ${N} reshard runs complete."
+echo "  All ${N} reshard runs complete for modes: ${RESHARD_MODES}."
 echo "  Results in: ${LOCAL_OUT}/"
 echo "  Each run contains reshard-up and reshard-down memtier/timing files."
 echo "  Analyse with:"

@@ -291,15 +291,34 @@ recovery status, and pod restart detection (OOM).
 
 ## Maxmemory Testing
 
-Measures Valkey's configured `maxmemory 1gb` behavior by writing more data than the
-cluster can retain and checking eviction counters plus a sample of written keys.
+Measures `maxmemory-policy` behavior by writing more data than the cluster can retain
+and checking eviction counters, write rejections, and a sample of accepted keys.
 
 ```bash
-N=1 ./k8s/scripts/maxmemory_benchmark.sh 4096 ./results/maxmemory
+BACKUP_IMAGE=europe-central2-docker.pkg.dev/redis-vs-valkey/valkey-bench/backup_restore:1 \
+VALKEY_MAXMEMORY=1gb \
+MAXMEMORY_POLICIES="allkeys-lru volatile-lru" \
+N=1 \
+./k8s/scripts/maxmemory_benchmark.sh 4096 ./results/valkey_maxmemory
 ```
 
 With 3 masters and `maxmemory 1gb`, `4096` MB of 1 KB values should push the cluster
-past its retainable dataset size and trigger `allkeys-lru` evictions.
+past its retainable dataset size. `allkeys-lru` should continue by evicting keys.
+`volatile-lru` will return OOM write errors for keys without TTL.
+
+For Memorystore Redis Cluster:
+
+```bash
+BACKUP_IMAGE=europe-central2-docker.pkg.dev/redis-vs-valkey/valkey-bench/backup_restore:1 \
+PROVIDER=memorystore \
+MEMORYSTORE_CLUSTER_ID=redis-ms-2 \
+MEMORYSTORE_MAXMEMORY=1073741824 \
+MAXMEMORY_POLICIES="allkeys-lru volatile-lru" \
+N=1 \
+./k8s/scripts/maxmemory_benchmark.sh 4096 ./results/memorystore_maxmemory
+```
+
+Set `KEY_TTL_SECONDS=3600` to test `volatile-lru` with expiring keys.
 
 To measure resilience while maxmemory pressure is happening, run memtier continuously
 and start the maxmemory writer after the steady-state window:
@@ -393,10 +412,12 @@ chart, and `consistency_summary.csv` with mean +/- std for:
 ## Horizontal Scaling / Resharding
 
 Measures the operational impact of changing shard count in both directions under continuous
-load. The test first scales from 3 to 4 shards and observes whether the chart/init
-auto-rebalances slots onto the new shard, then runs a second workload while moving slots
-off the extra shard and scaling back from 4 to 3 shards. Memtier captures the traffic
-impact during slot migration (ASK/MOVED redirections, latency spikes).
+load. The test runs both slot-migration modes by default: legacy `valkey-cli --cluster
+rebalance` with weights and atomic `valkey-cli --cluster rebalance` with
+`--cluster-use-atomic-slot-migration`. For each mode it scales from 3 to 4
+shards, moves slots onto the new shard, then runs a second workload while moving slots off
+the extra shard and scaling back from 4 to 3 shards. Memtier captures the traffic impact
+during slot migration (ASK/MOVED redirections, latency spikes).
 
 ### Run resharding benchmark
 
@@ -405,21 +426,37 @@ impact during slot migration (ASK/MOVED redirections, latency spikes).
 ```
 
 Each memtier phase runs for 120s by default. Override the Helm chart path, values file,
-number of runs, or test time:
+number of runs, migration modes, or test time:
 
 ```bash
 HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=3 TEST_TIME=120 ./k8s/scripts/reshard_benchmark.sh ./results/reshard
 ```
 
+By default `RESHARD_MODES` is `legacy atomic`, so `N=5` produces five legacy runs and
+five atomic runs. Use `RESHARD_MODES=legacy` or `RESHARD_MODES=atomic` to run only one mode.
+
+For managed Memorystore for Redis Cluster, use the separate script. It starts the same
+in-cluster memtier load pod, then triggers managed shard scaling through
+`gcloud redis clusters`:
+
+```bash
+./k8s/scripts/memorystore_reshard_benchmark.sh redis-ms ./results/memorystore_reshard
+```
+
+The Memorystore script defaults to `europe-central2`, `3 -> 4 -> 3` shards, `N=5`, and
+`TEST_TIME=900` because managed scaling can take several minutes. To target Memorystore
+for Valkey instead, set `MEMORYSTORE_PRODUCT=valkey`.
+
 Each run has two measured phases:
 
 - **Reshard up**: starts memtier, waits 30s for steady state, checks that no Chaos Mesh
   experiment is active, patches the StatefulSet rolling-update partition to `6`, scales
-  to 4 shards, waits for `valkey-6` and `valkey-7`, and observes the chart/init
-  auto-rebalance instead of running a manual rebalance command.
+  to 4 shards, waits for `valkey-6` and `valkey-7`, disables chart/init auto-rebalance
+  for the measured upgrade, and explicitly moves slots onto the new master with weighted
+  `--cluster rebalance`. Atomic mode adds `--cluster-use-atomic-slot-migration`.
 - **Reshard down**: starts a second memtier run, waits 30s for steady state, moves slots
-  off the extra master back across the original masters, removes the extra cluster nodes,
-  and only then scales the Helm release back to 3 shards.
+  off the extra master using the same migration mode, removes the extra cluster nodes, and
+  only then scales the Helm release back to 3 shards.
 
 The partition patch keeps existing pods `valkey-0` through `valkey-5` from being restarted
 while the benchmark is measuring slot movement.
@@ -437,20 +474,33 @@ kubectl exec -n vk valkey-0 -- valkey-cli cluster nodes
 python cli.py reshard --input ./results/reshard --output-dir ./plots/reshard
 ```
 
+To compare self-hosted legacy, self-hosted atomic, and managed Memorystore on the same
+chart, put the result directories under one parent and analyse the parent:
+
+```bash
+python cli.py reshard --input ./results --output-dir ./plots/reshard
+```
+
+The comparison chart labels bars as `l-N` for legacy, `a-N` for atomic, and `ms-N` for
+Memorystore. Memorystore operation time is shown as a single black-box segment because
+node changes, slot movement, and stabilization are managed internally.
+
 Produces per-phase time series plots (ops/sec and latency with reshard start/end markers
-and line markers for scale/auto-rebalance subphases),
+and line markers for scale/slot-migration subphases),
 a duration-only stacked comparison chart (`reshard_comparison.png`) with reshard-up and
 reshard-down panels side by side, and `reshard_summary.csv` with raw timing columns for:
 
 - **Operation duration (s)** — total measured reshard operation time
-- **Scale / auto-rebalance duration (s)** — reshard-up timing breakdown
+- **Slot migration mode** — `legacy` for weighted `valkey-cli --cluster rebalance`,
+  `atomic` for weighted rebalance plus `--cluster-use-atomic-slot-migration`
+- **Scale / slot move duration (s)** — reshard-up timing breakdown
 - **Move slots / delete nodes / scale-down duration (s)** — reshard-down timing breakdown
 - **Wait/check duration (s)** — time between steps spent waiting for cluster health checks
-- **Auto-rebalance status and slot count** — whether auto-rebalance was detected and
-  how many slots landed on the new master
+- **Explicit rebalance status and slot count** — whether the explicit slot move completed
+  and how many slots landed on the new master
 
-Each up run also writes `reshard_auto_rebalance_N.csv`, a poll trace of slot count on the
-new master and cluster health while auto-rebalance is being observed.
+Each up run also writes `reshard_<mode>_auto_rebalance_N.csv`, a one-row trace of slot
+count on the new master before explicit migration starts.
 
 ## Backup & Restore Testing
 

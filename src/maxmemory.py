@@ -24,12 +24,24 @@ def analyse_maxmemory_runs(json_dir: Path) -> pd.DataFrame:
         rows.append({
             "file": f.name,
             "run": doc.get("run"),
+            "provider": doc.get("provider", "valkey"),
+            "policy": doc.get("policy", "unknown"),
+            "observed_policy": doc.get("observed_policy", doc.get("policy", "unknown")),
             "run_id": doc.get("run_id"),
             "target_mb": doc.get("target_mb"),
+            "ttl_seconds": doc.get("ttl_seconds", 0),
             "seed_duration_s": doc.get("seed_duration_s"),
+            "seed_wall_duration_s": doc.get("seed_wall_duration_s"),
+            "target_keys": doc.get("target_keys"),
             "written_keys": doc.get("written_keys"),
+            "seed_completed": doc.get("seed_completed", True),
+            "pipeline_errors": doc.get("pipeline_errors", doc.get("errors", 0)),
+            "write_errors": doc.get("write_errors", 0),
+            "oom_errors": doc.get("oom_errors", 0),
+            "error_replies_delta": doc.get("error_replies_delta", 0),
             "used_memory_before_mb": _bytes_to_mb(doc.get("used_memory_before", 0)),
             "used_memory_after_mb": _bytes_to_mb(doc.get("used_memory_after", 0)),
+            "maxmemory_total_mb": _bytes_to_mb(doc.get("maxmemory_total_bytes", 0)),
             "dbsize_before": doc.get("dbsize_before"),
             "dbsize_after": doc.get("dbsize_after"),
             "evicted_keys_delta": doc.get("evicted_keys_delta"),
@@ -45,21 +57,28 @@ def analyse_maxmemory_runs(json_dir: Path) -> pd.DataFrame:
 def print_maxmemory_summary(df: pd.DataFrame) -> None:
     print(f"\nMaxmemory runs analysed: {len(df)}")
     print(f"Targets tested: {', '.join(str(v) + ' MB' for v in sorted(df['target_mb'].unique()))}")
+    print(f"Policies tested: {', '.join(str(v) for v in sorted(df['policy'].unique()))}")
 
     metrics = [
+        ("Written keys", "written_keys"),
         ("Evicted keys", "evicted_keys_delta"),
+        ("OOM errors", "oom_errors"),
+        ("Write errors", "write_errors"),
+        ("Error replies", "error_replies_delta"),
         ("Sample missing rate", "sample_missing_rate"),
         ("Used memory after (MB)", "used_memory_after_mb"),
         ("DB size after", "dbsize_after"),
         ("Seed duration (s)", "seed_duration_s"),
     ]
 
-    print(f"\n{'Metric':<28} {'Mean':>12} {'Std':>12}")
-    print("-" * 54)
-    for label, col in metrics:
-        mean = df[col].mean()
-        std = df[col].std()
-        print(f"{label:<28} {mean:>12.2f} {std:>12.2f}")
+    for (provider, policy), group in df.groupby(["provider", "policy"], dropna=False):
+        print(f"\n--- {provider} / {policy} ---")
+        print(f"{'Metric':<28} {'Mean':>12} {'Std':>12}")
+        print("-" * 54)
+        for label, col in metrics:
+            mean = group[col].mean()
+            std = group[col].std()
+            print(f"{label:<28} {mean:>12.2f} {std:>12.2f}")
 
 
 def save_maxmemory_csv(df: pd.DataFrame, out_dir: Path) -> None:
@@ -73,7 +92,7 @@ def plot_memory_before_after(df: pd.DataFrame, out_dir: Path) -> None:
     x = np.arange(len(df))
     width = 0.35
 
-    fig, ax = plt.subplots(figsize=(8, 4.5))
+    fig, ax = plt.subplots(figsize=(max(8, len(df) * 0.85), 4.5))
     ax.bar(
         x - width / 2, df["used_memory_before_mb"], width,
         label="Before", color="#55a868", edgecolor="black", linewidth=0.5,
@@ -88,6 +107,7 @@ def plot_memory_before_after(df: pd.DataFrame, out_dir: Path) -> None:
     ax.set_title("Maxmemory Test: Memory Before vs After Writes")
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
+    ax.tick_params(axis="x", rotation=30)
     ax.legend()
 
     fig.tight_layout()
@@ -99,7 +119,7 @@ def plot_evictions_and_missing(df: pd.DataFrame, out_dir: Path) -> None:
     labels = _run_labels(df)
     x = np.arange(len(df))
 
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.5))
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(max(11, len(df) * 1.2), 4.5))
 
     ax1.bar(
         x, df["evicted_keys_delta"],
@@ -110,17 +130,19 @@ def plot_evictions_and_missing(df: pd.DataFrame, out_dir: Path) -> None:
     ax1.set_title("Evictions Triggered")
     ax1.set_xticks(x)
     ax1.set_xticklabels(labels)
+    ax1.tick_params(axis="x", rotation=30)
 
     ax2.bar(
-        x, df["sample_missing_rate"] * 100,
+        x, df["oom_errors"],
         color="#c44e52", edgecolor="black", linewidth=0.5,
     )
     ax2.set_xlabel("Run")
-    ax2.set_ylabel("Sample missing (%)")
-    ax2.set_title("Sampled Keys Evicted")
+    ax2.set_ylabel("OOM errors")
+    ax2.set_title("Write Rejections")
     ax2.set_xticks(x)
     ax2.set_xticklabels(labels)
-    ax2.set_ylim(0, max(5, float((df["sample_missing_rate"] * 100).max()) * 1.2))
+    ax2.tick_params(axis="x", rotation=30)
+    ax2.set_ylim(0, max(5, float(df["oom_errors"].max()) * 1.2))
 
     fig.tight_layout()
     fig.savefig(out_dir / "maxmemory_evictions_missing.png", dpi=150, bbox_inches="tight")
@@ -132,4 +154,13 @@ def _bytes_to_mb(value: int | float | None) -> float:
 
 
 def _run_labels(df: pd.DataFrame) -> list[str]:
-    return [f"Run {int(r)}" if pd.notna(r) else f"Run {i + 1}" for i, r in enumerate(df["run"])]
+    labels = []
+    for i, row in df.reset_index(drop=True).iterrows():
+        run = int(row["run"]) if pd.notna(row["run"]) else i + 1
+        provider = str(row.get("provider", ""))
+        policy = str(row.get("policy", ""))
+        if provider and policy and policy != "unknown":
+            labels.append(f"{provider[:2]} {policy} r{run}")
+        else:
+            labels.append(f"Run {run}")
+    return labels

@@ -8,6 +8,7 @@ NS="vk"
 IMAGE="${BACKUP_IMAGE:-backup_restore:1}"
 REMOTE_OUT="/work/results/backup"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+KUBECTL_EXEC_TIMEOUT_SECONDS="${KUBECTL_EXEC_TIMEOUT_SECONDS:-30}"
 
 HOST="valkey.vk.svc.cluster.local"
 PORT=6379
@@ -68,7 +69,7 @@ wait_cluster_healthy() {
 }
 
 trigger_bgsave() {
-  echo "  Triggering BGSAVE on all master pods..."
+  echo "  Triggering BGSAVE on all master pods..." >&2
   local master_pods
   master_pods="$(kubectl exec valkey-0 -n "${NS}" -- \
     valkey-cli cluster nodes 2>/dev/null \
@@ -80,10 +81,13 @@ trigger_bgsave() {
   for addr in ${master_pods}; do
     local h="${addr%%:*}"
     local p="${addr##*:}"
-    kubectl exec valkey-0 -n "${NS}" -- valkey-cli -h "${h}" -p "${p}" bgsave 2>/dev/null || true
+    echo "    BGSAVE ${h}:${p}" >&2
+    timeout "${KUBECTL_EXEC_TIMEOUT_SECONDS}s" \
+      kubectl exec valkey-0 -c valkey -n "${NS}" -- \
+        valkey-cli -h "${h}" -p "${p}" bgsave >&2 || true
   done
 
-  echo "  Waiting for BGSAVE to complete on all masters..."
+  echo "  Waiting for BGSAVE to complete on all masters..." >&2
   sleep 5
   local all_done=false
   local max_wait=120
@@ -94,7 +98,8 @@ trigger_bgsave() {
       local h="${addr%%:*}"
       local p="${addr##*:}"
       local saving
-      saving="$(kubectl exec valkey-0 -n "${NS}" -- \
+      saving="$(timeout "${KUBECTL_EXEC_TIMEOUT_SECONDS}s" \
+        kubectl exec valkey-0 -c valkey -n "${NS}" -- \
         valkey-cli -h "${h}" -p "${p}" info persistence 2>/dev/null \
         | grep rdb_bgsave_in_progress | tr -d '[:space:]')" || true
       if [[ "${saving}" == *"1"* ]]; then
@@ -103,15 +108,20 @@ trigger_bgsave() {
       fi
     done
     if [[ "${all_done}" != "true" ]]; then
+      echo "    BGSAVE still running after ${waited}s..." >&2
       sleep 3
       waited=$((waited + 3))
     fi
   done
 
+  if [[ "${all_done}" != "true" ]]; then
+    echo "  WARNING: BGSAVE did not finish on all masters after ${max_wait}s" >&2
+  fi
+
   local save_end
   save_end="$(date +%s)"
   local save_dur=$((save_end - save_start))
-  echo "  BGSAVE completed in ${save_dur}s"
+  echo "  BGSAVE completed in ${save_dur}s" >&2
   echo "${save_start} ${save_end} ${save_dur}"
 }
 
@@ -175,12 +185,17 @@ for i in $(seq 1 "${N}"); do
 
   echo "[${i}] Waiting for pods to restart..."
   kubectl rollout status sts/valkey -n "${NS}" --timeout=300s
+  PODS_READY_TS="$(date +%s)"
+  POD_RECREATE_DURATION=$((PODS_READY_TS - DELETE_TS))
+  echo "[${i}] Pod recreate time: ${POD_RECREATE_DURATION}s"
 
   echo "[${i}] Waiting for cluster to become healthy..."
   wait_cluster_healthy 300
   READY_TS="$(date +%s)"
   RESTORE_DURATION=$((READY_TS - DELETE_TS))
+  CLUSTER_RECOVERY_AFTER_PODS=$((READY_TS - PODS_READY_TS))
   echo "[${i}] Restore time: ${RESTORE_DURATION}s"
+  echo "[${i}] Cluster recovery after pods ready: ${CLUSTER_RECOVERY_AFTER_PODS}s"
 
   # -- Verify phase --
   echo "[${i}] Verifying data integrity..."
@@ -227,7 +242,10 @@ for i in $(seq 1 "${N}"); do
   "save_end": ${SAVE_END},
   "save_duration_s": ${SAVE_DURATION},
   "delete_ts": ${DELETE_TS},
+  "pods_ready_ts": ${PODS_READY_TS},
   "ready_ts": ${READY_TS},
+  "pod_recreate_duration_s": ${POD_RECREATE_DURATION},
+  "cluster_recovery_after_pods_s": ${CLUSTER_RECOVERY_AFTER_PODS},
   "restore_duration_s": ${RESTORE_DURATION},
   "integrity_ok": ${INTEGRITY}
 }

@@ -6,26 +6,27 @@ Metodyka została dobrana tak, aby umożliwić weryfikację hipotez sformułowan
 
 \section{Organizacja badań}
 
-Badania podzielono na cztery główne etapy. Pierwszy etap obejmuje przygotowanie środowiska Kubernetes, wdrożenie badanych systemów oraz konfigurację monitoringu. Drugi etap obejmuje testy wydajnościowe, w których mierzone są przepustowość, opóźnienia oraz wykorzystanie zasobów. Trzeci etap obejmuje testy niezawodności i odporności, takie jak failover mastera, presja na CPU i pamięć oraz partycja sieciowa. Czwarty etap dotyczy utrzymywalności, w szczególności aktualizacji klastra, skalowania horyzontalnego, reshardingu oraz operacji backupu i odtwarzania.
+Badania zorganizowano jako zestaw niezależnych scenariuszy uruchamianych w Google Cloud Platform. Każdy test rozpoczyna się od przygotowania osobnego klastra Kubernetes w usłudze Google Kubernetes Engine lub od przygotowania osobnej instancji usługi zarządzanej, jeżeli dany scenariusz dotyczy Memorystore. Po zakończeniu pomiaru wyniki, logi i parametry uruchomienia są zapisywane w katalogu wynikowym, a środowisko może zostać usunięte albo odtworzone od początku dla kolejnego przebiegu.
 
-Kolejność wykonywania badań ma znaczenie dla wiarygodności wyników. Najpierw wykonywane są testy bazowe, które nie ingerują destrukcyjnie w działanie klastra. Dopiero po ich zakończeniu przeprowadzane są testy awaryjne i operacyjne. Takie uporządkowanie ogranicza ryzyko, że pozostałości po testach chaos engineering, niepełne odtworzenie klastra albo zmieniony stan danych wpłyną na wyniki pomiarów wydajnościowych.
+Takie podejście ogranicza wpływ kolejności wykonywania testów na wyniki. Scenariusze operacyjne, takie jak resharding, rolling upgrade albo backup i restore, zmieniają stan klastra, tworzą lub usuwają zasoby trwałe, a w części przypadków celowo powodują niedostępność podów. Uruchamianie kolejnych testów na świeżo przygotowanym środowisku zmniejsza ryzyko, że pozostałości po poprzednim przebiegu, stare wolumeny, zmieniony stan danych albo niepełne odtworzenie klastra wpłyną na następny pomiar.
 
-Przyjęto następującą kolejność prac badawczych:
+Konfiguracja klastra GKE jest utrzymywana możliwie stała w obrębie porównywanych scenariuszy. Dotyczy to przede wszystkim regionu, typu maszyn węzłów oraz sposobu uruchamiania generatorów obciążenia. Parametry klastra mogą być jednak dostosowywane do charakteru konkretnego testu. Przykładowo test backupu i odtwarzania wymaga większych wolumenów trwałych oraz innego limitu pamięci niż krótki test reshardingu. Zmiany takie są traktowane jako część definicji scenariusza i są zapisywane razem z wynikami.
+
+Przyjęto następujący schemat pojedynczego scenariusza badawczego:
 
 \begin{enumerate}
-    \item przygotowanie środowiska Kubernetes, monitoringu oraz obrazów narzędzi testowych;
-    \item wdrożenie klastra Valkey i klastra Redis w porównywalnej topologii;
-    \item walidacja poprawności połączeń, replikacji i działania trybu klastrowego;
-    \item wykonanie testów wydajnościowych dla wszystkich konfiguracji CPU, payloadu i proporcji operacji;
-    \item wykonanie testów failover oraz testów odporności na niedobór zasobów;
-    \item wykonanie testów partycji sieciowej i spójności danych;
-    \item wykonanie testów utrzymywalności: upgrade, resharding, backup i restore;
-    \item agregacja wyników, wizualizacja, analiza statystyczna i weryfikacja hipotez.
+    \item utworzenie klastra GKE lub przygotowanie instancji Memorystore zgodnie z parametrami testu;
+    \item wdrożenie klastra Valkey w Kubernetes albo odczyt konfiguracji usługi zarządzanej;
+    \item walidacja stanu początkowego, w tym połączeń, replikacji, pokrycia slotów i gotowości klastra;
+    \item przygotowanie danych testowych oraz uruchomienie generatora obciążenia, jeżeli wymaga tego scenariusz;
+    \item wykonanie badanej operacji, na przykład aktualizacji, reshardingu albo odtwarzania z kopii;
+    \item zapis metryk, logów, czasów faz operacji i raportów weryfikacyjnych;
+    \item usunięcie albo odtworzenie środowiska przed kolejnym powtórzeniem.
 \end{enumerate}
 
 \section{Warianty badawcze}
 
-Podstawowym przedmiotem badań jest klaster Valkey uruchomiony samodzielnie w środowisku Kubernetes. Jego wyniki są zestawiane z rozwiązaniami opartymi o Redis oraz z usługą zarządzaną traktowaną jako punkt odniesienia dla kosztów i nakładu pracy operacyjnej. Tabela~\ref{tab:warianty_badawcze} przedstawia przyjęte warianty.
+Podstawowym przedmiotem badań jest klaster Valkey uruchomiony samodzielnie w środowisku Kubernetes. Punktem odniesienia jest Google Cloud Memorystore for Redis, czyli usługa zarządzana, w której część mechanizmów administracyjnych jest realizowana przez dostawcę chmurowego. Tabela~\ref{tab:warianty_badawcze} przedstawia przyjęte warianty.
 
 \begin{table}[H]
 \centering
@@ -35,45 +36,92 @@ Podstawowym przedmiotem badań jest klaster Valkey uruchomiony samodzielnie w ś
 \toprule
 \textbf{Wariant} & \textbf{Rola w badaniu} \\
 \midrule
-Valkey Cluster w Kubernetes & Główny wariant badawczy. System self-hosted oceniany pod względem wydajności, opóźnień, odporności, kosztów i złożoności utrzymania. \\
-Redis Cluster w Kubernetes & Podstawowy wariant porównawczy dla testów wydajnościowych i operacyjnych wykonywanych w tej samej topologii. \\
-Redis Sentinel & Wariant odniesienia dla klasycznego mechanizmu failoveru, wykorzystywany głównie przy ocenie czasu odtworzenia mastera. \\
-Google Cloud Memorystore & Usługa zarządzana wykorzystywana jako punkt odniesienia w analizie kosztów, dostępności i nakładu pracy operacyjnej. \\
+Valkey Cluster w Kubernetes & Główny wariant badawczy. System self-hosted oceniany pod względem zachowania podczas operacji administracyjnych, wpływu tych operacji na klienta, kosztów oraz złożoności utrzymania. \\
+Google Cloud Memorystore for Redis & Wariant zarządzany wykorzystywany jako punkt odniesienia dla operacji udostępnianych przez dostawcę chmurowego, kosztów infrastruktury oraz nakładu pracy operatora. \\
 \bottomrule
 \end{tabularx}
 \end{table}
 
-Najbardziej bezpośrednie porównanie dotyczy wariantów Valkey Cluster i Redis Cluster uruchamianych w Kubernetes. W obu przypadkach należy zachować tę samą topologię, te same limity zasobów, ten sam generator obciążenia oraz te same parametry testów. Wariant Memorystore nie jest w pełni równoważny środowisku self-hosted, ponieważ część mechanizmów administracyjnych jest ukryta przed użytkownikiem. Z tego powodu w pracy jest on traktowany przede wszystkim jako wariant porównawczy dla analizy kosztów i maintenance overhead, a nie jako identycznie kontrolowane środowisko eksperymentalne.
+Porównanie obu wariantów wymaga rozróżnienia poziomu kontroli nad środowiskiem. W przypadku Valkey operator zarządza klastrem Kubernetes, konfiguracją Helm oraz zasobami trwałymi wykorzystywanymi przez system. W przypadku Memorystore użytkownik inicjuje operacje przez API lub narzędzia \texttt{gcloud}, natomiast wewnętrzna realizacja tych operacji pozostaje ukryta. Z tego powodu wariant zarządzany jest traktowany jako porównanie typu black-box. Tam, gdzie jest to możliwe, zachowywane są te same parametry obciążenia i podobny rozmiar danych, jednak nie zakłada się pełnej równoważności infrastruktury.
 
 \section{Środowisko testowe}
 
-Badania self-hosted prowadzone są w klastrze Kubernetes. Generator obciążenia uruchamiany jest jako pod w tym samym klastrze co badany system cache. Takie założenie ogranicza wpływ zewnętrznych load balancerów, publicznej sieci oraz dodatkowych przejść sieciowych, które mogłyby zdominować pomiar opóźnień. W środowisku produkcyjnym klient aplikacyjny bardzo często działa w tym samym klastrze lub w tej samej sieci prywatnej co cache, dlatego taki model lepiej odzwierciedla docelowy scenariusz użycia.
+Badania self-hosted prowadzone są w klastrze Kubernetes utworzonym w Google Kubernetes Engine. Dla każdego scenariusza klaster GKE jest tworzony od początku, aby przebieg testu nie zależał od stanu pozostawionego przez poprzednie eksperymenty. Bazową konfigurację klastra GKE tworzono poleceniem~\ref{lst:gke-cluster-create}.
 
-Konfigurację bazową środowiska przedstawiono w tabeli~\ref{tab:srodowisko_testowe}. Wartości te stanowią punkt wyjścia dla eksperymentów. Jeżeli ograniczenia sprzętowe uniemożliwią wykonanie pełnej macierzy testów, fakt ten powinien zostać odnotowany w rozdziale wynikowym jako ograniczenie badania.
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Utworzenie klastra GKE},label={lst:gke-cluster-create}]
+gcloud container clusters create valkey-bench \
+  --location europe-central2 \
+  --node-locations europe-central2-a \
+  --num-nodes 3 \
+  --machine-type n2-standard-4 \
+  --disk-type pd-balanced \
+  --disk-size 50
+\end{lstlisting}
 
-\begin{table}[H]
-\centering
-\caption{Bazowa konfiguracja środowiska testowego}
-\label{tab:srodowisko_testowe}
-\begin{tabularx}{\textwidth}{p{4.2cm}X}
-\toprule
-\textbf{Element} & \textbf{Konfiguracja bazowa} \\
-\midrule
-Orkiestracja & Kubernetes \\
-Tryb pracy systemu cache & Cluster mode \\
-Liczba shardów & 3 \\
-Liczba replik na shard & 1 \\
-Łączna liczba podów klastra & 6 \\
-Generator obciążenia & \texttt{memtier\_benchmark} uruchamiany jako pod w tym samym klastrze \\
-Monitoring & Prometheus oraz Grafana \\
-Metryki systemowe & CPU, pamięć, restarty podów, status klastra \\
-Trwałość danych & PVC, jeżeli scenariusz wymaga testu backup/restore lub odtworzenia po restarcie \\
-Zakłócenia kontrolowane & Chaos engineering przez ubijanie podów, presję na zasoby lub partycję sieciową \\
-\bottomrule
-\end{tabularx}
-\end{table}
+Wariant zarządzany uruchamiany był jako klaster Google Cloud Memorystore for Redis w tym samym regionie. Bazową konfigurację usługi tworzono poleceniem~\ref{lst:memorystore-cluster-create}.
 
-W testach wydajnościowych kluczowe jest zachowanie jednakowej konfiguracji dla Valkey i Redis. Obejmuje to nie tylko liczbę podów oraz przydział CPU, ale także politykę pamięci, ustawienia trwałości, rozmiar zbioru kluczy, wersję narzędzia testowego oraz sposób routingu ruchu. Każda zmiana tych parametrów może istotnie zmienić charakter obciążenia i utrudnić interpretację wyników.
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Utworzenie klastra Memorystore},label={lst:memorystore-cluster-create}]
+gcloud redis clusters create redis-ms \
+  --region=europe-central2 \
+  --network=projects/redis-vs-valkey/global/networks/default \
+  --replica-count=1 \
+  --node-type=redis-standard-small \
+  --shard-count=3
+\end{lstlisting}
+
+Monitoring środowiska Kubernetes instalowano za pomocą chartu \texttt{kube-prometheus-stack}, który uruchamia Prometheusa i Grafanę. Polecenia instalacyjne przedstawiono w listingu~\ref{lst:monitoring-install}.
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Instalacja Prometheusa i Grafany},label={lst:monitoring-install}]
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo update
+helm install monitoring prometheus-community/kube-prometheus-stack \
+  -n monitoring \
+  --create-namespace
+\end{lstlisting}
+
+Część testów odporności wykorzystywała również Chaos Mesh do uruchamiania kontrolowanych zakłóceń w klastrze Kubernetes. W środowisku GKE wskazywano runtime \texttt{containerd}. Instalację narzędzia przedstawiono w listingu~\ref{lst:chaos-mesh-install}.
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Instalacja Chaos Mesh},label={lst:chaos-mesh-install}]
+helm repo add chaos-mesh https://charts.chaos-mesh.org
+helm repo update
+helm install chaos-mesh chaos-mesh/chaos-mesh \
+  --namespace chaos-mesh \
+  --create-namespace \
+  --set chaosDaemon.runtime=containerd \
+  --set chaosDaemon.socketPath=/run/containerd/containerd.sock
+\end{lstlisting}
+
+Klaster Valkey instalowano z wykorzystaniem chartu \texttt{valkey-helm} w wersji rozwijanej w ramach pull requestu dodającego obsługę trybu klastrowego z shardingiem~\cite{valkeyHelmPr116}. Przygotowanie repozytorium chartu przedstawiono w listingu~\ref{lst:valkey-chart-pr}.
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Przygotowanie chartu Valkey},label={lst:valkey-chart-pr}]
+git clone https://github.com/valkey-io/valkey-helm.git
+cd valkey-helm
+git fetch origin pull/116/head:pr-116
+git checkout pr-116
+\end{lstlisting}
+
+Konfiguracja przekazywana do chartu Helm znajduje się w pliku \texttt{k8s/manifests/values.yaml}. Jej zawartość przedstawiono w listingu~\ref{lst:valkey-values}.
+
+\lstinputlisting[
+basicstyle=\ttfamily\footnotesize,
+columns=fullflexible,
+keepspaces=true,
+breaklines=true,
+breakatwhitespace=true,
+frame=single,
+framerule=0.2pt,
+caption={Plik \texttt{values.yaml} używany do instalacji Valkey},
+label={lst:valkey-values}
+]{../../k8s/manifests/values.yaml}
+
+Instalację klastra Valkey wykonywano poleceniem~\ref{lst:valkey-install}.
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Instalacja klastra Valkey z użyciem Helm},label={lst:valkey-install}]
+helm install valkey ../valkey-helm/valkey \
+  -n vk \
+  -f ./k8s/manifests/values.yaml \
+  --create-namespace
+\end{lstlisting}
 
 \section{Narzędzia badawcze}
 
@@ -85,9 +133,9 @@ Do testów odpornościowych przewidziano mechanizmy chaos engineering. Zakłóce
 
 \section{Testy wydajnościowe}
 
-Testy wydajnościowe służą weryfikacji hipotezy H1. Ich celem jest porównanie liczby operacji na sekundę i rozkładu opóźnień dla Valkey oraz Redis Cluster przy identycznym przydziale zasobów. Badane są trzy typy obciążenia: tylko odczyt, tylko zapis oraz scenariusz mieszany. Uwzględnienie różnych rozmiarów payloadu pozwala sprawdzić, czy system jest ograniczony głównie przez CPU, sieć, kopiowanie pamięci czy obsługę protokołu.
+Testy wydajnościowe służą weryfikacji zachowania klastra Valkey w przyjętym środowisku GKE oraz określeniu poziomu obciążenia używanego później w scenariuszach operacyjnych. Mierzone są liczba operacji na sekundę i rozkład opóźnień przy różnych rozmiarach payloadu oraz proporcjach operacji. Badane są trzy typy obciążenia: tylko odczyt, tylko zapis oraz scenariusz mieszany. Uwzględnienie różnych rozmiarów payloadu pozwala sprawdzić, czy system jest ograniczony głównie przez CPU, sieć, kopiowanie pamięci czy obsługę protokołu.
 
-Parametry testów wydajnościowych przedstawiono w tabeli~\ref{tab:parametry_wydajnosci}. Wartości bazowe dobrano tak, aby uzyskać porównywalny wariant eksperymentalny, możliwy do powtórzenia dla obu systemów. Dodatkowo można wykonywać testy saturacyjne z większą liczbą klientów i wątków, jednak powinny one być oznaczone jako osobny scenariusz, aby nie mieszać ich z wariantem bazowym.
+Parametry testów wydajnościowych przedstawiono w tabeli~\ref{tab:parametry_wydajnosci}. Wartości bazowe dobrano tak, aby uzyskać powtarzalny wariant eksperymentalny dla klastra self-hosted oraz punkt odniesienia dla scenariuszy operacyjnych wykonywanych pod obciążeniem. Dodatkowo można wykonywać testy saturacyjne z większą liczbą klientów i wątków, jednak powinny one być oznaczone jako osobny scenariusz, aby nie mieszać ich z wariantem bazowym.
 
 \begin{table}[H]
 \centering
@@ -115,7 +163,7 @@ Percentyle opóźnień & p50, p95, p99, p99.9 \\
 \end{tabularx}
 \end{table}
 
-Pełna macierz testów obejmuje 3 wartości CPU, 3 rozmiary payloadu i 3 proporcje operacji, czyli 27 konfiguracji dla jednego systemu. Przy pięciu powtórzeniach daje to 135 przebiegów na system. W przypadku porównania Valkey i Redis liczba przebiegów ulega podwojeniu. Z tego powodu istotne jest automatyczne zapisywanie wyników oraz jednoznaczne nazewnictwo plików wynikowych.
+Pełna macierz testów obejmuje 3 wartości CPU, 3 rozmiary payloadu i 3 proporcje operacji, czyli 27 konfiguracji dla wariantu self-hosted. Przy pięciu powtórzeniach daje to 135 przebiegów. Z tego powodu istotne jest automatyczne zapisywanie wyników oraz jednoznaczne nazewnictwo plików wynikowych.
 
 \section{Testy niezawodności i odporności}
 
@@ -139,19 +187,54 @@ Testy resilience sprawdzają zachowanie klastra przy presji na CPU i pamięć. W
 
 Dla testu pamięci szczególnie istotny jest wariant warm cache, czyli wcześniejsze wypełnienie klastra danymi. Bez danych test nie oddaje rzeczywistego zachowania systemu, ponieważ presja pamięci może nie uruchomić mechanizmów eksmisji ani nie doprowadzić do sytuacji bliskiej OOM Kill.
 
-\section{Testy utrzymywalności}
+\section{Testy utrzymywalności}\label{sec:testy_utrzymywalnosci}
 
-Testy utrzymywalności służą weryfikacji hipotezy H4. Ich celem jest ocena, ile pracy operacyjnej wymaga utrzymanie klastra self-hosted w porównaniu z usługą zarządzaną. W tej części obok metryk technicznych mierzone są również liczba kroków, liczba komend, czas wykonania procedury, konieczność ręcznej interwencji oraz ryzyko błędnej konfiguracji.
+Testy utrzymywalności służą weryfikacji hipotezy H4. Ich celem jest ocena, ile pracy operacyjnej wymaga utrzymanie klastra self-hosted w porównaniu z usługą zarządzaną. W tej części obok metryk technicznych mierzone są również liczba kroków, liczba komend, czas wykonania procedury, konieczność ręcznej interwencji oraz ryzyko błędnej konfiguracji. W rozdziale z wynikami przedstawiono dwa scenariusze wykonywane pod obciążeniem: rolling upgrade oraz resharding klastra.
 
-\subsection{Rolling upgrade}
+W scenariuszach utrzymaniowych zastosowano lżejszy profil obciążenia niż w testach wydajnościowych. Takie ustawienie utrzymuje stały ruch klienta w czasie wykonywania operacji administracyjnej i ułatwia porównanie przebiegów między powtórzeniami. Parametry obciążenia tła przedstawiono w tabeli~\ref{tab:parametry_utrzymaniowe_memtier}.
 
-Test rolling upgrade polega na wykonaniu aktualizacji lub wymuszonego restartu komponentów klastra podczas ciągłego obciążenia. Rejestrowane są liczba błędów klienta, czas trwania operacji, skoki opóźnień oraz liczba okien degradacji. Celem nie jest wyłącznie sprawdzenie, czy aktualizacja zakończy się sukcesem, ale również ocena, czy z perspektywy aplikacji operacja może być uznana za zero-downtime.
+\begin{table}[H]
+\centering
+\caption{Parametry \texttt{memtier\_benchmark} w testach utrzymaniowych}
+\label{tab:parametry_utrzymaniowe_memtier}
+\begin{tabularx}{\textwidth}{p{4.4cm}XX}
+\toprule
+\textbf{Parametr} & \textbf{Resharding} & \textbf{Rolling upgrade} \\
+\midrule
+Protokół i tryb pracy & \texttt{redis}, \texttt{--cluster-mode} & \texttt{redis}, \texttt{--cluster-mode} \\
+Liczba wątków & 4 & 4 \\
+Liczba klientów na wątek & 16 & 16 \\
+Łączna liczba połączeń & 64 & 64 \\
+Czas pojedynczego przebiegu & 120 s & 360 s \\
+Proporcja operacji & \texttt{1:1} (\texttt{SET}:\texttt{GET}) & \texttt{1:1} (\texttt{SET}:\texttt{GET}) \\
+Pipeline & 1 & 1 \\
+Rozmiar payloadu & 1024 B & 1024 B \\
+Zakres kluczy & 0--100000 & 0--100000 \\
+Percentyle opóźnień & p50, p95, p99, p99.9 & p50, p95, p99, p99.9 \\
+Liczba powtórzeń & 5 dla każdej fazy i metody & 5 \\
+\bottomrule
+\end{tabularx}
+\end{table}
 
-\subsection{Skalowanie horyzontalne i resharding}
+\subsection{Rolling upgrade}\label{subsec:rolling_upgrade}
 
-Test reshardingu obejmuje dodanie nowego sharda do klastra i przeniesienie części slotów. Dla systemów Redis-compatible jest to operacja szczególnie istotna, ponieważ rozkład slotów wpływa na równomierność obciążenia oraz wykorzystanie zasobów. W trakcie testu mierzone są czas dodania sharda, czas przenoszenia slotów, liczba błędów lub przekierowań po stronie klienta, spadek przepustowości oraz wpływ operacji na p99 i p99.9 latency.
+Test rolling upgrade obejmuje aktualizację wersji klastra Valkey podczas ciągłego obciążenia. Każde powtórzenie rozpoczyna się od przywrócenia wersji bazowej, dzięki czemu kolejne przebiegi startują z tego samego stanu. Następnie skrypt uruchamia pod z \texttt{memtier\_benchmark} oraz osobny pod klienta kontrolnego. Klient kontrolny działa niezależnie od generatora obciążenia i cyklicznie wykonuje sekwencję \texttt{SET}, \texttt{GET} i \texttt{DEL} w trybie cluster-aware. Próby wykonywane są co 0{,}2~s, a limit czasu odpowiedzi pojedynczej operacji wynosi 2~s.
 
-\subsection{Backup i restore}
+Po uruchomieniu obu klientów skrypt czeka 30~s na stan ustalony. Następnie wykonywany jest rzeczywisty \texttt{helm upgrade}, który zmienia wersję obrazu Valkey i wymusza rolling update podów StatefulSetu. Czas operacji administracyjnej liczony jest od rozpoczęcia \texttt{helm upgrade} do zakończenia rollout oraz pozytywnej kontroli gotowości klastra z perspektywy klienta. Po zakończeniu testu zapisywane są wyniki \texttt{memtier\_benchmark}, logi oraz plik CSV klienta kontrolnego zawierający znacznik czasu, czas odpowiedzi, status próby i treść błędu.
+
+\subsection{Skalowanie horyzontalne i resharding}\label{subsec:resharding}
+
+Test reshardingu obejmuje zmianę liczby shardów z trzech do czterech oraz powrót z czterech do trzech shardów. Dla klastra Valkey porównywane są dwa warianty migracji slotów: klasyczny tryb \texttt{valkey-cli --cluster rebalance} oraz tryb atomowy uruchamiany flagą \texttt{--cluster-use-atomic-slot-migration}. Mechanizm atomowej migracji slotów jest dostępny w Valkey od wersji 9.0; w badaniu wykorzystano obraz Valkey 9.1, ponieważ używane narzędzie \texttt{valkey-cli} udostępnia w tej wersji odpowiednią flagę. Na potrzeby benchmarku chart Helm został rozszerzony o możliwość wyłączenia automatycznego równoważenia slotów oraz przekazania flagi atomowej migracji slotów do operacji reshardingu~\cite{valkeyHelmPr116}.
+
+Przed rozpoczęciem pomiaru skrypt sprawdza, czy klaster ma trzy mastery, pełne pokrycie 16384 slotów i stan \texttt{cluster\_state:ok}. Następnie uruchamiany jest pod z \texttt{memtier\_benchmark}, po czym skrypt czeka 30~s na stabilizację ruchu. Dla skalowania w górę wykonywany jest \texttt{helm upgrade} ustawiający \texttt{cluster.shards=4}. Automatyczne równoważenie chartu jest wyłączone przez \texttt{cluster.autoRebalance.enabled=false}, aby migracja slotów była wykonywana jawnie przez skrypt benchmarkowy. Istniejące pody \texttt{valkey-0}--\texttt{valkey-5} są zabezpieczane przed rolling restartem przez ustawienie partycji aktualizacji StatefulSetu.
+
+Po utworzeniu nowych podów \texttt{valkey-6} i \texttt{valkey-7} skrypt czeka, aż będą gotowe oraz widoczne w metadanych klastra. Następnie wykonywane jest jawne przeniesienie slotów na dodatkowy master. Dla trybu legacy używana jest klasyczna migracja slotów, a dla trybu atomic ta sama operacja uruchamiana jest z flagą atomowej migracji. Po zakończeniu migracji skrypt ponownie sprawdza stan klastra i zapisuje czasy faz: tworzenie nowych podów, migrację slotów oraz czas całej operacji.
+
+Faza skalowania w dół rozpoczyna się osobnym przebiegiem \texttt{memtier\_benchmark}. Po 30~s stanu ustalonego skrypt przenosi sloty z dodatkowego sharda na pozostałe mastery, usuwa dodatkowe węzły z metadanych klastra poleceniem \texttt{del-node}, a następnie wykonuje \texttt{helm upgrade} przywracający \texttt{cluster.shards=3}. Mierzony czas obejmuje więc zarówno migrację slotów, jak i część administracyjną potrzebną do usunięcia sharda oraz przywrócenia stabilnej konfiguracji.
+
+Dla Memorystore procedura ma charakter black-box. Skrypt uruchamia pod z \texttt{memtier\_benchmark}, czeka 30~s, a następnie wywołuje zmianę liczby shardów przez \texttt{gcloud redis clusters update --shard-count}. Pomiar kończy się dopiero po tym, gdy opis klastra zwraca oczekiwaną liczbę shardów i stan gotowości usługi. Wariant zarządzany nie pozwala rozdzielić czasu tworzenia zasobów, wewnętrznej migracji slotów i kontroli stanu, dlatego w wynikach jest prezentowany jako pojedynczy blok czasu.
+
+\subsection{Backup i restore}\label{subsec:backup_restore}
 
 Test backupu i odtwarzania obejmuje wypełnienie klastra danymi, utworzenie kopii oraz odtworzenie działania po restarcie lub awarii. Dla wariantu self-hosted mierzone są czas przygotowania danych, czas wykonania kopii, czas odtworzenia, integralność próbki danych oraz liczba kroków wymaganych od operatora. Dla usługi zarządzanej analizowany jest deklarowany mechanizm backup/restore, dostępność Point-in-Time Recovery oraz zakres odpowiedzialności użytkownika.
 
@@ -167,7 +250,7 @@ Zestaw metryk dobrano tak, aby umożliwić ocenę zarówno wydajności, jak i ni
 \toprule
 \textbf{Kategoria} & \textbf{Metryki} \\
 \midrule
-Wydajność & Ops/sec, średnia z powtórzeń, odchylenie standardowe, różnica procentowa Valkey względem Redis. \\
+Wydajność & Ops/sec, średnia z powtórzeń, odchylenie standardowe, różnica procentowa względem wariantu odniesienia. \\
 Opóźnienia & p50, p95, p99, p99.9, maksymalne skoki opóźnień podczas awarii lub operacji utrzymaniowych. \\
 Zasoby & Średnie zużycie CPU, zużycie CPU per pod, zużycie pamięci, restarty podów. \\
 Failover & Czas odtworzenia mastera, liczba błędów klienta, czas degradacji, czas powrotu do stabilnego throughputu. \\
@@ -178,7 +261,7 @@ Koszty & Koszt miesięczny, koszt w przeliczeniu na 100 tys. ops/sec, koszt prac
 \end{tabularx}
 \end{table}
 
-Dla każdej konfiguracji liczbowej wykonywanych jest co najmniej pięć powtórzeń. Następnie obliczana jest średnia arytmetyczna oraz odchylenie standardowe. W przypadku porównania Valkey i Redis obliczana jest również różnica procentowa. Jeżeli rozkład wyników i liczba obserwacji na to pozwolą, można zastosować test statystyczny dla dwóch prób, na przykład test t-Studenta albo test Manna-Whitneya. Ze względu na ograniczoną liczbę powtórzeń wyniki należy jednak interpretować ostrożnie i traktować je jako eksperymentalne porównanie w określonym środowisku, a nie jako uniwersalną charakterystykę wszystkich możliwych wdrożeń.
+Dla każdej konfiguracji liczbowej wykonywanych jest co najmniej pięć powtórzeń. Następnie obliczana jest średnia arytmetyczna oraz odchylenie standardowe. W scenariuszach porównujących Valkey z Memorystore obliczana jest również różnica procentowa między wariantem self-hosted i zarządzanym. Jeżeli rozkład wyników i liczba obserwacji na to pozwolą, można zastosować test statystyczny dla dwóch prób, na przykład test t-Studenta albo test Manna-Whitneya. Ze względu na ograniczoną liczbę powtórzeń wyniki należy jednak interpretować ostrożnie i traktować je jako eksperymentalne porównanie w określonym środowisku, a nie jako uniwersalną charakterystykę wszystkich możliwych wdrożeń.
 
 Wyniki prezentowane są w formie tabel i wykresów. Dla testów wydajnościowych stosowane są wykresy słupkowe ops/sec, wykresy percentyli opóźnień oraz heatmapy zależności throughputu od CPU i rozmiaru payloadu. Dla testów failover, resilience, upgrade i resharding stosowane są wykresy czasowe, na których oznaczone jest okno wprowadzenia zakłócenia lub operacji administracyjnej.
 
@@ -189,7 +272,7 @@ Aby zachować powtarzalność badań, dla każdego przebiegu zapisywane są suro
 Przyjęto następujące zasady:
 
 \begin{itemize}
-    \item Valkey i Redis są testowane w możliwie identycznej topologii;
+    \item scenariusze Valkey są uruchamiane w możliwie stałej topologii klastra GKE;
     \item generator obciążenia działa z tego samego środowiska Kubernetes;
     \item przed każdą serią testów sprawdzany jest zdrowy stan klastra;
     \item dane testowe są czyszczone albo przygotowywane w kontrolowany sposób;
@@ -199,7 +282,7 @@ Przyjęto następujące zasady:
 
 \section{Kryteria interpretacji wyników}
 
-Valkey zostanie uznany za korzystniejszy technicznie od Redis Cluster w danym scenariuszu tylko wtedy, gdy przy tej samej konfiguracji osiąga wyższą przepustowość lub niższe opóźnienia bez pogorszenia stabilności, zużycia zasobów i zachowania podczas awarii. Pojedynczy lepszy wynik ops/sec nie jest wystarczający, jeżeli towarzyszy mu istotny wzrost p99 lub p99.9 latency.
+Ocena wariantu Valkey jest przeprowadzana osobno dla każdego scenariusza. W scenariuszach wydajnościowych korzystniejszy wynik oznacza wyższą przepustowość lub niższe opóźnienia bez pogorszenia stabilności i zużycia zasobów. Pojedynczy lepszy wynik ops/sec nie jest wystarczający, jeżeli towarzyszy mu istotny wzrost p99 lub p99.9 latency. W scenariuszach operacyjnych równie ważne są czas procedury, liczba wymaganych kroków oraz ryzyko błędu operatora.
 
 W przypadku hipotezy kosztowej porównanie obejmuje nie tylko koszt infrastruktury, ale także koszt pracy operacyjnej. Klaster self-hosted może być tańszy pod względem zasobów obliczeniowych, ale wymaga samodzielnego monitorowania, aktualizacji, reagowania na awarie oraz utrzymywania procedur backup/restore. Z tego względu wariant Valkey self-hosted zostanie uznany za korzystniejszy kosztowo tylko wtedy, gdy oszczędność infrastrukturalna nie zostanie zniwelowana przez maintenance overhead oraz ryzyko operacyjne.
 

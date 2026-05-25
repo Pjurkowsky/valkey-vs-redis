@@ -1,0 +1,21 @@
+image:
+  tag: "9.1.0"
+
+cluster:
+  enabled: true
+  shards: 3
+  replicasPerShard: 1
+  persistence:
+    size: 15Gi
+
+valkeyConfig: |
+  maxmemory 7gb
+  maxmemory-policy noeviction
+  cluster-preferred-endpoint-type ip
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    extraLabels:
+      release: monitoring

@@ -119,6 +119,106 @@ def _empty_result() -> Dict[str, Any]:
     }
 
 
+def _run_number(path: Path) -> Optional[str]:
+    stem_parts = path.stem.split("_")
+    return stem_parts[-1] if stem_parts and stem_parts[-1].isdigit() else None
+
+
+def _load_timing(json_dir: Path, run_file: Path) -> Dict[str, Any]:
+    import json
+
+    run_number = _run_number(run_file)
+    if run_number is None:
+        return {}
+
+    timing_path = json_dir / f"upgrade_timing_{run_number}.json"
+    if not timing_path.exists():
+        return {}
+
+    with timing_path.open() as fh:
+        return json.load(fh)
+
+
+def _probe_metrics(json_dir: Path, timing: Dict[str, Any]) -> Dict[str, Any]:
+    probe_file = timing.get("app_probe_file")
+    if not probe_file:
+        return _empty_probe_metrics()
+
+    probe_path = json_dir / str(probe_file)
+    if not probe_path.exists():
+        metrics = _empty_probe_metrics()
+        metrics["app_probe_file"] = str(probe_file)
+        return metrics
+
+    probe = pd.read_csv(probe_path)
+    if probe.empty or "epoch_ms" not in probe.columns:
+        metrics = _empty_probe_metrics()
+        metrics["app_probe_file"] = probe_path.name
+        return metrics
+
+    probe["epoch_s"] = probe["epoch_ms"] / 1000.0
+    probe["is_error"] = probe["status"].astype(str) != "ok"
+    probe["is_timeout"] = probe["error"].astype(str).str.contains(
+        "timeout|timed out|rc=124", case=False, na=False
+    )
+
+    upgrade_start = timing.get("upgrade_start")
+    upgrade_end = timing.get("upgrade_end")
+    during = probe
+    if upgrade_start is not None and upgrade_end is not None:
+        during = probe[
+            (probe["epoch_s"] >= float(upgrade_start))
+            & (probe["epoch_s"] <= float(upgrade_end))
+        ]
+
+    metrics = {
+        "app_probe_file": probe_path.name,
+        "app_probe_samples": int(len(probe)),
+        "app_probe_errors": int(probe["is_error"].sum()),
+        "app_probe_timeouts": int(probe["is_timeout"].sum()),
+        "app_probe_error_rate_pct": float(probe["is_error"].mean() * 100.0),
+        "app_probe_latency_p50_ms": float(probe["latency_ms"].quantile(0.50)),
+        "app_probe_latency_p95_ms": float(probe["latency_ms"].quantile(0.95)),
+        "app_probe_latency_p99_ms": float(probe["latency_ms"].quantile(0.99)),
+        "app_probe_upgrade_samples": int(len(during)),
+        "app_probe_upgrade_errors": int(during["is_error"].sum()) if not during.empty else 0,
+        "app_probe_upgrade_timeouts": int(during["is_timeout"].sum()) if not during.empty else 0,
+        "app_probe_upgrade_error_rate_pct": (
+            float(during["is_error"].mean() * 100.0) if not during.empty else 0.0
+        ),
+        "app_probe_upgrade_latency_p50_ms": (
+            float(during["latency_ms"].quantile(0.50)) if not during.empty else np.nan
+        ),
+        "app_probe_upgrade_latency_p95_ms": (
+            float(during["latency_ms"].quantile(0.95)) if not during.empty else np.nan
+        ),
+        "app_probe_upgrade_latency_p99_ms": (
+            float(during["latency_ms"].quantile(0.99)) if not during.empty else np.nan
+        ),
+    }
+    return metrics
+
+
+def _empty_probe_metrics() -> Dict[str, Any]:
+    return {
+        "app_probe_file": None,
+        "app_probe_samples": None,
+        "app_probe_errors": None,
+        "app_probe_timeouts": None,
+        "app_probe_error_rate_pct": None,
+        "app_probe_latency_p50_ms": None,
+        "app_probe_latency_p95_ms": None,
+        "app_probe_latency_p99_ms": None,
+        "app_probe_upgrade_samples": None,
+        "app_probe_upgrade_errors": None,
+        "app_probe_upgrade_timeouts": None,
+        "app_probe_upgrade_error_rate_pct": None,
+        "app_probe_upgrade_latency_p50_ms": None,
+        "app_probe_upgrade_latency_p95_ms": None,
+        "app_probe_upgrade_latency_p99_ms": None,
+    }
+
+
 def analyse_upgrade_runs(json_dir: Path) -> Tuple[pd.DataFrame, List[pd.DataFrame], List[List[Dict]]]:
     """Parse all upgrade_run_*.json files."""
     import json
@@ -148,9 +248,18 @@ def analyse_upgrade_runs(json_dir: Path) -> Tuple[pd.DataFrame, List[pd.DataFram
         ts = parse_time_series(run_result)
         all_ts.append(ts)
         metrics = detect_disruptions(ts)
+        timing = _load_timing(json_dir, f)
 
         row = {k: v for k, v in metrics.items() if k != "windows"}
         row["file"] = f.name
+        row.update({
+            "upgrade_duration_s": timing.get("upgrade_duration_s"),
+            "upgrade_start": timing.get("upgrade_start"),
+            "upgrade_end": timing.get("upgrade_end"),
+            "memtier_start": timing.get("memtier_start"),
+            "memtier_end": timing.get("memtier_end"),
+        })
+        row.update(_probe_metrics(json_dir, timing))
         row["_windows"] = metrics["windows"]
         results.append(row)
 
@@ -183,11 +292,17 @@ def print_upgrade_summary(df: pd.DataFrame) -> None:
         ("Baseline ops/sec", "baseline_ops"),
         ("Peak p99 during upgrade (ms)", "peak_p99_during"),
         ("Baseline p99 (ms)", "baseline_p99"),
+        ("App probe upgrade errors", "app_probe_upgrade_errors"),
+        ("App probe upgrade timeouts", "app_probe_upgrade_timeouts"),
+        ("App probe upgrade error rate (%)", "app_probe_upgrade_error_rate_pct"),
+        ("App probe upgrade p99 (ms)", "app_probe_upgrade_latency_p99_ms"),
     ]
 
     print(f"\n{'Metric':<40} {'Mean':>12} {'Std':>12}")
     print("-" * 66)
     for label, col in metrics:
+        if col not in valid.columns:
+            continue
         mean = valid[col].mean()
         std = valid[col].std()
         print(f"{label:<40} {mean:>12.2f} {std:>12.2f}")
