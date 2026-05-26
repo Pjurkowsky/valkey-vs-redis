@@ -16,6 +16,8 @@ Defaults:
   SHARD_COUNT=<source shardCount>
   REPLICA_COUNT=<source replicaCount>
   CLEANUP_RESTORE_CLUSTER=true
+  FLUSH_SOURCE_BEFORE_SEED=true
+  REDIS_CLI_IMAGE=docker.io/redis:7.2
 EOF
 }
 
@@ -35,6 +37,7 @@ LOCATION="${LOCATION:-europe-central2}"
 NS="${NS:-vk}"
 ARTIFACT_REPO="${ARTIFACT_REPO:-valkey-bench}"
 IMAGE="${BACKUP_IMAGE:-${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPO}/backup_restore:1}"
+REDIS_CLI_IMAGE="${REDIS_CLI_IMAGE:-docker.io/redis:7.2}"
 REMOTE_OUT="/work/results/memorystore_backup_restore"
 
 N="${N:-1}"
@@ -42,6 +45,7 @@ DATASET_MB="${DATASET_MB:-12288}"
 PORT="${MEMORYSTORE_PORT:-6379}"
 RESTORE_CLUSTER_PREFIX="${RESTORE_CLUSTER_PREFIX:-${SOURCE_CLUSTER_ID}-restore}"
 CLEANUP_RESTORE_CLUSTER="${CLEANUP_RESTORE_CLUSTER:-true}"
+FLUSH_SOURCE_BEFORE_SEED="${FLUSH_SOURCE_BEFORE_SEED:-true}"
 RESTORE_TIMEOUT_SECONDS="${RESTORE_TIMEOUT_SECONDS:-3600}"
 BACKUP_TIMEOUT_SECONDS="${BACKUP_TIMEOUT_SECONDS:-3600}"
 
@@ -238,6 +242,60 @@ run_seed_pod() {
   kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null
 }
 
+run_flush_source_pod() {
+  local run_idx="$1"
+  local host="$2"
+  local port="$3"
+  local pod_name="ms-backup-flush-${run_idx}"
+
+  kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+  kubectl run "${pod_name}" -n "${NS}" \
+    --image="${REDIS_CLI_IMAGE}" \
+    --restart=Never \
+    --command -- \
+    /bin/sh -c "
+      status=0
+      nodes=\$(redis-cli -h '${host}' -p '${port}' cluster nodes 2>&1) || status=\$?
+      if [ \"\${status}\" -eq 0 ]; then
+        masters=\$(printf '%s\n' \"\${nodes}\" | awk '\$3 ~ /master/ && \$3 !~ /fail/ {print \$2}')
+        if [ -z \"\${masters}\" ]; then
+          echo 'ERROR: no master nodes discovered from CLUSTER NODES' >&2
+          status=1
+        else
+          for endpoint in \${masters}; do
+            addr=\${endpoint%%@*}
+            node_host=\${addr%:*}
+            node_port=\${addr##*:}
+            echo \"FLUSHALL \${node_host}:\${node_port}\"
+            redis-cli -h \"\${node_host}\" -p \"\${node_port}\" flushall sync || redis-cli -h \"\${node_host}\" -p \"\${node_port}\" flushall || status=1
+            redis-cli -h \"\${node_host}\" -p \"\${node_port}\" config resetstat >/dev/null 2>&1 || true
+            dbsize=unknown
+            for attempt in \$(seq 1 60); do
+              dbsize=\$(redis-cli -h \"\${node_host}\" -p \"\${node_port}\" dbsize 2>/dev/null || echo unknown)
+              if [ \"\${dbsize}\" = '0' ]; then
+                break
+              fi
+              sleep 1
+            done
+            if [ \"\${dbsize}\" != '0' ]; then
+              echo \"ERROR: \${node_host}:\${node_port} still has \${dbsize} keys after FLUSHALL\" >&2
+              status=1
+            fi
+          done
+        fi
+      else
+        printf '%s\n' \"\${nodes}\" >&2
+      fi
+      echo \"\${status}\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+      exit \"\${status}\"
+    "
+
+  wait_for_command_pod "${pod_name}" 1800
+  kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null
+}
+
 run_verify_pod() {
   local run_idx="$1"
   local host="$2"
@@ -349,8 +407,10 @@ echo "PROJECT_ID=${PROJECT_ID}"
 echo "LOCATION=${LOCATION}"
 echo "SOURCE_CLUSTER_ID=${SOURCE_CLUSTER_ID}"
 echo "BACKUP_IMAGE=${IMAGE}"
+echo "REDIS_CLI_IMAGE=${REDIS_CLI_IMAGE}"
 echo "DATASET_MB=${DATASET_MB}"
 echo "N=${N}"
+echo "FLUSH_SOURCE_BEFORE_SEED=${FLUSH_SOURCE_BEFORE_SEED}"
 
 wait_for_cluster_ready "${SOURCE_CLUSTER_ID}" 900
 read -r SOURCE_HOST SOURCE_PORT < <(discover_endpoint "${SOURCE_CLUSTER_ID}")
@@ -388,6 +448,15 @@ for i in $(seq 1 "${N}"); do
   TIMING_FILE="memorystore_backup_timing_${DATASET_MB}_${i}.json"
   BACKUP_LOG="${LOCAL_OUT}/memorystore_backup_${i}.log"
   RESTORE_LOG="${LOCAL_OUT}/memorystore_restore_${i}.log"
+
+  FLUSH_START=0
+  FLUSH_END=0
+  if [[ "${FLUSH_SOURCE_BEFORE_SEED}" == "true" ]]; then
+    echo "[${i}] Flushing source cluster ${SOURCE_CLUSTER_ID} before seeding..."
+    FLUSH_START="$(date +%s)"
+    run_flush_source_pod "${i}" "${SOURCE_HOST}" "${PORT}"
+    FLUSH_END="$(date +%s)"
+  fi
 
   echo "[${i}] Seeding ${DATASET_MB} MB into ${SOURCE_CLUSTER_ID}..."
   SEED_START="$(date +%s)"
@@ -430,6 +499,9 @@ for i in $(seq 1 "${N}"); do
   "restore_cluster": $(json_string "${RESTORE_CLUSTER_ID}"),
   "location": $(json_string "${LOCATION}"),
   "dataset_mb": ${DATASET_MB},
+  "source_flush_start": ${FLUSH_START},
+  "source_flush_end": ${FLUSH_END},
+  "source_flush_duration_s": $((FLUSH_END - FLUSH_START)),
   "seed_keys": ${SEED_KEYS},
   "seed_duration_s": ${SEED_DUR},
   "seed_wall_duration_s": $((SEED_END - SEED_START)),
