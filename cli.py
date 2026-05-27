@@ -111,9 +111,11 @@ def cmd_failover(args: argparse.Namespace) -> None:
 
 
 def cmd_resilience(args: argparse.Namespace) -> None:
+    from src.metrics import build_prom
     from src.resilience import (
         analyse_resilience_runs,
         plot_resilience_comparison,
+        plot_resilience_memory_timeseries,
         plot_resilience_timeseries,
         print_resilience_summary,
         save_resilience_csv,
@@ -122,11 +124,29 @@ def cmd_resilience(args: argparse.Namespace) -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    prom = None
+    if not args.no_prometheus:
+        try:
+            prom = build_prom(args.prometheus_url)
+            prom.check_prometheus_connection()
+            print(f"Connected to Prometheus at {args.prometheus_url}")
+        except Exception as e:
+            print(f"[warn] Prometheus unavailable ({e}); memory time-series plot will be skipped")
+            prom = None
+
     results_df, all_ts = analyse_resilience_runs(Path(args.input), args.scenario)
     print_resilience_summary(results_df, args.scenario)
     save_resilience_csv(results_df, out_dir, args.scenario)
     plot_resilience_timeseries(all_ts, results_df, out_dir, args.scenario)
     plot_resilience_comparison(results_df, out_dir, args.scenario)
+    plot_resilience_memory_timeseries(
+        Path(args.input),
+        results_df,
+        out_dir,
+        args.scenario,
+        prom,
+        args.memory_query,
+    )
     print(f"\nAll resilience [{args.scenario}] plots saved to {out_dir}/")
 
 
@@ -313,6 +333,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--scenario", required=True, choices=["cpu", "memory", "memory-extreme", "maxmemory"],
                    help="Stress scenario to analyse")
     p.add_argument("--output-dir", default=f"{PLOTS_DIR}/resilience", help="Output directory")
+    p.add_argument("--prometheus-url", default="http://localhost:9090",
+                   help="Prometheus base URL for memory time-series plots")
+    p.add_argument("--no-prometheus", action="store_true",
+                   help="Skip Prometheus memory time-series plots")
+    p.add_argument(
+        "--memory-query",
+        default='sum by (pod)(container_memory_working_set_bytes{namespace="vk",pod=~"valkey-[0-9]+",container="valkey"})',
+        help="PromQL query returning Valkey memory series in bytes",
+    )
     p.set_defaults(func=cmd_resilience)
 
     # upgrade

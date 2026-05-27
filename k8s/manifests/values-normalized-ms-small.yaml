@@ -1,0 +1,29 @@
+image:
+  tag: "9.1.0"
+
+resources:
+  requests:
+    cpu: "2"
+    memory: "7Gi"
+  limits:
+    cpu: "2"
+    memory: "7Gi"
+
+cluster:
+  enabled: true
+  shards: 3
+  replicasPerShard: 1
+  persistence:
+    size: 15Gi
+
+valkeyConfig: |
+  maxmemory 5583457484
+  maxmemory-policy allkeys-lru
+  cluster-preferred-endpoint-type ip
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    extraLabels:
+      release: monitoring
