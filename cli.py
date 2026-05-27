@@ -240,6 +240,28 @@ def cmd_backup(args: argparse.Namespace) -> None:
     print(f"\nPlots saved to {out_dir}/")
 
 
+def cmd_backup_snapshot(args: argparse.Namespace) -> None:
+    from src.backup_pvc_snapshot import (
+        analyse_backup_snapshot_runs,
+        plot_backup_comparison,
+        plot_valkey_phase_breakdown,
+        print_backup_snapshot_summary,
+        save_backup_snapshot_csv,
+    )
+
+    out_dir = Path(args.output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"Loading PVC snapshot backup results from {args.input} ...")
+    vk_df, ms_df = analyse_backup_snapshot_runs(Path(args.input))
+
+    print_backup_snapshot_summary(vk_df, ms_df)
+    save_backup_snapshot_csv(vk_df, ms_df, out_dir)
+    plot_backup_comparison(vk_df, ms_df, out_dir)
+    plot_valkey_phase_breakdown(vk_df, out_dir)
+    print(f"\nPlots saved to {out_dir}/")
+
+
 def cmd_maxmemory(args: argparse.Namespace) -> None:
     from src.maxmemory import (
         analyse_maxmemory_runs,
@@ -322,6 +344,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--input", required=True, help="Directory with backup_timing_*.json files")
     p.add_argument("--output-dir", default=f"{PLOTS_DIR}/backup", help="Output directory")
     p.set_defaults(func=cmd_backup)
+
+    # backup-snapshot
+    p = sub.add_parser("backup-snapshot", help="PVC snapshot backup & Memorystore backup analysis")
+    p.add_argument("--input", required=True,
+                   help="Directory with vk/ and ms/ subdirectories containing benchmark results")
+    p.add_argument("--output-dir", default=f"{PLOTS_DIR}/backup_snapshot", help="Output directory")
+    p.set_defaults(func=cmd_backup_snapshot)
 
     # maxmemory
     p = sub.add_parser("maxmemory", help="Maxmemory eviction analysis")

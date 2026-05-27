@@ -102,3 +102,109 @@ Przebieg & Czas [s] & Próby & Błędy & Timeouty & Error rate [\%] & p99 [ms] \
 \FloatBarrier
 
 Średni czas rolling upgrade wyniósł 278~s. W oknie aktualizacji klient kontrolny zarejestrował średnio 15 błędów na około 1166 prób, co odpowiada 1{,}29\% nieudanych operacji. Najczęściej były to timeouty operacji \texttt{SET}; pojawiały się również odpowiedzi \texttt{CLUSTERDOWN} oraz pojedyncze błędy połączenia. Podczas rozruchu oraz po zakończeniu aktualizacji nie zarejestrowano błędów.
+
+\section{Backup i restore}
+
+Celem testu było porównanie czasu wykonania kopii zapasowej i odtworzenia klastra dla dwóch wariantów: samodzielnie utrzymywanego klastra Valkey w Kubernetes z backupem opartym o snapshoty GCE Persistent Disk oraz zarządzanego klastra Redis w Google Cloud Memorystore z wbudowanym mechanizmem backupu. Procedura testu, fazy operacji oraz sposób weryfikacji integralności zostały opisane w podrozdziale~\ref{subsec:backup_restore}. Dla każdego wariantu wykonano po pięć powtórzeń na zbiorze danych o rozmiarze 10\,240~MB (10\,485\,760 kluczy).
+
+\subsection{Valkey self-hosted --- PVC snapshots}
+
+Tabela~\ref{tab:backup-valkey-phases} przedstawia średni czas poszczególnych faz backupu i odtworzenia wraz z odchyleniem standardowym. Rozbicie na fazy pokazano na rysunku~\ref{fig:valkey-backup-breakdown}.
+
+\begin{table}[htbp]
+\centering
+\caption{Czas poszczególnych faz backupu i restore dla klastra Valkey (5 powtórzeń, 10~GB danych).}
+\label{tab:backup-valkey-phases}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrr}
+\toprule
+Faza & Średni czas [s] & Odch. std. [s] \\
+\midrule
+\multicolumn{3}{l}{\textit{Backup}} \\
+\quad BGSAVE & $12{,}2$ & $0{,}84$ \\
+\quad Skalowanie StatefulSet do 0 & $33{,}2$ & $0{,}84$ \\
+\quad Tworzenie snapshotów dysków & $220{,}2$ & $5{,}63$ \\
+\quad \textbf{Łączny czas backupu} & $\mathbf{266{,}0}$ & $\mathbf{5{,}39}$ \\
+\midrule
+\multicolumn{3}{l}{\textit{Restore}} \\
+\quad Tworzenie dysków ze snapshotów & $133{,}0$ & $0{,}00$ \\
+\quad Tworzenie PV/PVC & $9{,}8$ & $3{,}70$ \\
+\quad Uruchomienie podów & $22{,}0$ & $0{,}71$ \\
+\quad Odzyskanie stanu klastra & $3{,}0$ & $2{,}74$ \\
+\quad \textbf{Łączny czas restore} & $\mathbf{169{,}8}$ & $\mathbf{5{,}02}$ \\
+\midrule
+Weryfikacja integralności (10\% próbka) & $256{,}2$ & $10{,}47$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/valkey_backup_phase_breakdown.png}
+    \caption{Rozbicie czasu backupu i restore klastra Valkey na poszczególne fazy.}
+    \label{fig:valkey-backup-breakdown}
+\end{figure}
+
+\FloatBarrier
+
+Dominującą fazą backupu jest tworzenie snapshotów dysków GCE (średnio 220{,}2~s, co stanowi 83\% całkowitego czasu backupu). Sam zapis RDB trwał jedynie 12{,}2~s. Po stronie odtworzenia najdłuższą operacją jest tworzenie dysków ze snapshotów (133{,}0~s, 78\% czasu restore). Czas uruchomienia podów i osiągnięcia gotowości klastra wyniósł łącznie 25~s.
+
+Integralność danych została potwierdzona w 4 z 5 przebiegów. W przebiegu numer 4 weryfikator zgłosił 3 błędy na próbce 1\,048\,576 kluczy (0{,}0003\%), przy zerowej liczbie brakujących kluczy. Ponieważ żadne klucze nie zostały utracone, błędy te mogą wynikać z różnicy w momencie wykonania BGSAVE na poszczególnych shardach.
+
+\subsection{Memorystore --- zarządzany backup}
+
+Tabela~\ref{tab:backup-memorystore} przedstawia wyniki dla usługi Memorystore.
+
+\begin{table}[htbp]
+\centering
+\caption{Czas backupu i restore dla Memorystore (5 powtórzeń, 10~GB danych).}
+\label{tab:backup-memorystore}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrr}
+\toprule
+Faza & Średni czas [s] & Odch. std. [s] \\
+\midrule
+Backup (zarządzany) & $49{,}4$ & $8{,}14$ \\
+Restore (utworzenie klastra z backupu) & $475{,}4$ & $17{,}90$ \\
+Weryfikacja integralności & $470{,}4$ & $8{,}93$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\FloatBarrier
+
+Backup zarządzany trwał średnio 49{,}4~s, co jest ponad pięciokrotnie szybsze od wariantu self-hosted (266{,}0~s). Wynika to z faktu, że Memorystore nie wymaga zatrzymania klastra ani tworzenia snapshotów wolumenów --- usługa wykonuje kopię wewnętrznie. Natomiast operacja odtworzenia (utworzenie nowego klastra z backupu) trwała średnio 475{,}4~s, czyli prawie trzykrotnie dłużej niż restore w wariancie self-hosted (169{,}8~s). Wynika to z konieczności alokacji i konfiguracji nowej infrastruktury klastra przez dostawcę chmurowego. Integralność danych została potwierdzona we wszystkich pięciu przebiegach.
+
+\subsection{Porównanie wariantów}
+
+Rysunek~\ref{fig:backup-comparison} zestawia czasy backupu i restore obu wariantów. Tabela~\ref{tab:backup-comparison-total} podsumowuje łączny czas operacji.
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=0.85\textwidth]{images/backup_comparison.png}
+    \caption{Porównanie czasu backupu i restore między Valkey self-hosted a Memorystore.}
+    \label{fig:backup-comparison}
+\end{figure}
+
+\begin{table}[htbp]
+\centering
+\caption{Porównanie łącznego czasu backupu i restore.}
+\label{tab:backup-comparison-total}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrr}
+\toprule
+Operacja & Valkey [s] & Memorystore [s] & Stosunek \\
+\midrule
+Backup & $266{,}0 \pm 5{,}4$ & $49{,}4 \pm 8{,}1$ & $5{,}38\times$ \\
+Restore & $169{,}8 \pm 5{,}0$ & $475{,}4 \pm 17{,}9$ & $0{,}36\times$ \\
+Łącznie (backup + restore) & $435{,}8$ & $524{,}8$ & $0{,}83\times$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\FloatBarrier
+
+Warianty prezentują odwrócone proporcje: Memorystore oferuje szybki backup (5{,}4$\times$ krótszy), ale wolny restore (2{,}8$\times$ dłuższy). Łączny czas cyklu backup--restore jest w wariancie self-hosted krótszy o~17\% (435{,}8~s vs 524{,}8~s). Kluczowa różnica operacyjna polega na tym, że backup Valkey wymaga niedostępności klastra na czas skalowania w dół i tworzenia snapshotów (łącznie ${\sim}253$~s), natomiast backup Memorystore nie powoduje przestoju w obsłudze zapytań.

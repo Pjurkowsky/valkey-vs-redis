@@ -8,7 +8,7 @@ Systemy cache'owania danych w pamięci operacyjnej pełnią rolę pośredniej wa
 
 \subsection{Strategie cache'owania}
 
-W literaturze wyróżnia się kilka podstawowych strategii integracji cache z aplikacją:
+W literaturze wyróżnia się kilka podstawowych strategii integracji cache z aplikacją~\cite{azureCacheAside, zakhary2017caching}:
 
 \begin{itemize}
     \item \textbf{Cache-aside} (lazy loading) -- aplikacja najpierw sprawdza cache, a w przypadku braku danych (cache miss) pobiera je ze źródła trwałego i zapisuje w cache. Jest to najprostsza i najczęściej stosowana strategia, ponieważ nie wymaga dodatkowej infrastruktury między aplikacją a bazą danych.
@@ -43,7 +43,7 @@ Redis wykorzystuje jednowątkowy model obsługi żądań oparty na pętli zdarze
 
 \subsection{Mechanizmy trwałości}
 
-Redis oferuje dwa mechanizmy utrwalania danych na dysku:
+Redis oferuje dwa mechanizmy utrwalania danych na dysku~\cite{redisPersistence}:
 
 \begin{itemize}
     \item \textbf{RDB} (Redis Database) -- tworzenie migawki (snapshot) całego zbioru danych w określonym momencie. Operacja \texttt{BGSAVE} uruchamia proces potomny, który serializuje dane do pliku \texttt{dump.rdb}. Mechanizm ten zapewnia kompaktowy format kopii zapasowej, ale dane zapisane po ostatnim snapshoty są tracone w przypadku awarii.
@@ -56,7 +56,7 @@ Oba mechanizmy mogą działać równocześnie. W scenariuszach backupu i odtwarz
 
 Redis wspiera asynchroniczną replikację master-replica, w której jeden węzeł master obsługuje operacje zapisu i odczytu, a węzły repliki utrzymują kopie danych i mogą obsługiwać operacje odczytu. Replikacja jest asynchroniczna, co oznacza, że potwierdzenie zapisu jest zwracane klientowi przed propagacją do replik. W przypadku awarii mastera dane, które nie zostały jeszcze zreplikowane, mogą zostać utracone.
 
-Mechanizm Redis Sentinel zapewnia automatyczne wykrywanie awarii mastera i promocję repliki do roli mastera (failover). Sentinel monitoruje instancje Redis, powiadamia administratorów o problemach i przeprowadza automatyczną rekonfigurację topologii. W konfiguracji klastrowej Redis Cluster mechanizm failover jest wbudowany bezpośrednio w protokół klastra i nie wymaga osobnych instancji Sentinel.
+Mechanizm Redis Sentinel zapewnia automatyczne wykrywanie awarii mastera i promocję repliki do roli mastera (failover)~\cite{redisSentinel}. Sentinel monitoruje instancje Redis, powiadamia administratorów o problemach i przeprowadza automatyczną rekonfigurację topologii. W konfiguracji klastrowej Redis Cluster mechanizm failover jest wbudowany bezpośrednio w protokół klastra i nie wymaga osobnych instancji Sentinel~\cite{redisClusterSpec}.
 
 \subsection{Redis Cluster}
 
@@ -81,7 +81,7 @@ Zrozumienie architektury Redis Cluster jest kluczowe dla dalszych rozdziałów, 
 
 \section{Valkey -- geneza i architektura}\label{sec:valkey}
 
-Valkey to otwartoźródłowy system typu in-memory data store, będący forkiem Redis 7.2.4. Projekt został ogłoszony 28 marca 2024 roku pod patronatem Linux Foundation jako bezpośrednia odpowiedź społeczności na zmianę licencji Redis~\cite{linuxFoundationValkey}. Nazwa Valkey nawiązuje do podstawowej funkcji systemu jako magazynu klucz-wartość (key-value, odwrócone).
+Valkey to otwartoźródłowy system typu in-memory data store, będący forkiem Redis 7.2.4~\cite{valkeyDocumentation}. Projekt został ogłoszony 28 marca 2024 roku pod patronatem Linux Foundation jako bezpośrednia odpowiedź społeczności na zmianę licencji Redis~\cite{linuxFoundationValkey}. Nazwa Valkey nawiązuje do podstawowej funkcji systemu jako magazynu klucz-wartość (key-value, odwrócone).
 
 \subsection{Geneza projektu}
 
@@ -97,7 +97,7 @@ Pierwsza wersja, Valkey 7.2.5-rc1, została opublikowana 16 kwietnia 2024 roku j
 
 \subsection{Zgodność z Redis}
 
-Valkey zachowuje pełną zgodność protokołu RESP (Redis Serialization Protocol) oraz kompatybilność na poziomie poleceń z Redis 7.2.4. Oznacza to, że istniejące biblioteki klienckie Redis (redis-py, Jedis, ioredis, Lettuce) mogą łączyć się z klastrem Valkey bez zmian w kodzie aplikacji. Narzędzia wiersza poleceń (\texttt{valkey-cli}, \texttt{valkey-benchmark}) są funkcjonalnymi odpowiednikami \texttt{redis-cli} i \texttt{redis-benchmark}, rozszerzonymi o nowe flagi specyficzne dla Valkey.
+Valkey zachowuje pełną zgodność protokołu RESP (Redis Serialization Protocol) oraz kompatybilność na poziomie poleceń z Redis 7.2.4~\cite{valkeyDocumentation}. Oznacza to, że istniejące biblioteki klienckie Redis (redis-py, Jedis, ioredis, Lettuce) mogą łączyć się z klastrem Valkey bez zmian w kodzie aplikacji. Narzędzia wiersza poleceń (\texttt{valkey-cli}, \texttt{valkey-benchmark}) są funkcjonalnymi odpowiednikami \texttt{redis-cli} i \texttt{redis-benchmark}, rozszerzonymi o nowe flagi specyficzne dla Valkey.
 
 \subsection{Atomowa migracja slotów}
 
@@ -124,9 +124,9 @@ Mechanizm ten jest bezpośrednio wykorzystywany w testach reshardingu opisanych 
 Redis od momentu powstania w 2009 roku był dystrybuowany na licencji BSD 3-Clause, która pozwalała na nieograniczone wykorzystanie, modyfikację i redystrybucję kodu źródłowego, w tym w produktach komercyjnych i usługach chmurowych. Chronologia zmian licencyjnych przedstawia się następująco:
 
 \begin{itemize}
-    \item 2018 -- Redis Labs wprowadza Commons Clause dla modułów Redis (RedisJSON, RedisGraph, RedisTimeSeries), ograniczając ich wykorzystanie w konkurencyjnych usługach.
-    \item 2019 -- moduły zostają przeniesione na Redis Source Available License (RSALv1).
-    \item 2022 -- moduły są relicencjonowane na podwójną licencję RSALv2/SSPLv1.
+    \item 2018 -- Redis Labs wprowadza Commons Clause dla modułów Redis (RedisJSON, RedisGraph, RedisTimeSeries), ograniczając ich wykorzystanie w konkurencyjnych usługach~\cite{whitacreRelicensing}.
+    \item 2019 -- moduły zostają przeniesione na Redis Source Available License (RSALv1)~\cite{whitacreRelicensing}.
+    \item 2022 -- moduły są relicencjonowane na podwójną licencję RSALv2/SSPLv1~\cite{redisLicenseChange}.
     \item 20 marca 2024 -- Redis Ltd. ogłasza, że począwszy od wersji 7.4, rdzeń Redis będzie dystrybuowany na podwójnej licencji RSALv2 lub SSPLv1. Wcześniejsze wersje (do 7.2.x) zachowują licencję BSD-3~\cite{redisLicenseChange}.
 \end{itemize}
 
@@ -144,7 +144,7 @@ Kontekst licencyjny jest istotny dla niniejszej pracy, ponieważ stanowi bezpoś
 
 \section{Kubernetes jako środowisko uruchomieniowe}\label{sec:kubernetes}
 
-Kubernetes to system orkiestracji kontenerów, który automatyzuje wdrażanie, skalowanie i zarządzanie aplikacjami kontenerowymi. W kontekście niniejszej pracy Kubernetes stanowi środowisko uruchomieniowe dla klastra Valkey i definiuje ograniczenia oraz możliwości związane z zarządzaniem stanowymi obciążeniami.
+Kubernetes to system orkiestracji kontenerów, który automatyzuje wdrażanie, skalowanie i zarządzanie aplikacjami kontenerowymi~\cite{k8sDocumentation}. W kontekście niniejszej pracy Kubernetes stanowi środowisko uruchomieniowe dla klastra Valkey i definiuje ograniczenia oraz możliwości związane z zarządzaniem stanowymi obciążeniami.
 
 \subsection{StatefulSet}
 
@@ -161,13 +161,13 @@ Właściwości te są kluczowe dla klastra Valkey, w którym każdy węzeł musi
 
 \subsection{Persistent Volume Claims}
 
-Persistent Volume Claim (PVC) to abstrakcja w Kubernetes umożliwiająca podowi żądanie trwałego wolumenu o określonym rozmiarze i klasie storage. W przypadku klastra Valkey każdy pod StatefulSetu posiada własny PVC, na którym przechowywane są pliki RDB, konfiguracja węzła (\texttt{nodes.conf}) oraz opcjonalnie plik AOF. Wolumen PVC przeżywa restart poda, co umożliwia odtworzenie stanu węzła bez ponownej synchronizacji z masterem.
+Persistent Volume Claim (PVC) to abstrakcja w Kubernetes umożliwiająca podowi żądanie trwałego wolumenu o określonym rozmiarze i klasie storage~\cite{k8sPVC}. W przypadku klastra Valkey każdy pod StatefulSetu posiada własny PVC, na którym przechowywane są pliki RDB, konfiguracja węzła (\texttt{nodes.conf}) oraz opcjonalnie plik AOF. Wolumen PVC przeżywa restart poda, co umożliwia odtworzenie stanu węzła bez ponownej synchronizacji z masterem.
 
 Klasy storage (StorageClass) definiują typ dysku oraz parametry wydajności. W środowisku Google Cloud dostępne są między innymi dyski \texttt{pd-balanced} i \texttt{pd-ssd}, różniące się przepustowością i opóźnieniem operacji I/O. Wybór klasy storage wpływa na czas operacji BGSAVE oraz czas odtwarzania z kopii zapasowej.
 
 \subsection{Helm}
 
-Helm to menedżer pakietów dla Kubernetes, który pozwala na definiowanie, instalowanie i aktualizowanie zestawów zasobów Kubernetes jako spójnych jednostek nazywanych chartami. Chart zawiera szablony manifestów Kubernetes parametryzowane plikiem wartości (\texttt{values.yaml}). Operacja \texttt{helm upgrade} umożliwia aktualizację wdrożenia z nowymi parametrami lub wersjami obrazów kontenerowych, przy czym Kubernetes realizuje tę zmianę jako rolling update podów StatefulSetu.
+Helm to menedżer pakietów dla Kubernetes, który pozwala na definiowanie, instalowanie i aktualizowanie zestawów zasobów Kubernetes jako spójnych jednostek nazywanych chartami~\cite{helmDocumentation}. Chart zawiera szablony manifestów Kubernetes parametryzowane plikiem wartości (\texttt{values.yaml}). Operacja \texttt{helm upgrade} umożliwia aktualizację wdrożenia z nowymi parametrami lub wersjami obrazów kontenerowych, przy czym Kubernetes realizuje tę zmianę jako rolling update podów StatefulSetu.
 
 W kontekście niniejszej pracy Helm jest wykorzystywany zarówno do instalacji klastra Valkey, jak i do wykonywania operacji administracyjnych: zmiany wersji obrazu (rolling upgrade), zmiany liczby shardów (resharding) oraz modyfikacji konfiguracji klastra.
 
