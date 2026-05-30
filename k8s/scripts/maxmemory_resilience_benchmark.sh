@@ -5,7 +5,10 @@ usage() {
   cat <<EOF
 Usage: $0 [target-mb] [output-dir]
 
-Runs a maxmemory pressure test while memtier_benchmark is generating load.
+Pre-fills cluster to maxmemory, then measures performance with memtier_benchmark.
+
+Phase 1: Fill the cluster to TARGET_MB (as fast as possible, --allow-partial).
+Phase 2: Run memtier_benchmark on the full cluster (TEST_TIME seconds).
 
 Environment:
   PROVIDER=valkey|memorystore        default: valkey
@@ -70,7 +73,6 @@ TEST_TIME="${TEST_TIME:-120}"
 KEYS="${KEYS:-100000}"
 DATA_SIZE="${DATA_SIZE:-1024}"
 RATIO="${RATIO:-1:1}"
-STEADY_STATE_WAIT="${STEADY_STATE_WAIT:-30}"
 
 mkdir -p "${LOCAL_OUT}"
 
@@ -291,7 +293,7 @@ if [[ "${PROVIDER}" == "memorystore" ]]; then
   read -r HOST PORT < <(discover_ms_endpoint)
 fi
 
-echo "==> Maxmemory resilience benchmark"
+echo "==> Maxmemory resilience benchmark (pre-fill then measure)"
 echo "PROVIDER=${PROVIDER}"
 echo "HOST=${HOST}"
 echo "PORT=${PORT}"
@@ -313,7 +315,7 @@ fi
 
 for i in $(seq 1 "${N}"); do
   MEMTIER_POD="memtier-maxmemory-${i}"
-  SEED_POD="maxmemory-pressure-${i}"
+  PREFILL_POD="maxmemory-prefill-${i}"
   CLEANUP_POD="maxmemory-pressure-cleanup-${i}"
   FLUSH_POD="maxmemory-pressure-flush-${i}"
   RUN_ID="maxmem_res_${PROVIDER}_${TARGET_MB}mb_${i}_$(date +%s)"
@@ -326,7 +328,7 @@ for i in $(seq 1 "${N}"); do
   echo "  Maxmemory resilience run ${i}/${N} (${TARGET_MB} MB pressure)"
   echo "=========================================="
 
-  kubectl delete pod "${MEMTIER_POD}" "${SEED_POD}" "${CLEANUP_POD}" "${FLUSH_POD}" \
+  kubectl delete pod "${MEMTIER_POD}" "${PREFILL_POD}" "${CLEANUP_POD}" "${FLUSH_POD}" \
     -n "${NS}" --ignore-not-found 2>/dev/null || true
 
   if [[ "${FLUSH_BETWEEN_RUNS}" == "true" ]]; then
@@ -334,7 +336,38 @@ for i in $(seq 1 "${N}"); do
     flush_cluster "${FLUSH_POD}"
   fi
 
-  echo "[${i}] Starting memtier pod (test-time=${TEST_TIME}s)..."
+  echo "[${i}] Pre-filling cluster to maxmemory (${TARGET_MB} MB)..."
+  PREFILL_START_EPOCH="$(date +%s)"
+  kubectl run "${PREFILL_POD}" -n "${NS}" \
+    --image="${BACKUP_IMAGE}" \
+    --restart=Never \
+    --command -- \
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      python /work/backup_restore_seed.py \
+        --mode seed \
+        --host '${HOST}' --port '${PORT}' \
+        --target-mb '${TARGET_MB}' \
+        --run-id '${RUN_ID}' \
+        --allow-partial \
+        --stop-after-errors 50 \
+        --output '${REMOTE_OUT}/${SEED_REPORT}'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
+
+  wait_for_command_pod "${PREFILL_POD}" 7200
+  PREFILL_END_EPOCH="$(date +%s)"
+  kubectl cp "${NS}/${PREFILL_POD}:${REMOTE_OUT}/${SEED_REPORT}" "${LOCAL_OUT}/${SEED_REPORT}"
+  kubectl delete pod "${PREFILL_POD}" -n "${NS}" --ignore-not-found
+
+  prefill_duration="$("${PYTHON_BIN}" -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['seed_duration_s'])")"
+  prefill_keys="$("${PYTHON_BIN}" -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['written_keys'])")"
+  echo "[${i}] Pre-fill done: ${prefill_keys} keys in ${prefill_duration}s"
+
+  echo "[${i}] Starting memtier benchmark (test-time=${TEST_TIME}s) on full cluster..."
   kubectl run "${MEMTIER_POD}" -n "${NS}" \
     --image="${MEMTIER_IMAGE}" \
     --restart=Never \
@@ -359,45 +392,10 @@ for i in $(seq 1 "${N}"); do
       sleep '${POD_HOLD_SECONDS}'
     "
 
-  echo "[${i}] Waiting for memtier to start..."
-  kubectl wait pod/"${MEMTIER_POD}" -n "${NS}" \
-    --for=condition=Ready --timeout=60s
-
-  echo "[${i}] Waiting ${STEADY_STATE_WAIT}s for steady state..."
-  sleep "${STEADY_STATE_WAIT}"
-
-  echo "[${i}] Starting maxmemory pressure writer (${TARGET_MB} MB)..."
-  PRESSURE_START_EPOCH="$(date +%s)"
-  kubectl run "${SEED_POD}" -n "${NS}" \
-    --image="${BACKUP_IMAGE}" \
-    --restart=Never \
-    --command -- \
-    /bin/sh -c "
-      mkdir -p '${REMOTE_OUT}'
-      python /work/backup_restore_seed.py \
-        --mode seed \
-        --host '${HOST}' --port '${PORT}' \
-        --target-mb '${TARGET_MB}' \
-        --run-id '${RUN_ID}' \
-        --output '${REMOTE_OUT}/${SEED_REPORT}'
-      status=\$?
-      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
-      touch '${POD_DONE_FILE}'
-      sleep '${POD_HOLD_SECONDS}'
-    "
-
-  wait_for_command_pod "${SEED_POD}" 3600
-  PRESSURE_END_EPOCH="$(date +%s)"
-  kubectl cp "${NS}/${SEED_POD}:${REMOTE_OUT}/${SEED_REPORT}" "${LOCAL_OUT}/${SEED_REPORT}"
-  kubectl delete pod "${SEED_POD}" -n "${NS}" --ignore-not-found
-
   echo "[${i}] Waiting for memtier to finish..."
-  wait_for_command_pod "${MEMTIER_POD}" 600
+  wait_for_command_pod "${MEMTIER_POD}" $((TEST_TIME + 300))
   kubectl cp "${NS}/${MEMTIER_POD}:${REMOTE_OUT}/${MEMTIER_FILE}" "${LOCAL_OUT}/${MEMTIER_FILE}"
   kubectl delete pod "${MEMTIER_POD}" -n "${NS}" --ignore-not-found
-
-  seed_duration="$("${PYTHON_BIN}" -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['seed_duration_s'])")"
-  seed_keys="$("${PYTHON_BIN}" -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['written_keys'])")"
 
   cat > "${LOCAL_OUT}/${TIMING_FILE}" <<EOF
 {
@@ -406,11 +404,11 @@ for i in $(seq 1 "${N}"); do
   "run_id": "${RUN_ID}",
   "target_mb": ${TARGET_MB},
   "maxmemory_policy": $(json_string "${MAXMEMORY_POLICY}"),
-  "steady_state_wait_s": ${STEADY_STATE_WAIT},
-  "pressure_start_epoch_s": ${PRESSURE_START_EPOCH},
-  "pressure_end_epoch_s": ${PRESSURE_END_EPOCH},
-  "pressure_duration_s": ${seed_duration},
-  "written_keys": ${seed_keys},
+  "prefill_start_epoch_s": ${PREFILL_START_EPOCH},
+  "prefill_end_epoch_s": ${PREFILL_END_EPOCH},
+  "prefill_duration_s": ${prefill_duration},
+  "prefill_keys": ${prefill_keys},
+  "test_time_s": ${TEST_TIME},
   "memtier_file": "${MEMTIER_FILE}",
   "seed_report": "${SEED_REPORT}"
 }

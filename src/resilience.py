@@ -263,6 +263,9 @@ def _event_window_for_file(
     with timing_file.open() as fh:
         timing = json.load(fh)
 
+    if "test_time_s" in timing:
+        return 0.0, float(timing["test_time_s"])
+
     start = float(timing.get("steady_state_wait_s", STRESS_START_SECOND))
     duration = float(timing.get("pressure_duration_s", STRESS_DURATIONS[scenario]))
     return start, start + duration
