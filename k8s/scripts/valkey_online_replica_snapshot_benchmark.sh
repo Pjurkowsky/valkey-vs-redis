@@ -811,7 +811,25 @@ verify_data() {
     "
 
   wait_for_pod_ready "${pod_name}" 120
-  kubectl cp "${run_dir}/${seed_report}" "${NS}/${pod_name}:${REMOTE_OUT}/${seed_report}"
+
+  local cp_attempts=0
+  local cp_max=5
+  while (( cp_attempts < cp_max )); do
+    if kubectl cp "${run_dir}/${seed_report}" "${NS}/${pod_name}:${REMOTE_OUT}/${seed_report}" 2>/dev/null; then
+      if kubectl exec "${pod_name}" -n "${NS}" -- test -f "${REMOTE_OUT}/${seed_report}" 2>/dev/null; then
+        break
+      fi
+    fi
+    cp_attempts=$((cp_attempts + 1))
+    echo "  WARNING: kubectl cp attempt ${cp_attempts}/${cp_max} failed, retrying in 5s..."
+    sleep 5
+  done
+  if (( cp_attempts >= cp_max )); then
+    echo "ERROR: Failed to copy seed report to verify pod after ${cp_max} attempts." >&2
+    kubectl logs "${pod_name}" -n "${NS}" || true
+    return 1
+  fi
+
   wait_for_command_pod "${pod_name}" 7200
   kubectl cp "${NS}/${pod_name}:${REMOTE_OUT}/${verify_report}" "${run_dir}/${verify_report}"
   kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null
