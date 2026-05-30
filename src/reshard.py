@@ -60,7 +60,7 @@ def _discover_reshard_files(json_dir: Path) -> List[Tuple[str, str, Optional[str
             )
 
     phase_order = {"up": 0, "down": 1}
-    mode_order = {None: 0, "legacy": 1, "atomic": 2, "ms": 3}
+    mode_order = {None: 0, "legacy": 1, "redis72": 2, "atomic": 3, "ms": 4}
     return sorted(
         discovered,
         key=lambda item: (
@@ -479,7 +479,7 @@ def plot_reshard_comparison(results_df: pd.DataFrame, out_dir: Path) -> None:
 
     for ax, (phase, title, segments) in zip(axes[0], available_specs):
         phase_df = valid[valid["phase"] == phase].copy()
-        phase_df["_mode_order"] = phase_df["slot_migration_mode"].map({"legacy": 0, "atomic": 1, "ms": 2}).fillna(-1)
+        phase_df["_mode_order"] = phase_df["slot_migration_mode"].map({"legacy": 0, "redis72": 1, "atomic": 2, "ms": 3}).fillna(-1)
         phase_df = phase_df.sort_values(["run", "_mode_order"])
         _plot_phase_duration_breakdown(ax, phase_df, title, segments)
 
@@ -488,7 +488,7 @@ def plot_reshard_comparison(results_df: pd.DataFrame, out_dir: Path) -> None:
 
     for phase, title, segments in available_specs:
         phase_df = valid[valid["phase"] == phase].copy()
-        phase_df["_mode_order"] = phase_df["slot_migration_mode"].map({"legacy": 0, "atomic": 1, "ms": 2}).fillna(-1)
+        phase_df["_mode_order"] = phase_df["slot_migration_mode"].map({"legacy": 0, "redis72": 1, "atomic": 2, "ms": 3}).fillna(-1)
         phase_df = phase_df.sort_values(["run", "_mode_order"])
 
         fig, ax = plt.subplots(figsize=(13, 5.8), constrained_layout=True)
@@ -585,6 +585,7 @@ def _run_label(row: pd.Series) -> str:
         return run
     mode_prefix = {
         "legacy": "l",
+        "redis72": "r",
         "atomic": "a",
         "ms": "m",
     }.get(str(mode), str(mode))

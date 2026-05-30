@@ -435,6 +435,21 @@ HELM_CHART_PATH=../valkey-helm/valkey VALUES_FILE=./k8s/manifests/values.yaml N=
 By default `RESHARD_MODES` is `legacy atomic`, so `N=5` produces five legacy runs and
 five atomic runs. Use `RESHARD_MODES=legacy` or `RESHARD_MODES=atomic` to run only one mode.
 
+For a self-hosted Redis 7.2 cluster deployed with the Bitnami `redis-cluster` chart,
+use the Redis-specific script. It scales the release from 6 to 8 pods, manually adds
+the new master and replica, measures classic `redis-cli --cluster rebalance`, then
+moves slots off the extra master and scales back to 6 pods:
+
+```bash
+N=5 TEST_TIME=120 ./k8s/scripts/redis72_reshard_benchmark.sh ./results/redis72_reshard
+```
+
+The script defaults to namespace `redis`, release `redis72`, and
+`./k8s/manifests/values-redis72.yaml`. Override them with `NS`, `RELEASE`,
+`HELM_CHART_PATH`, or `VALUES_FILE` if needed. On GKE it defaults to the public
+`redislabs/memtier_benchmark:latest` image; set `MEMTIER_IMAGE` to use the custom
+repo image instead.
+
 For managed Memorystore for Redis Cluster, use the separate script. It starts the same
 in-cluster memtier load pod, then triggers managed shard scaling through
 `gcloud redis clusters`:
@@ -481,8 +496,8 @@ chart, put the result directories under one parent and analyse the parent:
 python cli.py reshard --input ./results --output-dir ./plots/reshard
 ```
 
-The comparison chart labels bars as `l-N` for legacy, `a-N` for atomic, and `ms-N` for
-Memorystore. Memorystore operation time is shown as a single black-box segment because
+The comparison chart labels bars as `l-N` for legacy, `r-N` for Redis 7.2,
+`a-N` for atomic, and `ms-N` for Memorystore. Memorystore operation time is shown as a single black-box segment because
 node changes, slot movement, and stabilization are managed internally.
 
 Produces per-phase time series plots (ops/sec and latency with reshard start/end markers
@@ -534,6 +549,20 @@ N=5 BACKUP_IMAGE=backup_restore:2 ./k8s/scripts/backup_restore_benchmark.sh 100 
 
 Each run seeds data, triggers BGSAVE, deletes all Valkey pods, waits for the cluster to
 recover from RDB, verifies a 10% sample of keys, then cleans up. N=3 by default.
+
+For Redis 7.2 deployed as the `redis72` Bitnami release in namespace `redis`, use the
+Redis-specific backup/restore script. It mounts the shared seed/verify helper as a
+ConfigMap, seeds data through Redis Cluster, runs `redis-cli --cluster call ... bgsave`,
+deletes all Redis pods while preserving PVCs, waits for cluster recovery, verifies the
+sample, and cleans up only the keys from that run:
+
+```bash
+N=5 ./k8s/scripts/redis72_backup_restore_benchmark.sh 100 ./results/redis72_backup
+```
+
+The size argument is total dataset size in MB for the whole cluster. The script defaults
+to `python:3.12-slim` and installs `redis[hiredis]` in the helper pod if needed. To use a
+prebuilt helper image, set `BACKUP_IMAGE`.
 
 ### Analyse backup/restore results
 
