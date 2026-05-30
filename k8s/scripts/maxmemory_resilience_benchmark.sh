@@ -199,6 +199,7 @@ run_tool_pod() {
   kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
   kubectl run "${pod_name}" -n "${NS}" \
     --image="${BACKUP_IMAGE}" \
+    --image-pull-policy=Always \
     --restart=Never \
     --command -- \
     /bin/sh -c "${shell_body}"
@@ -212,6 +213,7 @@ flush_cluster() {
   kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
   kubectl run "${pod_name}" -n "${NS}" \
     --image="${REDIS_CLI_IMAGE}" \
+    --image-pull-policy=IfNotPresent \
     --restart=Never \
     --command -- \
     /bin/sh -c "
@@ -370,6 +372,7 @@ for i in $(seq 1 "${N}"); do
   echo "[${i}] Starting memtier benchmark (test-time=${TEST_TIME}s) on full cluster..."
   kubectl run "${MEMTIER_POD}" -n "${NS}" \
     --image="${MEMTIER_IMAGE}" \
+    --image-pull-policy=IfNotPresent \
     --restart=Never \
     --command -- \
     /bin/sh -c "
@@ -391,6 +394,39 @@ for i in $(seq 1 "${N}"); do
       touch '${POD_DONE_FILE}'
       sleep '${POD_HOLD_SECONDS}'
     "
+
+  echo "[${i}] Waiting for memtier to start..."
+  kubectl wait pod/"${MEMTIER_POD}" -n "${NS}" \
+    --for=condition=Ready --timeout=60s
+
+  echo "[${i}] Waiting ${STEADY_STATE_WAIT}s for steady state..."
+  sleep "${STEADY_STATE_WAIT}"
+
+  echo "[${i}] Starting maxmemory pressure writer (${TARGET_MB} MB)..."
+  PRESSURE_START_EPOCH="$(date +%s)"
+  kubectl run "${SEED_POD}" -n "${NS}" \
+    --image="${BACKUP_IMAGE}" \
+    --image-pull-policy=Always \
+    --restart=Never \
+    --command -- \
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      python /work/backup_restore_seed.py \
+        --mode seed \
+        --host '${HOST}' --port '${PORT}' \
+        --target-mb '${TARGET_MB}' \
+        --run-id '${RUN_ID}' \
+        --output '${REMOTE_OUT}/${SEED_REPORT}'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
+
+  wait_for_command_pod "${SEED_POD}" 3600
+  PRESSURE_END_EPOCH="$(date +%s)"
+  kubectl cp "${NS}/${SEED_POD}:${REMOTE_OUT}/${SEED_REPORT}" "${LOCAL_OUT}/${SEED_REPORT}"
+  kubectl delete pod "${SEED_POD}" -n "${NS}" --ignore-not-found
 
   echo "[${i}] Waiting for memtier to finish..."
   wait_for_command_pod "${MEMTIER_POD}" $((TEST_TIME + 300))
@@ -417,6 +453,7 @@ EOF
   echo "[${i}] Cleaning up surviving pressure keys..."
   kubectl run "${CLEANUP_POD}" -n "${NS}" \
     --image="${BACKUP_IMAGE}" \
+    --image-pull-policy=Always \
     --restart=Never \
     --command -- \
     /bin/sh -c "

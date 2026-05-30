@@ -42,6 +42,11 @@ BACKUP_IMAGE="${BACKUP_IMAGE:-${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFAC
 DATASET_MB="${DATASET_MB:-10240}"
 N="${N:-1}"
 REMOTE_OUT="/work/results/backup"
+RANDOM_DATA="${RANDOM_DATA:-false}"
+RANDOM_DATA_ARG=""
+if [[ "${RANDOM_DATA}" == "true" ]]; then
+  RANDOM_DATA_ARG="--random-data"
+fi
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 source "${SCRIPT_DIR}/pod_results.sh"
@@ -212,6 +217,7 @@ seed_data() {
         --port 6379 \
         --target-mb '${DATASET_MB}' \
         --run-id '${run_id}' \
+        ${RANDOM_DATA_ARG} \
         --output '${REMOTE_OUT}/${report_file}'
       status=\$?
       echo \"\$status\" > '${POD_EXIT_CODE_FILE}'

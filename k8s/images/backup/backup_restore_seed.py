@@ -7,6 +7,7 @@ Modes:
 """
 
 import argparse
+import hashlib
 import json
 import random
 import time
@@ -24,6 +25,19 @@ from redis.exceptions import (
 
 VALUE_SIZE = 1024  # 1 KB per key
 PIPELINE_BATCH = 500
+
+
+def _value_for_key(run_id: str, index: int, random_data: bool) -> str:
+    if not random_data:
+        return "x" * VALUE_SIZE
+
+    seed = f"{run_id}:{index}".encode()
+    chunks = []
+    counter = 0
+    while sum(len(chunk) for chunk in chunks) < VALUE_SIZE:
+        chunks.append(hashlib.sha256(seed + counter.to_bytes(4, "big")).hexdigest())
+        counter += 1
+    return "".join(chunks)[:VALUE_SIZE]
 
 
 def _connect(host: str, port: int) -> RedisCluster:
@@ -82,15 +96,17 @@ def seed(
     ttl_seconds: int | None = None,
     allow_partial: bool = False,
     stop_after_errors: int = 1000,
+    random_data: bool = False,
 ) -> None:
     rc = _connect(host, port)
     rc.ping()
 
     target_bytes = target_mb * 1024 * 1024
     target_keys = max(1, target_bytes // VALUE_SIZE)
-    value = "x" * VALUE_SIZE
-
-    print(f"Seeding {target_keys} keys ({target_mb} MB, {VALUE_SIZE}B each), run_id={run_id}...")
+    print(
+        f"Seeding {target_keys} keys ({target_mb} MB, {VALUE_SIZE}B each), "
+        f"run_id={run_id}, random_data={random_data}..."
+    )
     t_start = time.monotonic()
     written = 0
     errors = 0
@@ -104,6 +120,7 @@ def seed(
         batch_end = min(batch_start + PIPELINE_BATCH, target_keys)
         pipe = rc.pipeline(transaction=False)
         for i in range(batch_start, batch_end):
+            value = _value_for_key(run_id, i, random_data)
             pipe.set(f"br:{run_id}:{i}", value, ex=ttl_seconds)
         try:
             pipe.execute()
@@ -118,6 +135,7 @@ def seed(
                 print(f"  Pipeline error at {batch_start}: {type(exc).__name__}: {exc}")
             for i in range(batch_start, batch_end):
                 try:
+                    value = _value_for_key(run_id, i, random_data)
                     rc.set(f"br:{run_id}:{i}", value, ex=ttl_seconds)
                     written += 1
                 except Exception as item_exc:
@@ -157,6 +175,7 @@ def seed(
         "stopped_early": stopped_early,
         "ttl_seconds": ttl_seconds,
         "allow_partial": allow_partial,
+        "random_data": random_data,
         "first_error": first_error,
         "last_error": last_error,
     }
@@ -176,6 +195,7 @@ def verify(host: str, port: int, seed_report_path: Path, output: Path) -> None:
 
     run_id = seed_report["run_id"]
     total_keys = seed_report["written_keys"]
+    random_data = bool(seed_report.get("random_data", False))
     sample_ratio = 0.10
     sample_size = max(100, int(total_keys * sample_ratio))
     sample_size = min(sample_size, total_keys)
@@ -195,7 +215,8 @@ def verify(host: str, port: int, seed_report_path: Path, output: Path) -> None:
         key = f"br:{run_id}:{idx}"
         try:
             val = rc.get(key)
-            if val is not None and len(val) == VALUE_SIZE:
+            expected = _value_for_key(run_id, idx, random_data)
+            if val == expected:
                 found += 1
             else:
                 missing += 1
@@ -315,6 +336,8 @@ def main() -> None:
                         help="TTL for seeded keys; 0 means no TTL")
     parser.add_argument("--allow-partial", action="store_true",
                         help="Exit successfully even if maxmemory prevents writing all keys")
+    parser.add_argument("--random-data", action="store_true",
+                        help="Generate deterministic pseudo-random values instead of repeated bytes")
     parser.add_argument("--stop-after-errors", type=int, default=1000,
                         help="Stop seed mode after this many per-key write errors; 0 disables")
     parser.add_argument("--phase", default="snapshot")
@@ -341,6 +364,7 @@ def main() -> None:
             ttl_seconds=ttl_seconds,
             allow_partial=args.allow_partial,
             stop_after_errors=args.stop_after_errors,
+            random_data=args.random_data,
         )
     elif args.mode == "verify":
         if args.seed_report is None:

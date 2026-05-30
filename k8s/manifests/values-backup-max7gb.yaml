@@ -8,10 +8,21 @@ cluster:
   persistence:
     size: 15Gi
 
+resources:
+  requests:
+    cpu: "2"
+    memory: "7Gi"
+  limits:
+    cpu: "2"
+    memory: "7Gi"
+
 valkeyConfig: |
-  maxmemory 7gb
-  maxmemory-policy noeviction
+  maxmemory 5200mb
+  maxmemory-policy allkeys-lru
+  maxmemory-clients 7%
+  maxclients 16000
   cluster-preferred-endpoint-type ip
+
 
 metrics:
   enabled: true

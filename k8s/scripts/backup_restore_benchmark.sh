@@ -12,6 +12,11 @@ KUBECTL_EXEC_TIMEOUT_SECONDS="${KUBECTL_EXEC_TIMEOUT_SECONDS:-30}"
 
 HOST="valkey.vk.svc.cluster.local"
 PORT=6379
+RANDOM_DATA="${RANDOM_DATA:-false}"
+RANDOM_DATA_ARG=""
+if [[ "${RANDOM_DATA}" == "true" ]]; then
+  RANDOM_DATA_ARG="--random-data"
+fi
 
 source "${SCRIPT_DIR}/pod_results.sh"
 
@@ -154,6 +159,7 @@ for i in $(seq 1 "${N}"); do
         --host '${HOST}' --port '${PORT}' \
         --target-mb '${SIZE_MB}' \
         --run-id '${RUN_ID}' \
+        ${RANDOM_DATA_ARG} \
         --output '${REMOTE_OUT}/${SEED_REPORT}'
       status=\$?
       echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
