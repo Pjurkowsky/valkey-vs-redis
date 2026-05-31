@@ -1,11 +1,36 @@
 {
   "mode": "verify",
-  "run_id": "ms_backup_10240mb_2_1779739439",
-  "total_keys": 10485760,
-  "sample_size": 1048576,
-  "keys_found": 1048576,
-  "keys_missing": 0,
+  "verify_mode": "size",
+  "run_id": "ms_backup_10240mb_2_1780198808",
+  "expected_keys": 10485760,
+  "restored_keys": 10485760,
+  "key_count_ok": true,
+  "key_count_ratio": 1.0,
+  "expected_bytes": 10737418240,
+  "used_memory": 14634457440,
+  "used_memory_dataset": 13926656556,
+  "memory_to_expected_ratio": 1.297021,
+  "masters": [
+    {
+      "addr": "10.186.0.17:11006",
+      "dbsize": 3495679,
+      "used_memory": 4878741776,
+      "used_memory_dataset": 4642784156
+    },
+    {
+      "addr": "10.186.0.17:11003",
+      "dbsize": 3494908,
+      "used_memory": 4877674480,
+      "used_memory_dataset": 4641760308
+    },
+    {
+      "addr": "10.186.0.17:11004",
+      "dbsize": 3495173,
+      "used_memory": 4878041184,
+      "used_memory_dataset": 4642112092
+    }
+  ],
   "verify_errors": 0,
   "integrity_ok": true,
-  "verify_duration_s": 427.37
+  "verify_duration_s": 0.02
 }
