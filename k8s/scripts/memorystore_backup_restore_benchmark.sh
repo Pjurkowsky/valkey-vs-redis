@@ -6,7 +6,7 @@ usage() {
 Usage: $0 <memorystore-cluster-id> [output-dir]
 
 Seeds a Memorystore for Redis Cluster instance, creates a managed backup, restores
-that backup into a new cluster, verifies sampled data, and records timing JSON.
+that backup into a new cluster, verifies the restore, and records timing JSON.
 
 Defaults:
   LOCATION=europe-central2
@@ -17,6 +17,8 @@ Defaults:
   REPLICA_COUNT=<source replicaCount>
   CLEANUP_RESTORE_CLUSTER=true
   FLUSH_SOURCE_BEFORE_SEED=true
+  RANDOM_DATA=true
+  VERIFY_MODE=size
   REDIS_CLI_IMAGE=docker.io/redis:7.2
 EOF
 }
@@ -46,8 +48,14 @@ PORT="${MEMORYSTORE_PORT:-6379}"
 RESTORE_CLUSTER_PREFIX="${RESTORE_CLUSTER_PREFIX:-${SOURCE_CLUSTER_ID}-restore}"
 CLEANUP_RESTORE_CLUSTER="${CLEANUP_RESTORE_CLUSTER:-true}"
 FLUSH_SOURCE_BEFORE_SEED="${FLUSH_SOURCE_BEFORE_SEED:-true}"
+RANDOM_DATA="${RANDOM_DATA:-true}"
+VERIFY_MODE="${VERIFY_MODE:-size}"
 RESTORE_TIMEOUT_SECONDS="${RESTORE_TIMEOUT_SECONDS:-3600}"
 BACKUP_TIMEOUT_SECONDS="${BACKUP_TIMEOUT_SECONDS:-3600}"
+RANDOM_DATA_ARG=""
+if [[ "${RANDOM_DATA}" == "true" ]]; then
+  RANDOM_DATA_ARG="--random-data"
+fi
 
 mkdir -p "${LOCAL_OUT}"
 
@@ -230,6 +238,7 @@ run_seed_pod() {
         --host '${host}' --port '${port}' \
         --target-mb '${DATASET_MB}' \
         --run-id '${run_id}' \
+        ${RANDOM_DATA_ARG} \
         --output '${REMOTE_OUT}/${report_file}'
       status=\$?
       echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
@@ -316,6 +325,7 @@ run_verify_pod() {
         --mode verify \
         --host '${host}' --port '${port}' \
         --seed-report '${REMOTE_OUT}/${seed_report}' \
+        --verify-mode '${VERIFY_MODE}' \
         --output '${REMOTE_OUT}/${verify_report}'
       status=\$?
       echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
@@ -433,6 +443,8 @@ echo "NETWORK=${NETWORK}"
 echo "NODE_TYPE=${NODE_TYPE}"
 echo "SHARD_COUNT=${SHARD_COUNT}"
 echo "REPLICA_COUNT=${REPLICA_COUNT}"
+echo "RANDOM_DATA=${RANDOM_DATA}"
+echo "VERIFY_MODE=${VERIFY_MODE}"
 
 for i in $(seq 1 "${N}"); do
   echo ""
@@ -490,6 +502,10 @@ for i in $(seq 1 "${N}"); do
   SEED_KEYS="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['written_keys'])" 2>/dev/null || echo 0)"
   SEED_DUR="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['seed_duration_s'])" 2>/dev/null || echo 0)"
   INTEGRITY="$(python3 -c "import json; print(json.dumps(bool(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}'))['integrity_ok'])))" 2>/dev/null || echo false)"
+  VERIFY_MODE_REPORTED="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('verify_mode','unknown'))" 2>/dev/null || echo unknown)"
+  RESTORED_KEYS="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('restored_keys', json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('keys_found', 0)))" 2>/dev/null || echo 0)"
+  KEY_COUNT_OK="$(python3 -c "import json; print(json.dumps(bool(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('key_count_ok', False))))" 2>/dev/null || echo false)"
+  USED_MEMORY_DATASET="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('used_memory_dataset', 0))" 2>/dev/null || echo 0)"
 
   cat > "${LOCAL_OUT}/${TIMING_FILE}" <<EOF
 {
@@ -516,6 +532,10 @@ for i in $(seq 1 "${N}"); do
   "verify_start": ${VERIFY_START},
   "verify_end": ${VERIFY_END},
   "verify_duration_s": $((VERIFY_END - VERIFY_START)),
+  "verify_mode": $(json_string "${VERIFY_MODE_REPORTED}"),
+  "restored_keys": ${RESTORED_KEYS},
+  "key_count_ok": ${KEY_COUNT_OK},
+  "used_memory_dataset": ${USED_MEMORY_DATASET},
   "integrity_ok": ${INTEGRITY}
 }
 EOF

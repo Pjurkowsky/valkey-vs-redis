@@ -3,7 +3,7 @@
 
 Modes:
   seed   -- bulk-write keys until the target size is reached
-  verify -- read back a random sample of seeded keys and check integrity
+  verify -- check restored data either by reading a sample or by size only
 """
 
 import argparse
@@ -81,8 +81,13 @@ def _master_addrs(host: str, port: int) -> list[tuple[str, int]]:
         flags = set(parts[2].split(","))
         if "master" not in flags or "fail" in flags or "handshake" in flags:
             continue
-        endpoint = parts[1].split("@", 1)[0].split(",", 1)[0]
+        addr = parts[1]
+        endpoint = addr.split("@", 1)[0].split(",", 1)[0]
         node_host, node_port = endpoint.rsplit(":", 1)
+        if "," in addr:
+            announced_host = addr.split(",", 1)[1].strip()
+            if announced_host and announced_host != "?":
+                node_host = announced_host
         masters.append((node_host, int(node_port)))
     return masters
 
@@ -189,10 +194,7 @@ def seed(
         raise SystemExit(2)
 
 
-def verify(host: str, port: int, seed_report_path: Path, output: Path) -> None:
-    with seed_report_path.open() as f:
-        seed_report = json.load(f)
-
+def verify_sample(host: str, port: int, seed_report: dict, output: Path) -> None:
     run_id = seed_report["run_id"]
     total_keys = seed_report["written_keys"]
     random_data = bool(seed_report.get("random_data", False))
@@ -231,6 +233,7 @@ def verify(host: str, port: int, seed_report_path: Path, output: Path) -> None:
 
     report = {
         "mode": "verify",
+        "verify_mode": "sample",
         "run_id": run_id,
         "total_keys": total_keys,
         "sample_size": sample_size,
@@ -245,6 +248,92 @@ def verify(host: str, port: int, seed_report_path: Path, output: Path) -> None:
     with output.open("w") as f:
         json.dump(report, f, indent=2)
     print(f"Verify report: {output}")
+
+
+def verify_size(host: str, port: int, seed_report: dict, output: Path) -> None:
+    run_id = seed_report["run_id"]
+    expected_keys = int(seed_report["written_keys"])
+    expected_bytes = int(seed_report.get("total_bytes", expected_keys * VALUE_SIZE))
+
+    print(f"Verifying restored size for {expected_keys} expected keys...")
+    t_start = time.monotonic()
+    masters = []
+    total_keys = 0
+    total_used_memory = 0
+    total_used_memory_dataset = 0
+    verify_errors = 0
+
+    try:
+        master_addrs = _master_addrs(host, port)
+    except (ConnectionError, TimeoutError, ClusterDownError, RedisClusterException, RedisError, OSError) as exc:
+        master_addrs = []
+        verify_errors += 1
+        print(f"Could not read cluster masters: {type(exc).__name__}: {exc}")
+
+    for node_host, node_port in master_addrs:
+        node = {"addr": f"{node_host}:{node_port}"}
+        try:
+            client = _connect_single(node_host, node_port)
+            info = client.info("memory")
+            dbsize = int(client.dbsize())
+            used_memory = int(info.get("used_memory", 0))
+            used_memory_dataset = int(info.get("used_memory_dataset", 0))
+            node.update({
+                "dbsize": dbsize,
+                "used_memory": used_memory,
+                "used_memory_dataset": used_memory_dataset,
+            })
+            total_keys += dbsize
+            total_used_memory += used_memory
+            total_used_memory_dataset += used_memory_dataset
+        except (ConnectionError, TimeoutError, ClusterDownError, RedisClusterException, RedisError, OSError) as exc:
+            verify_errors += 1
+            node["error"] = f"{type(exc).__name__}: {exc}"
+        masters.append(node)
+
+    duration = time.monotonic() - t_start
+    key_count_ok = total_keys == expected_keys
+    integrity_ok = key_count_ok and verify_errors == 0
+    key_count_ratio = (total_keys / expected_keys) if expected_keys else 1.0
+    memory_to_expected_ratio = (total_used_memory_dataset / expected_bytes) if expected_bytes else None
+
+    print(
+        f"Size verify complete: {total_keys}/{expected_keys} keys, "
+        f"{verify_errors} errors in {duration:.1f}s — {'OK' if integrity_ok else 'FAILED'}"
+    )
+
+    report = {
+        "mode": "verify",
+        "verify_mode": "size",
+        "run_id": run_id,
+        "expected_keys": expected_keys,
+        "restored_keys": total_keys,
+        "key_count_ok": key_count_ok,
+        "key_count_ratio": round(key_count_ratio, 6),
+        "expected_bytes": expected_bytes,
+        "used_memory": total_used_memory,
+        "used_memory_dataset": total_used_memory_dataset,
+        "memory_to_expected_ratio": round(memory_to_expected_ratio, 6) if memory_to_expected_ratio is not None else None,
+        "masters": masters,
+        "verify_errors": verify_errors,
+        "integrity_ok": integrity_ok,
+        "verify_duration_s": round(duration, 2),
+    }
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with output.open("w") as f:
+        json.dump(report, f, indent=2)
+    print(f"Verify report: {output}")
+
+
+def verify(host: str, port: int, seed_report_path: Path, output: Path, verify_mode: str) -> None:
+    with seed_report_path.open() as f:
+        seed_report = json.load(f)
+
+    if verify_mode == "size":
+        verify_size(host, port, seed_report, output)
+    else:
+        verify_sample(host, port, seed_report, output)
 
 
 def cleanup(host: str, port: int, seed_report_path: Path) -> None:
@@ -346,6 +435,8 @@ def main() -> None:
     parser.add_argument("--maxmemory", default=None)
     parser.add_argument("--seed-report", type=Path, default=None,
                         help="Path to seed report JSON (verify/cleanup mode)")
+    parser.add_argument("--verify-mode", choices=["sample", "size"], default="sample",
+                        help="sample checks values; size only checks total restored key count and memory")
     parser.add_argument("--output", type=Path,
                         default=Path("/work/results/backup/report.json"))
     args = parser.parse_args()
@@ -369,7 +460,7 @@ def main() -> None:
     elif args.mode == "verify":
         if args.seed_report is None:
             parser.error("--seed-report required for verify mode")
-        verify(args.host, args.port, args.seed_report, args.output)
+        verify(args.host, args.port, args.seed_report, args.output, args.verify_mode)
     elif args.mode == "cleanup":
         if args.seed_report is None:
             parser.error("--seed-report required for cleanup mode")

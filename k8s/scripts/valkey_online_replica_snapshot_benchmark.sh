@@ -13,7 +13,7 @@ artifacts:
   4. validate replica RDB files,
   5. snapshot replica PVC disks,
   6. restore into a fresh cluster by mounting snapshot disks inside Kubernetes,
-  7. verify restored data.
+  7. verify restored size by default, or sampled data with VERIFY_MODE=sample.
 
 Environment:
   N=1
@@ -27,6 +27,7 @@ Environment:
   BACKUP_IMAGE=<LOCATION>-docker.pkg.dev/<PROJECT_ID>/valkey-bench/backup_restore:1
   COPY_IMAGE=busybox:1.36
   RANDOM_DATA=true
+  VERIFY_MODE=size
   PARALLEL_SHARD_OPS=true
 EOF
 }
@@ -56,6 +57,7 @@ COPY_IMAGE="${COPY_IMAGE:-busybox:1.36}"
 RESTORE_DISK_TYPE="${RESTORE_DISK_TYPE:-pd-balanced}"
 EXPECTED_SHARDS="${EXPECTED_SHARDS:-3}"
 RANDOM_DATA="${RANDOM_DATA:-true}"
+VERIFY_MODE="${VERIFY_MODE:-size}"
 PARALLEL_SHARD_OPS="${PARALLEL_SHARD_OPS:-true}"
 REMOTE_OUT="/work/results/online_replica_snapshot"
 KUBECTL_EXEC_TIMEOUT_SECONDS="${KUBECTL_EXEC_TIMEOUT_SECONDS:-30}"
@@ -803,6 +805,7 @@ verify_data() {
         --host '${RELEASE}.${NS}.svc.cluster.local' \
         --port 6379 \
         --seed-report '${REMOTE_OUT}/${seed_report}' \
+        --verify-mode '${VERIFY_MODE}' \
         --output '${REMOTE_OUT}/${verify_report}'
       status=\$?
       echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
@@ -1315,7 +1318,13 @@ doc = {
     "cluster_recovery_after_pods_s": restore.get("cluster_recovery_after_pods_s"),
     "restore_duration_s": restore.get("restore_duration_s"),
     "verify_duration_s": verify.get("verify_duration_s"),
+    "verify_mode": verify.get("verify_mode"),
     "verify_sample_size": verify.get("sample_size"),
+    "expected_keys": verify.get("expected_keys", verify.get("total_keys")),
+    "restored_keys": verify.get("restored_keys", verify.get("keys_found")),
+    "key_count_ok": verify.get("key_count_ok"),
+    "used_memory": verify.get("used_memory"),
+    "used_memory_dataset": verify.get("used_memory_dataset"),
     "integrity_ok": verify.get("integrity_ok"),
     "backup_manifest": manifest_path,
     "backup_timing": backup_timing_path,
@@ -1357,6 +1366,12 @@ fields = [
     "cluster_recovery_after_pods_s",
     "restore_duration_s",
     "verify_duration_s",
+    "verify_mode",
+    "expected_keys",
+    "restored_keys",
+    "key_count_ok",
+    "used_memory",
+    "used_memory_dataset",
     "integrity_ok",
 ]
 
@@ -1380,6 +1395,7 @@ echo "RELEASE=${RELEASE}"
 echo "DATASET_MB=${DATASET_MB}"
 echo "N=${N}"
 echo "RANDOM_DATA=${RANDOM_DATA}"
+echo "VERIFY_MODE=${VERIFY_MODE}"
 echo "PARALLEL_SHARD_OPS=${PARALLEL_SHARD_OPS}"
 echo "VALUES_FILE=${VALUES_FILE}"
 echo "BACKUP_IMAGE=${BACKUP_IMAGE}"

@@ -6,7 +6,8 @@ cluster:
   shards: 3
   replicasPerShard: 1
   persistence:
-    size: 15Gi
+    size: 8Gi
+    storageClass: pd-ssd-rwo
 
 resources:
   requests:
@@ -21,7 +22,6 @@ valkeyConfig: |
   maxmemory-policy allkeys-lru
   maxmemory-clients 7%
   maxclients 16000
-  cluster-preferred-endpoint-type ip
 
 
 metrics:
