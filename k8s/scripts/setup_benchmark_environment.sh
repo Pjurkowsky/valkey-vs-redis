@@ -213,6 +213,26 @@ PY
   fi
 }
 
+ensure_storage_classes() {
+  if kubectl get storageclass pd-ssd-rwo >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "  Creating pd-ssd-rwo StorageClass..."
+  kubectl apply -f - <<'EOF'
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: pd-ssd-rwo
+provisioner: pd.csi.storage.gke.io
+parameters:
+  type: pd-ssd
+reclaimPolicy: Delete
+allowVolumeExpansion: true
+volumeBindingMode: WaitForFirstConsumer
+EOF
+}
+
 prepare_valkey_chart_if_needed() {
   if [[ "${TARGET}" != "valkey" || -d "${CHART_PATH}" || "${AUTO_PREPARE_VALKEY_CHART}" != "true" ]]; then
     return 0
@@ -311,6 +331,7 @@ PY
 print_config
 cleanup_unattached_disks
 create_or_reuse_gke_cluster
+ensure_storage_classes
 install_monitoring
 install_target
 

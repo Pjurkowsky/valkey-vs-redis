@@ -18,6 +18,12 @@ ADMIN_POD="${ADMIN_POD:-${STS}-0}"
 HEADLESS="${HEADLESS:-${STS}-headless}"
 CLUSTER_ENDPOINT="${ADMIN_HOST:-${ADMIN_POD}.${HEADLESS}.${NS}.svc.cluster.local}:${PORT}"
 INSTALL_REDIS_DEPS="${INSTALL_REDIS_DEPS:-auto}"
+RANDOM_DATA="${RANDOM_DATA:-true}"
+VERIFY_MODE="${VERIFY_MODE:-size}"
+RANDOM_DATA_ARG=""
+if [[ "${RANDOM_DATA}" == "true" ]]; then
+  RANDOM_DATA_ARG="--random-data"
+fi
 
 source "${SCRIPT_DIR}/pod_results.sh"
 
@@ -179,6 +185,7 @@ seed_data() {
             --host '${HOST}' --port '${PORT}' \\
             --target-mb '${SIZE_MB}' \\
             --run-id '${run_id}' \\
+            ${RANDOM_DATA_ARG} \\
             --output '${REMOTE_OUT}/${report_file}'"
 
   wait_for_pod_ready "${pod_name}" 180
@@ -197,6 +204,7 @@ verify_data() {
             --mode verify \\
             --host '${HOST}' --port '${PORT}' \\
             --seed-report '${REMOTE_OUT}/${seed_report}' \\
+            --verify-mode '${VERIFY_MODE}' \\
             --output '${REMOTE_OUT}/${verify_report}'"
 
   wait_for_pod_ready "${pod_name}" 180
@@ -233,6 +241,8 @@ echo "Admin endpoint: ${CLUSTER_ENDPOINT}"
 echo "Backup image: ${IMAGE}"
 echo "Dataset: ${SIZE_MB} MB total"
 echo "Runs: ${N}"
+echo "RANDOM_DATA=${RANDOM_DATA}"
+echo "VERIFY_MODE=${VERIFY_MODE}"
 
 ensure_backup_script_configmap
 wait_cluster_healthy 300
@@ -288,6 +298,10 @@ for i in $(seq 1 "${N}"); do
   SEED_KEYS="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['written_keys'])" 2>/dev/null || echo 0)"
   SEED_DUR="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}'))['seed_duration_s'])" 2>/dev/null || echo 0)"
   INTEGRITY="$(python3 -c "import json; print(json.dumps(bool(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}'))['integrity_ok'])))" 2>/dev/null || echo false)"
+  VERIFY_MODE_REPORTED="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('verify_mode','unknown'))" 2>/dev/null || echo unknown)"
+  RESTORED_KEYS="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('restored_keys', json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('keys_found', 0)))" 2>/dev/null || echo 0)"
+  KEY_COUNT_OK="$(python3 -c "import json; print(json.dumps(bool(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('key_count_ok', False))))" 2>/dev/null || echo false)"
+  USED_MEMORY_DATASET="$(python3 -c "import json; print(json.load(open('${LOCAL_OUT}/${VERIFY_REPORT}')).get('used_memory_dataset', 0))" 2>/dev/null || echo 0)"
 
   cat > "${LOCAL_OUT}/${TIMING_FILE}" <<EOF
 {
@@ -307,6 +321,10 @@ for i in $(seq 1 "${N}"); do
   "pod_recreate_duration_s": ${POD_RECREATE_DURATION},
   "cluster_recovery_after_pods_s": ${CLUSTER_RECOVERY_AFTER_PODS},
   "restore_duration_s": ${RESTORE_DURATION},
+  "verify_mode": "${VERIFY_MODE_REPORTED}",
+  "restored_keys": ${RESTORED_KEYS},
+  "key_count_ok": ${KEY_COUNT_OK},
+  "used_memory_dataset": ${USED_MEMORY_DATASET},
   "integrity_ok": ${INTEGRITY}
 }
 EOF

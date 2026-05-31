@@ -1,0 +1,3051 @@
+{
+    "apiVersion": "v1",
+    "items": [
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "f5ec2fff203a62d9c54969ae415cc2dd",
+                    "checksum/initconfig": "7060f66ffb0bde7965a32ff9933a41ca"
+                },
+                "creationTimestamp": "2026-05-31T03:40:59Z",
+                "generateName": "valkey-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "valkey",
+                    "app.kubernetes.io/name": "valkey",
+                    "apps.kubernetes.io/pod-index": "0",
+                    "controller-revision-hash": "valkey-6948f7b44c",
+                    "statefulset.kubernetes.io/pod-name": "valkey-0",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "valkey-0",
+                "namespace": "vk",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "valkey",
+                        "uid": "d2506128-fb53-4e5b-a61a-60200cfb2627"
+                    }
+                ],
+                "resourceVersion": "1780198875374415004",
+                "uid": "b539a94d-9541-44e9-8bd6-ef5aa9c1e115"
+            },
+            "spec": {
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "/cluster-script/init-cluster.sh \u0026\nvalkey-server /data/conf/valkey.conf\n"
+                        ],
+                        "command": [
+                            "/bin/sh",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "VALKEY_NODES",
+                                "value": "valkey-0.valkey-headless.vk.svc.cluster.local valkey-1.valkey-headless.vk.svc.cluster.local valkey-2.valkey-headless.vk.svc.cluster.local valkey-3.valkey-headless.vk.svc.cluster.local valkey-4.valkey-headless.vk.svc.cluster.local valkey-5.valkey-headless.vk.svc.cluster.local"
+                            },
+                            {
+                                "name": "CLUSTER_NODE_COUNT",
+                                "value": "6"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            },
+                            {
+                                "name": "VALKEY_LOGLEVEL",
+                                "value": "notice"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "name": "valkey",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "startupProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 30,
+                            "initialDelaySeconds": 5,
+                            "periodSeconds": 5,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    },
+                    {
+                        "env": [
+                            {
+                                "name": "REDIS_ALIAS",
+                                "value": "valkey"
+                            }
+                        ],
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "name": "metrics",
+                        "ports": [
+                            {
+                                "containerPort": 9121,
+                                "name": "metrics",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "failureThreshold": 3,
+                            "httpGet": {
+                                "path": "/",
+                                "port": "metrics",
+                                "scheme": "HTTP"
+                            },
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "resources": {},
+                        "startupProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File"
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": true,
+                "hostname": "valkey-0",
+                "initContainers": [
+                    {
+                        "command": [
+                            "/scripts/init.sh"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "CLUSTER_SHARDS",
+                                "value": "3"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "name": "valkey-init",
+                        "resources": {},
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config",
+                                "subPath": "valkey.conf"
+                            }
+                        ]
+                    }
+                ],
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-5l0r",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1000,
+                    "runAsGroup": 1000,
+                    "runAsUser": 1000,
+                    "seccompProfile": {
+                        "type": "RuntimeDefault"
+                    }
+                },
+                "serviceAccount": "valkey",
+                "serviceAccountName": "valkey",
+                "subdomain": "valkey-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "valkey-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "valkey-data-valkey-0"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-init-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-cluster-script"
+                        },
+                        "name": "cluster-script"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "valkey-config"
+                        },
+                        "name": "valkey-config"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:05Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:05Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:15Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:15Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:00Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "containerID": "containerd://d464726eed44723c3a9f3f9b4f6721232d8d2868ad1154fab83786932385cf73",
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imageID": "ghcr.io/oliver006/redis_exporter@sha256:67e175f144212fe5796b3134dae1f3db33782b57dc53f7c6f5d938f8f70d9754",
+                        "lastState": {},
+                        "name": "metrics",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:05Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        }
+                    },
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://5ceaf7897bd551599208887bfca38d457554095eab40d40bb45c284386314ce6",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:05Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.223",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.223"
+                    }
+                ],
+                "initContainerStatuses": [
+                    {
+                        "containerID": "containerd://310ab9556286588c32f0e974dbc1d10fe8a12c54c88d896c2597706bd4890f74",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey-init",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": false,
+                        "state": {
+                            "terminated": {
+                                "containerID": "containerd://310ab9556286588c32f0e974dbc1d10fe8a12c54c88d896c2597706bd4890f74",
+                                "exitCode": 0,
+                                "finishedAt": "2026-05-31T03:41:04Z",
+                                "reason": "Completed",
+                                "startedAt": "2026-05-31T03:41:04Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config"
+                            }
+                        ]
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.1.95",
+                "podIPs": [
+                    {
+                        "ip": "10.100.1.95"
+                    }
+                ],
+                "qosClass": "Burstable",
+                "startTime": "2026-05-31T03:41:00Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "f5ec2fff203a62d9c54969ae415cc2dd",
+                    "checksum/initconfig": "7060f66ffb0bde7965a32ff9933a41ca"
+                },
+                "creationTimestamp": "2026-05-31T03:40:59Z",
+                "generateName": "valkey-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "valkey",
+                    "app.kubernetes.io/name": "valkey",
+                    "apps.kubernetes.io/pod-index": "1",
+                    "controller-revision-hash": "valkey-6948f7b44c",
+                    "statefulset.kubernetes.io/pod-name": "valkey-1",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "valkey-1",
+                "namespace": "vk",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "valkey",
+                        "uid": "d2506128-fb53-4e5b-a61a-60200cfb2627"
+                    }
+                ],
+                "resourceVersion": "1780198880638431006",
+                "uid": "4f4d5265-7f93-4b7f-95f9-33a647e14c96"
+            },
+            "spec": {
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "/cluster-script/init-cluster.sh \u0026\nvalkey-server /data/conf/valkey.conf\n"
+                        ],
+                        "command": [
+                            "/bin/sh",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "VALKEY_NODES",
+                                "value": "valkey-0.valkey-headless.vk.svc.cluster.local valkey-1.valkey-headless.vk.svc.cluster.local valkey-2.valkey-headless.vk.svc.cluster.local valkey-3.valkey-headless.vk.svc.cluster.local valkey-4.valkey-headless.vk.svc.cluster.local valkey-5.valkey-headless.vk.svc.cluster.local"
+                            },
+                            {
+                                "name": "CLUSTER_NODE_COUNT",
+                                "value": "6"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            },
+                            {
+                                "name": "VALKEY_LOGLEVEL",
+                                "value": "notice"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "name": "valkey",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "startupProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 30,
+                            "initialDelaySeconds": 5,
+                            "periodSeconds": 5,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    },
+                    {
+                        "env": [
+                            {
+                                "name": "REDIS_ALIAS",
+                                "value": "valkey"
+                            }
+                        ],
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "name": "metrics",
+                        "ports": [
+                            {
+                                "containerPort": 9121,
+                                "name": "metrics",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "failureThreshold": 3,
+                            "httpGet": {
+                                "path": "/",
+                                "port": "metrics",
+                                "scheme": "HTTP"
+                            },
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "resources": {},
+                        "startupProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File"
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": true,
+                "hostname": "valkey-1",
+                "initContainers": [
+                    {
+                        "command": [
+                            "/scripts/init.sh"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "CLUSTER_SHARDS",
+                                "value": "3"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "name": "valkey-init",
+                        "resources": {},
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config",
+                                "subPath": "valkey.conf"
+                            }
+                        ]
+                    }
+                ],
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-7rdq",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1000,
+                    "runAsGroup": 1000,
+                    "runAsUser": 1000,
+                    "seccompProfile": {
+                        "type": "RuntimeDefault"
+                    }
+                },
+                "serviceAccount": "valkey",
+                "serviceAccountName": "valkey",
+                "subdomain": "valkey-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "valkey-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "valkey-data-valkey-1"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-init-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-cluster-script"
+                        },
+                        "name": "cluster-script"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "valkey-config"
+                        },
+                        "name": "valkey-config"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:10Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:10Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:20Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:20Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:00Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "containerID": "containerd://d60c0db68ab2b73d52e596d2572abb27f7f9642ae4c24fa910f848604fe35ec6",
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imageID": "ghcr.io/oliver006/redis_exporter@sha256:67e175f144212fe5796b3134dae1f3db33782b57dc53f7c6f5d938f8f70d9754",
+                        "lastState": {},
+                        "name": "metrics",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:10Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        }
+                    },
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://f8f63621c6195762785abfe57d1bde5d7e1e379ac6561ecde28c97bd106be028",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:10Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.222",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.222"
+                    }
+                ],
+                "initContainerStatuses": [
+                    {
+                        "containerID": "containerd://3e23144327997dbb595c174728895c793971bbcdabfc138058386b6ddf9c94e0",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey-init",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": false,
+                        "state": {
+                            "terminated": {
+                                "containerID": "containerd://3e23144327997dbb595c174728895c793971bbcdabfc138058386b6ddf9c94e0",
+                                "exitCode": 0,
+                                "finishedAt": "2026-05-31T03:41:09Z",
+                                "reason": "Completed",
+                                "startedAt": "2026-05-31T03:41:09Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config"
+                            }
+                        ]
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.0.73",
+                "podIPs": [
+                    {
+                        "ip": "10.100.0.73"
+                    }
+                ],
+                "qosClass": "Burstable",
+                "startTime": "2026-05-31T03:41:00Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "f5ec2fff203a62d9c54969ae415cc2dd",
+                    "checksum/initconfig": "7060f66ffb0bde7965a32ff9933a41ca"
+                },
+                "creationTimestamp": "2026-05-31T03:40:59Z",
+                "generateName": "valkey-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "valkey",
+                    "app.kubernetes.io/name": "valkey",
+                    "apps.kubernetes.io/pod-index": "2",
+                    "controller-revision-hash": "valkey-6948f7b44c",
+                    "statefulset.kubernetes.io/pod-name": "valkey-2",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "valkey-2",
+                "namespace": "vk",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "valkey",
+                        "uid": "d2506128-fb53-4e5b-a61a-60200cfb2627"
+                    }
+                ],
+                "resourceVersion": "1780198879396879004",
+                "uid": "1f7d4ad4-7a6b-4037-957e-947cec58bf17"
+            },
+            "spec": {
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "/cluster-script/init-cluster.sh \u0026\nvalkey-server /data/conf/valkey.conf\n"
+                        ],
+                        "command": [
+                            "/bin/sh",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "VALKEY_NODES",
+                                "value": "valkey-0.valkey-headless.vk.svc.cluster.local valkey-1.valkey-headless.vk.svc.cluster.local valkey-2.valkey-headless.vk.svc.cluster.local valkey-3.valkey-headless.vk.svc.cluster.local valkey-4.valkey-headless.vk.svc.cluster.local valkey-5.valkey-headless.vk.svc.cluster.local"
+                            },
+                            {
+                                "name": "CLUSTER_NODE_COUNT",
+                                "value": "6"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            },
+                            {
+                                "name": "VALKEY_LOGLEVEL",
+                                "value": "notice"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "name": "valkey",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "startupProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 30,
+                            "initialDelaySeconds": 5,
+                            "periodSeconds": 5,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    },
+                    {
+                        "env": [
+                            {
+                                "name": "REDIS_ALIAS",
+                                "value": "valkey"
+                            }
+                        ],
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "name": "metrics",
+                        "ports": [
+                            {
+                                "containerPort": 9121,
+                                "name": "metrics",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "failureThreshold": 3,
+                            "httpGet": {
+                                "path": "/",
+                                "port": "metrics",
+                                "scheme": "HTTP"
+                            },
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "resources": {},
+                        "startupProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File"
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": true,
+                "hostname": "valkey-2",
+                "initContainers": [
+                    {
+                        "command": [
+                            "/scripts/init.sh"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "CLUSTER_SHARDS",
+                                "value": "3"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "name": "valkey-init",
+                        "resources": {},
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config",
+                                "subPath": "valkey.conf"
+                            }
+                        ]
+                    }
+                ],
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-5l0r",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1000,
+                    "runAsGroup": 1000,
+                    "runAsUser": 1000,
+                    "seccompProfile": {
+                        "type": "RuntimeDefault"
+                    }
+                },
+                "serviceAccount": "valkey",
+                "serviceAccountName": "valkey",
+                "subdomain": "valkey-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "valkey-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "valkey-data-valkey-2"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-init-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-cluster-script"
+                        },
+                        "name": "cluster-script"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "valkey-config"
+                        },
+                        "name": "valkey-config"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:10Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:10Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:19Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:19Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:00Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "containerID": "containerd://742cc62d33e37ae83f4b3b5f6714774144abd6e1a71107823a9768cd35d351b3",
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imageID": "ghcr.io/oliver006/redis_exporter@sha256:67e175f144212fe5796b3134dae1f3db33782b57dc53f7c6f5d938f8f70d9754",
+                        "lastState": {},
+                        "name": "metrics",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:10Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        }
+                    },
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://eb4ded452d9e748386c5442f44cd3e1ef65270084d6caa7edd0d9bb4fddc4fbe",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:10Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.223",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.223"
+                    }
+                ],
+                "initContainerStatuses": [
+                    {
+                        "containerID": "containerd://1f02d09c9329ceddbaf636bd95b5d4df99bb10f000e9ad3dffad05308f90caa9",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey-init",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": false,
+                        "state": {
+                            "terminated": {
+                                "containerID": "containerd://1f02d09c9329ceddbaf636bd95b5d4df99bb10f000e9ad3dffad05308f90caa9",
+                                "exitCode": 0,
+                                "finishedAt": "2026-05-31T03:41:09Z",
+                                "reason": "Completed",
+                                "startedAt": "2026-05-31T03:41:09Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config"
+                            }
+                        ]
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.1.97",
+                "podIPs": [
+                    {
+                        "ip": "10.100.1.97"
+                    }
+                ],
+                "qosClass": "Burstable",
+                "startTime": "2026-05-31T03:41:00Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "f5ec2fff203a62d9c54969ae415cc2dd",
+                    "checksum/initconfig": "7060f66ffb0bde7965a32ff9933a41ca"
+                },
+                "creationTimestamp": "2026-05-31T03:40:59Z",
+                "generateName": "valkey-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "valkey",
+                    "app.kubernetes.io/name": "valkey",
+                    "apps.kubernetes.io/pod-index": "3",
+                    "controller-revision-hash": "valkey-6948f7b44c",
+                    "statefulset.kubernetes.io/pod-name": "valkey-3",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "valkey-3",
+                "namespace": "vk",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "valkey",
+                        "uid": "d2506128-fb53-4e5b-a61a-60200cfb2627"
+                    }
+                ],
+                "resourceVersion": "1780198879452879022",
+                "uid": "b8b5c824-405a-4f67-93f4-31a856850e08"
+            },
+            "spec": {
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "/cluster-script/init-cluster.sh \u0026\nvalkey-server /data/conf/valkey.conf\n"
+                        ],
+                        "command": [
+                            "/bin/sh",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "VALKEY_NODES",
+                                "value": "valkey-0.valkey-headless.vk.svc.cluster.local valkey-1.valkey-headless.vk.svc.cluster.local valkey-2.valkey-headless.vk.svc.cluster.local valkey-3.valkey-headless.vk.svc.cluster.local valkey-4.valkey-headless.vk.svc.cluster.local valkey-5.valkey-headless.vk.svc.cluster.local"
+                            },
+                            {
+                                "name": "CLUSTER_NODE_COUNT",
+                                "value": "6"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            },
+                            {
+                                "name": "VALKEY_LOGLEVEL",
+                                "value": "notice"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "name": "valkey",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "startupProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 30,
+                            "initialDelaySeconds": 5,
+                            "periodSeconds": 5,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    },
+                    {
+                        "env": [
+                            {
+                                "name": "REDIS_ALIAS",
+                                "value": "valkey"
+                            }
+                        ],
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "name": "metrics",
+                        "ports": [
+                            {
+                                "containerPort": 9121,
+                                "name": "metrics",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "failureThreshold": 3,
+                            "httpGet": {
+                                "path": "/",
+                                "port": "metrics",
+                                "scheme": "HTTP"
+                            },
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "resources": {},
+                        "startupProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File"
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": true,
+                "hostname": "valkey-3",
+                "initContainers": [
+                    {
+                        "command": [
+                            "/scripts/init.sh"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "CLUSTER_SHARDS",
+                                "value": "3"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "name": "valkey-init",
+                        "resources": {},
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config",
+                                "subPath": "valkey.conf"
+                            }
+                        ]
+                    }
+                ],
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-5l0r",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1000,
+                    "runAsGroup": 1000,
+                    "runAsUser": 1000,
+                    "seccompProfile": {
+                        "type": "RuntimeDefault"
+                    }
+                },
+                "serviceAccount": "valkey",
+                "serviceAccountName": "valkey",
+                "subdomain": "valkey-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "valkey-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "valkey-data-valkey-3"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-init-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-cluster-script"
+                        },
+                        "name": "cluster-script"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "valkey-config"
+                        },
+                        "name": "valkey-config"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:09Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:09Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:19Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:19Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:01Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "containerID": "containerd://87a0edc8f971cca7cc868618a120526abb62c8386fceacbed3acf6fbfb8b30a9",
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imageID": "ghcr.io/oliver006/redis_exporter@sha256:67e175f144212fe5796b3134dae1f3db33782b57dc53f7c6f5d938f8f70d9754",
+                        "lastState": {},
+                        "name": "metrics",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:09Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        }
+                    },
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://549d45219aaa1ed6953c78dffac2df40ab4ef7d3d22716511898c6fdc9f3d67b",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:09Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.223",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.223"
+                    }
+                ],
+                "initContainerStatuses": [
+                    {
+                        "containerID": "containerd://e3e47e50ae4cfc88a3dc1e55250a3e6e51a1635d7d3f2beefe73740d0a34414b",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey-init",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": false,
+                        "state": {
+                            "terminated": {
+                                "containerID": "containerd://e3e47e50ae4cfc88a3dc1e55250a3e6e51a1635d7d3f2beefe73740d0a34414b",
+                                "exitCode": 0,
+                                "finishedAt": "2026-05-31T03:41:08Z",
+                                "reason": "Completed",
+                                "startedAt": "2026-05-31T03:41:08Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config"
+                            }
+                        ]
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.1.96",
+                "podIPs": [
+                    {
+                        "ip": "10.100.1.96"
+                    }
+                ],
+                "qosClass": "Burstable",
+                "startTime": "2026-05-31T03:41:01Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "f5ec2fff203a62d9c54969ae415cc2dd",
+                    "checksum/initconfig": "7060f66ffb0bde7965a32ff9933a41ca"
+                },
+                "creationTimestamp": "2026-05-31T03:40:59Z",
+                "generateName": "valkey-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "valkey",
+                    "app.kubernetes.io/name": "valkey",
+                    "apps.kubernetes.io/pod-index": "4",
+                    "controller-revision-hash": "valkey-6948f7b44c",
+                    "statefulset.kubernetes.io/pod-name": "valkey-4",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "valkey-4",
+                "namespace": "vk",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "valkey",
+                        "uid": "d2506128-fb53-4e5b-a61a-60200cfb2627"
+                    }
+                ],
+                "resourceVersion": "1780198880727855002",
+                "uid": "4052943c-3120-49b5-931e-9902e8c8686c"
+            },
+            "spec": {
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "/cluster-script/init-cluster.sh \u0026\nvalkey-server /data/conf/valkey.conf\n"
+                        ],
+                        "command": [
+                            "/bin/sh",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "VALKEY_NODES",
+                                "value": "valkey-0.valkey-headless.vk.svc.cluster.local valkey-1.valkey-headless.vk.svc.cluster.local valkey-2.valkey-headless.vk.svc.cluster.local valkey-3.valkey-headless.vk.svc.cluster.local valkey-4.valkey-headless.vk.svc.cluster.local valkey-5.valkey-headless.vk.svc.cluster.local"
+                            },
+                            {
+                                "name": "CLUSTER_NODE_COUNT",
+                                "value": "6"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            },
+                            {
+                                "name": "VALKEY_LOGLEVEL",
+                                "value": "notice"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "name": "valkey",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "startupProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 30,
+                            "initialDelaySeconds": 5,
+                            "periodSeconds": 5,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    },
+                    {
+                        "env": [
+                            {
+                                "name": "REDIS_ALIAS",
+                                "value": "valkey"
+                            }
+                        ],
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "name": "metrics",
+                        "ports": [
+                            {
+                                "containerPort": 9121,
+                                "name": "metrics",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "failureThreshold": 3,
+                            "httpGet": {
+                                "path": "/",
+                                "port": "metrics",
+                                "scheme": "HTTP"
+                            },
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "resources": {},
+                        "startupProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File"
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": true,
+                "hostname": "valkey-4",
+                "initContainers": [
+                    {
+                        "command": [
+                            "/scripts/init.sh"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "CLUSTER_SHARDS",
+                                "value": "3"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "name": "valkey-init",
+                        "resources": {},
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config",
+                                "subPath": "valkey.conf"
+                            }
+                        ]
+                    }
+                ],
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-7rdq",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1000,
+                    "runAsGroup": 1000,
+                    "runAsUser": 1000,
+                    "seccompProfile": {
+                        "type": "RuntimeDefault"
+                    }
+                },
+                "serviceAccount": "valkey",
+                "serviceAccountName": "valkey",
+                "subdomain": "valkey-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "valkey-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "valkey-data-valkey-4"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-init-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-cluster-script"
+                        },
+                        "name": "cluster-script"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "valkey-config"
+                        },
+                        "name": "valkey-config"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:11Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:11Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:20Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:20Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:00Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "containerID": "containerd://c37d00fcc92f5a888a5c3bd6fb16b3d0625c706544ca832f125610655d26ab2f",
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imageID": "ghcr.io/oliver006/redis_exporter@sha256:67e175f144212fe5796b3134dae1f3db33782b57dc53f7c6f5d938f8f70d9754",
+                        "lastState": {},
+                        "name": "metrics",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:11Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        }
+                    },
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://f6584f96e44ed04d43868326a8098dd7dc81aca0bb84daa9b31f9049ad0cfdad",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:11Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.222",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.222"
+                    }
+                ],
+                "initContainerStatuses": [
+                    {
+                        "containerID": "containerd://9a41f857dffd3586ae35f3a22da9e2221019f1cc86cd0688db9d659a280608a1",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey-init",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": false,
+                        "state": {
+                            "terminated": {
+                                "containerID": "containerd://9a41f857dffd3586ae35f3a22da9e2221019f1cc86cd0688db9d659a280608a1",
+                                "exitCode": 0,
+                                "finishedAt": "2026-05-31T03:41:10Z",
+                                "reason": "Completed",
+                                "startedAt": "2026-05-31T03:41:10Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config"
+                            }
+                        ]
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.0.75",
+                "podIPs": [
+                    {
+                        "ip": "10.100.0.75"
+                    }
+                ],
+                "qosClass": "Burstable",
+                "startTime": "2026-05-31T03:41:00Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "f5ec2fff203a62d9c54969ae415cc2dd",
+                    "checksum/initconfig": "7060f66ffb0bde7965a32ff9933a41ca"
+                },
+                "creationTimestamp": "2026-05-31T03:40:59Z",
+                "generateName": "valkey-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "valkey",
+                    "app.kubernetes.io/name": "valkey",
+                    "apps.kubernetes.io/pod-index": "5",
+                    "controller-revision-hash": "valkey-6948f7b44c",
+                    "statefulset.kubernetes.io/pod-name": "valkey-5",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "valkey-5",
+                "namespace": "vk",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "valkey",
+                        "uid": "d2506128-fb53-4e5b-a61a-60200cfb2627"
+                    }
+                ],
+                "resourceVersion": "1780198880795007019",
+                "uid": "7925cfa8-e3a3-441a-840a-c22f1f4f2122"
+            },
+            "spec": {
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "/cluster-script/init-cluster.sh \u0026\nvalkey-server /data/conf/valkey.conf\n"
+                        ],
+                        "command": [
+                            "/bin/sh",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "VALKEY_NODES",
+                                "value": "valkey-0.valkey-headless.vk.svc.cluster.local valkey-1.valkey-headless.vk.svc.cluster.local valkey-2.valkey-headless.vk.svc.cluster.local valkey-3.valkey-headless.vk.svc.cluster.local valkey-4.valkey-headless.vk.svc.cluster.local valkey-5.valkey-headless.vk.svc.cluster.local"
+                            },
+                            {
+                                "name": "CLUSTER_NODE_COUNT",
+                                "value": "6"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            },
+                            {
+                                "name": "VALKEY_LOGLEVEL",
+                                "value": "notice"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "name": "valkey",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "startupProbe": {
+                            "exec": {
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "valkey-cli ping"
+                                ]
+                            },
+                            "failureThreshold": 30,
+                            "initialDelaySeconds": 5,
+                            "periodSeconds": 5,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    },
+                    {
+                        "env": [
+                            {
+                                "name": "REDIS_ALIAS",
+                                "value": "valkey"
+                            }
+                        ],
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "name": "metrics",
+                        "ports": [
+                            {
+                                "containerPort": 9121,
+                                "name": "metrics",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "failureThreshold": 3,
+                            "httpGet": {
+                                "path": "/",
+                                "port": "metrics",
+                                "scheme": "HTTP"
+                            },
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "resources": {},
+                        "startupProbe": {
+                            "failureThreshold": 3,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "metrics"
+                            },
+                            "timeoutSeconds": 1
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File"
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": true,
+                "hostname": "valkey-5",
+                "initContainers": [
+                    {
+                        "command": [
+                            "/scripts/init.sh"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_INDEX",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.labels['apps.kubernetes.io/pod-index']"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "CLUSTER_SHARDS",
+                                "value": "3"
+                            },
+                            {
+                                "name": "CLUSTER_REPLICAS_PER_SHARD",
+                                "value": "1"
+                            }
+                        ],
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imagePullPolicy": "IfNotPresent",
+                        "name": "valkey-init",
+                        "resources": {},
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config",
+                                "subPath": "valkey.conf"
+                            }
+                        ]
+                    }
+                ],
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-7rdq",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1000,
+                    "runAsGroup": 1000,
+                    "runAsUser": 1000,
+                    "seccompProfile": {
+                        "type": "RuntimeDefault"
+                    }
+                },
+                "serviceAccount": "valkey",
+                "serviceAccountName": "valkey",
+                "subdomain": "valkey-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "valkey-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "valkey-data-valkey-5"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-init-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 365,
+                            "name": "valkey-cluster-script"
+                        },
+                        "name": "cluster-script"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "valkey-config"
+                        },
+                        "name": "valkey-config"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:10Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:11Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:20Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:20Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T03:41:00Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "containerID": "containerd://fcaad5a87477a356ec58af75de2ed78296d8d399cf70285cba2f61a89e8e9d58",
+                        "image": "ghcr.io/oliver006/redis_exporter:v1.79.0",
+                        "imageID": "ghcr.io/oliver006/redis_exporter@sha256:67e175f144212fe5796b3134dae1f3db33782b57dc53f7c6f5d938f8f70d9754",
+                        "lastState": {},
+                        "name": "metrics",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:11Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        }
+                    },
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://5cdfeba3706c55b07a92d7d9e745e2cf758082f415cd7c6385d92682c5ab842a",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T03:41:11Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/cluster-script",
+                                "name": "cluster-script"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.222",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.222"
+                    }
+                ],
+                "initContainerStatuses": [
+                    {
+                        "containerID": "containerd://ebabe63353ab0aafaaf95b3b0447594da9549fa2f11caf0a52144e5556b0a8e2",
+                        "image": "docker.io/valkey/valkey:9.1.0",
+                        "imageID": "docker.io/valkey/valkey@sha256:4963247afc4cd33c7d3b2d2816b9f7f8eeebab148d29056c2ca4d7cbc966f2d9",
+                        "lastState": {},
+                        "name": "valkey-init",
+                        "ready": true,
+                        "resources": {},
+                        "restartCount": 0,
+                        "started": false,
+                        "state": {
+                            "terminated": {
+                                "containerID": "containerd://ebabe63353ab0aafaaf95b3b0447594da9549fa2f11caf0a52144e5556b0a8e2",
+                                "exitCode": 0,
+                                "finishedAt": "2026-05-31T03:41:10Z",
+                                "reason": "Completed",
+                                "startedAt": "2026-05-31T03:41:10Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1000,
+                                "supplementalGroups": [
+                                    1000
+                                ],
+                                "uid": 1000
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/data",
+                                "name": "valkey-data"
+                            },
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/usr/local/etc/valkey/valkey.conf",
+                                "name": "valkey-config"
+                            }
+                        ]
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.0.74",
+                "podIPs": [
+                    {
+                        "ip": "10.100.0.74"
+                    }
+                ],
+                "qosClass": "Burstable",
+                "startTime": "2026-05-31T03:41:00Z"
+            }
+        }
+    ],
+    "kind": "List",
+    "metadata": {
+        "resourceVersion": ""
+    }
+}

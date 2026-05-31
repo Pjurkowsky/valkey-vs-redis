@@ -1,0 +1,36 @@
+{
+  "mode": "verify",
+  "verify_mode": "size",
+  "run_id": "online-replica-snapshot-10240mb-4-1780198823",
+  "expected_keys": 10485760,
+  "restored_keys": 10485760,
+  "key_count_ok": true,
+  "key_count_ratio": 1.0,
+  "expected_bytes": 10737418240,
+  "used_memory": 14425035272,
+  "used_memory_dataset": 14094035516,
+  "memory_to_expected_ratio": 1.312609,
+  "masters": [
+    {
+      "addr": "valkey-0.valkey-headless.vk.svc.cluster.local:6379",
+      "dbsize": 3494937,
+      "used_memory": 4807904280,
+      "used_memory_dataset": 4697586692
+    },
+    {
+      "addr": "valkey-2.valkey-headless.vk.svc.cluster.local:6379",
+      "dbsize": 3495032,
+      "used_memory": 4808034760,
+      "used_memory_dataset": 4697714372
+    },
+    {
+      "addr": "valkey-1.valkey-headless.vk.svc.cluster.local:6379",
+      "dbsize": 3495791,
+      "used_memory": 4809096232,
+      "used_memory_dataset": 4698734452
+    }
+  ],
+  "verify_errors": 0,
+  "integrity_ok": true,
+  "verify_duration_s": 0.04
+}

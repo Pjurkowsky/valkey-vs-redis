@@ -1,0 +1,68 @@
+{
+  "variant": "valkey_online_replica_pvc_snapshot",
+  "project_id": "redis-vs-valkey",
+  "location": "europe-central2",
+  "zone": "europe-central2-a",
+  "namespace": "vk",
+  "release": "valkey",
+  "created_at_epoch_s": 1780199686,
+  "backup_start": 1780199549,
+  "backup_end": 1780199686,
+  "backup_duration_s": 137,
+  "bgsave_start": 1780199551,
+  "bgsave_end": 1780199594,
+  "bgsave_duration_s": 43,
+  "rdb_validation_start": 1780199594,
+  "rdb_validation_end": 1780199620,
+  "rdb_validation_duration_s": 26,
+  "snapshot_create_start": 1780199620,
+  "snapshot_create_end": 1780199686,
+  "snapshot_create_duration_s": 66,
+  "shards": [
+    {
+      "master_id": "47f462e7dd849a96f9c6c20c8045b44cd082b6c1",
+      "target_master_pod": "valkey-0",
+      "source_replica_pod": "valkey-4",
+      "slots": [
+        "0-5460"
+      ],
+      "source_pvc": "valkey-data-valkey-4",
+      "target_pvc": "valkey-data-valkey-0",
+      "source_disk": "pvc-ac74c650-aae3-4fd4-9eba-927b54d0307f",
+      "snapshot": "valkey-online-replica-snap-4-20260531-055229-0-from-4",
+      "storage_request": "8Gi",
+      "storage_class": "pd-ssd-rwo",
+      "snapshot_duration_s": 64
+    },
+    {
+      "master_id": "0169765ce81071f6f51fda8468464d78df387437",
+      "target_master_pod": "valkey-1",
+      "source_replica_pod": "valkey-5",
+      "slots": [
+        "5461-10922"
+      ],
+      "source_pvc": "valkey-data-valkey-5",
+      "target_pvc": "valkey-data-valkey-1",
+      "source_disk": "pvc-da81ff24-0507-4679-b67f-77428e8a2fb2",
+      "snapshot": "valkey-online-replica-snap-4-20260531-055229-1-from-5",
+      "storage_request": "8Gi",
+      "storage_class": "pd-ssd-rwo",
+      "snapshot_duration_s": 64
+    },
+    {
+      "master_id": "ba21b6c4dd3a8288d7dafbbbfaa4d19ae5f25b6e",
+      "target_master_pod": "valkey-2",
+      "source_replica_pod": "valkey-3",
+      "slots": [
+        "10923-16383"
+      ],
+      "source_pvc": "valkey-data-valkey-3",
+      "target_pvc": "valkey-data-valkey-2",
+      "source_disk": "pvc-5ff879b3-25d4-4ca0-a2d8-2eecc0bf35e7",
+      "snapshot": "valkey-online-replica-snap-4-20260531-055229-2-from-3",
+      "storage_request": "8Gi",
+      "storage_class": "pd-ssd-rwo",
+      "snapshot_duration_s": 65
+    }
+  ]
+}

@@ -16,14 +16,41 @@ cluster:
 
 persistence:
   enabled: true
-  size: 5Gi
+  storageClass: pd-ssd-rwo
+  size: 8Gi
 
 redis:
   useAOFPersistence: "no"
+  startupProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 36
+  livenessProbe:
+    enabled: true
+    initialDelaySeconds: 180
+    periodSeconds: 10
+    timeoutSeconds: 6
+    failureThreshold: 12
+  readinessProbe:
+    enabled: true
+    initialDelaySeconds: 20
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 18
+  resources:
+    requests:
+      cpu: "2"
+      memory: "7Gi"
+    limits:
+      cpu: "2"
+      memory: "7Gi"
   configmap: |-
-    maxmemory 1gb
+    maxmemory 5200mb
     maxmemory-policy allkeys-lru
-    cluster-preferred-endpoint-type ip
+    maxmemory-clients 7%
+    maxclients 16000
 
 metrics:
   enabled: false
