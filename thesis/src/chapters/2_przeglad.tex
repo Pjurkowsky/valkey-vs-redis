@@ -48,15 +48,13 @@ Redis oferuje dwa mechanizmy utrwalania danych na dysku~\cite{redisPersistence}:
     \item \textbf{AOF} (Append Only File) -- rejestrowanie każdej operacji zapisu w pliku dziennika. Umożliwia odtworzenie stanu przez ponowne odtworzenie sekwencji poleceń. Oferuje lepszą trwałość (konfigurowalną do poziomu fsync po każdej operacji), ale kosztem większego rozmiaru pliku i wyższego obciążenia I/O.
 \end{itemize}
 
-Oba mechanizmy mogą działać równocześnie. W scenariuszach backupu i odtwarzania opisywanych w dalszej części pracy wykorzystywany jest mechanizm RDB, ponieważ umożliwia szybkie tworzenie spójnej kopii danych bez zatrzymywania serwera.
+Oba mechanizmy mogą działać równocześnie.
 
 \subsection{Zarządzanie pamięcią i polityki eksmisji}
 
 Redis jako system przechowujący dane w pamięci operacyjnej wymaga mechanizmu kontroli zużycia RAM. Dyrektywa \texttt{maxmemory} określa maksymalną ilość pamięci dostępną dla danych. Po przekroczeniu tego limitu Redis eksmituje klucze zgodnie z wybraną polityką~\cite{redisEviction}.
 
-Dostępne polityki dzielą się na dwie grupy: \texttt{allkeys-*} (obejmujące wszystkie klucze) oraz \texttt{volatile-*} (obejmujące wyłącznie klucze z ustawionym TTL). Domyślna polityka \texttt{noeviction} blokuje zapisy po wyczerpaniu pamięci. W scenariuszach cache'owania najczęściej stosowana jest \texttt{allkeys-lru}, która eksmituje klucze najdawniej używane. Algorytm LRU w Redis jest aproksymacją opartą na próbkowaniu --- przy każdej eksmisji losowo wybieranych jest kilka kluczy (domyślnie 5, konfigurowalnie przez \texttt{maxmemory-samples}), a usuwany jest ten z najstarszym czasem dostępu~\cite{redisEviction}.
-
-W testach opisanych w dalszej części pracy klaster działa z polityką \texttt{allkeys-lru} i ograniczonym limitem \texttt{maxmemory}.
+Dostępne polityki dzielą się na dwie grupy: \texttt{allkeys-*} (obejmujące wszystkie klucze) oraz \texttt{volatile-*} (obejmujące wyłącznie klucze z ustawionym TTL). Domyślna polityka \texttt{noeviction} blokuje zapisy po wyczerpaniu pamięci. W scenariuszach cache'owania najczęściej stosowana jest \texttt{allkeys-lru}, która eksmituje klucze najdawniej używane. 
 
 \subsection{Replikacja i wysoka dostępność}
 
@@ -66,7 +64,7 @@ Mechanizm Redis Sentinel zapewnia automatyczne wykrywanie awarii mastera i promo
 
 \subsection{Redis Cluster}
 
-Redis Cluster to mechanizm partycjonowania danych i zapewniania wysokiej dostępności wbudowany w Redis od wersji 3.0. Przestrzeń kluczy jest podzielona na 16384 hash slotów. Każdy klucz jest przypisywany do slotu według wzoru:
+Redis Cluster to mechanizm partycjonowania danych i zapewniania wysokiej dostępności. Przestrzeń kluczy jest podzielona na 16384 hash slotów. Każdy klucz jest przypisywany do slotu według wzoru:
 
 \[
 \text{HASH\_SLOT} = \text{CRC16}(\text{key}) \mod 16384
@@ -146,11 +144,11 @@ Valkey, jako fork utrzymywany na licencji BSD-3, jest kandydatem do zastąpienia
 
 \section{Kubernetes jako środowisko uruchomieniowe}\label{sec:kubernetes}
 
-Kubernetes to system orkiestracji kontenerów, który automatyzuje wdrażanie, skalowanie i zarządzanie aplikacjami kontenerowymi~\cite{k8sDocumentation}. W kontekście niniejszej pracy Kubernetes stanowi środowisko uruchomieniowe dla klastra Valkey i definiuje ograniczenia oraz możliwości związane z zarządzaniem stanowymi obciążeniami.
+Kubernetes to system orkiestracji kontenerów, który automatyzuje wdrażanie, skalowanie i zarządzanie aplikacjami kontenerowymi~\cite{k8sDocumentation}. W kontekście niniejszej pracy Kubernetes stanowi środowisko uruchomieniowe dla klastrów Valkey i Redis 7.2.
 
 \subsection{StatefulSet}
 
-StatefulSet to obiekt Kubernetes zaprojektowany do zarządzania aplikacjami stanowymi. W odróżnieniu od Deployment, StatefulSet zapewnia:
+StatefulSet to obiekt Kubernetes zaprojektowany do zarządzania aplikacjami stanowymi. Zapewnia:
 
 \begin{itemize}
     \item stabilne, przewidywalne nazwy podów (np. \texttt{valkey-0}, \texttt{valkey-1}, \texttt{valkey-2});
@@ -192,7 +190,7 @@ W środowiskach chmurowych systemy cache mogą być uruchamiane na dwa sposoby: 
 
 W modelu usługi zarządzanej dostawca przejmuje odpowiedzialność za infrastrukturę fizyczną, aktualizacje systemu operacyjnego, patching oprogramowania, replikację, failover, backup oraz monitoring bazowy. Użytkownik zarządza jedynie konfiguracją aplikacyjną, rozmiarem klastra i politykami dostępu. Model ten zmniejsza nakład pracy operacyjnej kosztem ograniczonej elastyczności konfiguracji i wyższych kosztów infrastruktury.
 
-W modelu self-hosted zespół operacyjny przejmuje pełną odpowiedzialność za cykl życia systemu: instalację, konfigurację, monitoring, aktualizacje, skalowanie, backup, odtwarzanie po awarii oraz reagowanie na incydenty. Model ten daje pełną kontrolę nad konfiguracją i potencjalnie niższe koszty infrastruktury, ale wymaga wiedzy eksperckiej i dedykowanego nakładu pracy.
+W modelu self-hosted administrator przejmuje pełną odpowiedzialność za cykl życia systemu: instalację, konfigurację, monitoring, aktualizacje, skalowanie, backup, odtwarzanie po awarii oraz reagowanie na incydenty. Model ten daje pełną kontrolę nad konfiguracją i potencjalnie niższe koszty infrastruktury, wymaga jednak wiedzy eksperckiej i dedykowanego nakładu pracy.
 
 \subsection{Google Cloud Memorystore for Redis}
 

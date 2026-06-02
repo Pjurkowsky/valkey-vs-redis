@@ -284,39 +284,6 @@ Mierzone metryki obejmują: liczbę utraconych potwierdzonych kluczy z podziałe
 
 \subsection{Resilience przy niedoborze zasobów}\label{subsec:resilience}
 
-Testy resilience sprawdzają zachowanie klastra przy presji na CPU i pamięć. Zakłócenia są wprowadzane za pomocą zasobu \texttt{StressChaos} z Chaos Mesh. Tabela~\ref{tab:scenariusze_resilience} przedstawia trzy badane scenariusze.
-
-\begin{table}[H]
-\centering
-\caption{Scenariusze testów resilience}
-\label{tab:scenariusze_resilience}
-\begin{tabularx}{\textwidth}{p{3.2cm}p{2.4cm}Xr}
-\toprule
-\textbf{Scenariusz} & \textbf{Typ} & \textbf{Parametry stresu} & \textbf{Czas} \\
-\midrule
-CPU stress & \texttt{StressChaos} & 4~workers, 100\% CPU load, 1~pod & 30 s \\
-Memory stress & \texttt{StressChaos} & 1~worker, 900~MB, 1~pod & 60 s \\
-Memory extreme & \texttt{StressChaos} & 2~workers, 1800~MB łącznie, 1~pod & 60 s \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-Obciążenie tła jest zgodne z profilem z tabeli~\ref{tab:profil_operacyjny}.
-
-Procedura każdego powtórzenia przebiega następująco:
-
-\begin{enumerate}
-    \item uruchomienie poda z \texttt{memtier\_benchmark};
-    \item stabilizacja obciążenia;
-    \item zastosowanie odpowiedniego manifestu \texttt{StressChaos} --- stres trwa 30~s (CPU) lub 60~s (memory);
-    \item po zakończeniu stresu \texttt{memtier\_benchmark} kontynuuje do końca okna 120~s;
-    \item zapis wyników JSON i podsumowania.
-\end{enumerate}
-
-Dla testów pamięci szczególnie istotny jest wariant warm cache, czyli wcześniejsze wypełnienie klastra danymi. Bez danych test nie oddaje rzeczywistego zachowania systemu, ponieważ presja pamięci może nie uruchomić mechanizmów eksmisji ani nie doprowadzić do sytuacji bliskiej OOM Kill.
-
-Mierzone metryki obejmują: maksymalny procentowy spadek ops/sec względem poziomu bazowego (\texttt{ops\_drop\_pct}), czas degradacji poniżej 80\% poziomu bazowego (\texttt{degradation\_duration\_ms}), maksymalne opóźnienie p99 podczas stresu, informację o powrocie do co najmniej 90\% poziomu bazowego po zakończeniu stresu (\texttt{recovery\_detected}) oraz wykrycie restartu poda (\texttt{pod\_restart\_detected}).
-
 \section{Testy utrzymywalności}\label{sec:testy_utrzymywalnosci}
 
 Testy utrzymywalności służą weryfikacji hipotezy H4. Ich celem jest ocena, ile pracy operacyjnej wymaga utrzymanie klastra self-hosted w porównaniu z usługą zarządzaną. W tej części obok metryk technicznych mierzone są również liczba kroków, liczba komend, czas wykonania procedury, konieczność ręcznej interwencji oraz ryzyko błędnej konfiguracji. W rozdziale z wynikami przedstawiono dwa scenariusze wykonywane pod obciążeniem: rolling upgrade oraz resharding klastra.
