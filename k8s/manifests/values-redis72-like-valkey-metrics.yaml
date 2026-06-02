@@ -1,0 +1,52 @@
+global:
+  security:
+    allowInsecureImages: true
+
+image:
+  registry: docker.io
+  repository: bitnamilegacy/redis-cluster
+  tag: 7.2.5-debian-12-r4
+
+usePassword: false
+
+cluster:
+  init: true
+  nodes: 6
+  replicas: 1
+
+persistence:
+  enabled: true
+  size: 5Gi
+
+redis:
+  useAOFPersistence: "no"
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "1"
+      memory: "2Gi"
+  configmap: |-
+    maxmemory 1gb
+    maxmemory-policy allkeys-lru
+    cluster-preferred-endpoint-type ip
+
+metrics:
+  enabled: true
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/redis-exporter
+    tag: 1.76.0-debian-12-r0
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: monitoring
