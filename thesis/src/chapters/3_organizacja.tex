@@ -156,7 +156,7 @@ helm install redis72 \
 
 W testach porównujących klastry self-hosted z Memorystore konieczne jest dopasowanie zasobów przydzielonych podom Valkey i Redis 7.2 do parametrów usługi zarządzanej. Klaster Memorystore tworzono z typem węzła \texttt{redis-standard-small}, który zgodnie z dokumentacją~\cite{gcpMemorystoreNodeTypes} oferuje 2~vCPU i około 7~GiB pamięci całkowitej na shard, z czego około 5{,}2~GiB jest dostępne jako pamięć użytkowa po odjęciu narzutu systemowego.
 
-Aby zapewnić porównywalność, klastry self-hosted w testach z udziałem Memorystore były uruchamiane z plikiem wartości \texttt{values-normalized-ms-small.yaml}, który ustawia limity i requesty zasobów na 2~vCPU i 7~GiB pamięci RAM oraz parametr \texttt{maxmemory} na wartość 5\,583\,457\,484~B ($\approx$5{,}2~GiB), odpowiadającą faktycznej dostępnej pamięci Memorystore na typie \texttt{redis-standard-small}. Zawartość tego pliku przedstawiono w listingu~\ref{lst:normalized-values}.
+Aby zapewnić porównywalność, klastry self-hosted w testach z udziałem Memorystore były uruchamiane z profilami ustawiającymi limity i requesty zasobów na 2~vCPU i 7~GiB pamięci RAM na pod. Plik \texttt{values-normalized-ms-small.yaml} ustawia dodatkowo parametr \texttt{maxmemory} na wartość 5\,583\,457\,484~B ($\approx$5{,}2~GiB), odpowiadającą faktycznej dostępnej pamięci Memorystore na typie \texttt{redis-standard-small}. Zawartość tego pliku przedstawiono w listingu~\ref{lst:normalized-values}. W pomiarach reshardingu i backupu użyto profilu Valkey \texttt{values-backup-max7gb.yaml} oraz odpowiadającego mu profilu Redis 7.2 \texttt{values-redis72.yaml}; oba warianty ustawiają 2~vCPU, 7~GiB pamięci RAM i \texttt{maxmemory 5200mb}.
 
 \lstinputlisting[
 basicstyle=\ttfamily\footnotesize,

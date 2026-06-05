@@ -35,8 +35,8 @@ Tabela~\ref{tab:reshard-duration} pokazuje średni czas całej operacji administ
 \toprule
 Faza & Valkey legacy [s] & Redis 7.2 [s] & Valkey atomic [s] & Memorystore [s] & Redis / legacy & Atomic / legacy & MS / legacy \\
 \midrule
-3 $\rightarrow$ 4 shardy & $103{,}6 \pm 1{,}5$ & $72{,}4 \pm 1{,}5$ & $35{,}6 \pm 6{,}6$ & $166{,}8 \pm 11{,}2$ & $1{,}43\times$ & $2{,}91\times$ & $0{,}62\times$ \\
-4 $\rightarrow$ 3 shardy & $144{,}8 \pm 6{,}8$ & $66{,}6 \pm 1{,}5$ & $55{,}6 \pm 0{,}5$ & $46{,}8 \pm 6{,}9$ & $2{,}17\times$ & $2{,}60\times$ & $3{,}09\times$ \\
+3 $\rightarrow$ 4 shardy & $86{,}6 \pm 2{,}2$ & $66{,}8 \pm 1{,}1$ & $30{,}6 \pm 3{,}2$ & $166{,}8 \pm 11{,}2$ & $1{,}30\times$ & $2{,}83\times$ & $0{,}52\times$ \\
+4 $\rightarrow$ 3 shardy & $102{,}6 \pm 0{,}9$ & $54{,}6 \pm 0{,}9$ & $52{,}4 \pm 1{,}1$ & $46{,}8 \pm 6{,}9$ & $1{,}88\times$ & $1{,}96\times$ & $2{,}19\times$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -44,9 +44,9 @@ Faza & Valkey legacy [s] & Redis 7.2 [s] & Valkey atomic [s] & Memorystore [s] &
 
 \FloatBarrier
 
-Redis 7.2 znacząco skrócił czas klasycznego reshardingu względem Valkey legacy: przy skalowaniu w górę z 103{,}6~s do 72{,}4~s, a przy skalowaniu w dół z 144{,}8~s do 66{,}6~s. Różnica wynika głównie z krótszej fazy przenoszenia slotów. Przy skalowaniu w górę migracja slotów zajmowała średnio 76{,}6~s dla Valkey legacy i 36{,}8~s dla Redis 7.2. Przy skalowaniu w dół było to odpowiednio 96{,}0~s oraz 37{,}6~s.
+Redis 7.2 pozostał szybszy od klasycznego reshardingu Valkey legacy, ale po uruchomieniu obu wariantów na profilu odpowiadającym Memorystore różnica była mniejsza niż w poprzednim pomiarze: przy skalowaniu w górę czas spadł z 86{,}6~s do 66{,}8~s, a przy skalowaniu w dół z 102{,}6~s do 54{,}6~s. Różnica wynika głównie z krótszej fazy przenoszenia slotów. Przy skalowaniu w górę migracja slotów zajmowała średnio 58{,}4~s dla Valkey legacy i 34{,}4~s dla Redis 7.2. Przy skalowaniu w dół było to odpowiednio 54{,}6~s oraz 31{,}6~s.
 
-Tryb atomowy Valkey pozostał najszybszym wariantem self-hosted przy skalowaniu w górę: cała operacja trwała średnio 35{,}6~s, a sama migracja slotów 4{,}4~s. Przy skalowaniu w dół Valkey atomic trwał średnio 55{,}6~s i był szybszy od Redis 7.2, ale wolniejszy od Memorystore. Wynik Memorystore jest asymetryczny: skalowanie z trzech do czterech shardów trwało średnio 166{,}8~s, czyli dłużej niż wszystkie warianty self-hosted, natomiast skalowanie z czterech do trzech shardów trwało średnio 46{,}8~s i było najkrótszym wynikiem całej grupy.
+Tryb atomowy Valkey pozostał najszybszym wariantem self-hosted przy skalowaniu w górę: cała operacja trwała średnio 30{,}6~s, a sama migracja slotów 3{,}6~s. Przy skalowaniu w dół Valkey atomic trwał średnio 52{,}4~s i był nieznacznie szybszy od Redis 7.2 oraz wolniejszy od Memorystore. Wynik Memorystore jest asymetryczny: skalowanie z trzech do czterech shardów trwało średnio 166{,}8~s, czyli dłużej niż wszystkie warianty self-hosted, natomiast skalowanie z czterech do trzech shardów trwało średnio 46{,}8~s i było najkrótszym wynikiem całej grupy.
 
 Wpływ reshardingu na klienta przedstawia tabela~\ref{tab:reshard-latency-throughput}. Wartości percentyli są średnimi z wyników raportowanych przez \texttt{memtier\_benchmark} dla pięciu powtórzeń, natomiast kolumna \textit{ops/sec} zawiera średnią oraz odchylenie standardowe.
 
@@ -59,13 +59,13 @@ Wpływ reshardingu na klienta przedstawia tabela~\ref{tab:reshard-latency-throug
 \toprule
 Faza & Wariant & Ops/sec & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 \midrule
-3 $\rightarrow$ 4 & Valkey legacy & $105\,999{,}91 \pm 1\,144{,}62$ & 1{,}27 & 6{,}17 & 10{,}97 & 19{,}97 \\
-3 $\rightarrow$ 4 & Redis 7.2 & $108\,241{,}02 \pm 3\,807{,}86$ & 1{,}39 & 5{,}08 & 10{,}21 & 32{,}26 \\
-3 $\rightarrow$ 4 & Valkey atomic & $112\,655{,}54 \pm 2\,069{,}61$ & 1{,}28 & 5{,}49 & 10{,}16 & 19{,}53 \\
+3 $\rightarrow$ 4 & Valkey legacy & $185\,425{,}50 \pm 2\,016{,}95$ & 1{,}05 & 2{,}36 & 4{,}38 & 6{,}50 \\
+3 $\rightarrow$ 4 & Redis 7.2 & $191\,061{,}88 \pm 1\,174{,}35$ & 1{,}05 & 2{,}04 & 3{,}78 & 5{,}96 \\
+3 $\rightarrow$ 4 & Valkey atomic & $194\,364{,}36 \pm 1\,882{,}52$ & 1{,}12 & 1{,}88 & 2{,}41 & 3{,}89 \\
 3 $\rightarrow$ 4 & Memorystore & $141\,327{,}99 \pm 1\,985{,}12$ & 1{,}23 & 2{,}01 & 2{,}95 & 6{,}71 \\
-4 $\rightarrow$ 3 & Valkey legacy & $101\,685{,}72 \pm 635{,}51$ & 1{,}62 & 7{,}05 & 11{,}98 & 22{,}07 \\
-4 $\rightarrow$ 3 & Redis 7.2 & $108\,830{,}41 \pm 4\,923{,}57$ & 1{,}45 & 5{,}14 & 10{,}44 & 33{,}51 \\
-4 $\rightarrow$ 3 & Valkey atomic & $114\,688{,}15 \pm 2\,664{,}65$ & 1{,}18 & 5{,}24 & 9{,}41 & 18{,}38 \\
+4 $\rightarrow$ 3 & Valkey legacy & $192\,847{,}16 \pm 1\,325{,}84$ & 1{,}09 & 2{,}19 & 4{,}05 & 5{,}61 \\
+4 $\rightarrow$ 3 & Redis 7.2 & $198\,361{,}03 \pm 2\,581{,}14$ & 1{,}04 & 1{,}91 & 3{,}76 & 5{,}36 \\
+4 $\rightarrow$ 3 & Valkey atomic & $203\,988{,}30 \pm 1\,548{,}27$ & 0{,}99 & 1{,}68 & 2{,}01 & 2{,}95 \\
 4 $\rightarrow$ 3 & Memorystore & $140\,837{,}06 \pm 1\,026{,}09$ & 1{,}47 & 2{,}42 & 3{,}54 & 7{,}45 \\
 \bottomrule
 \end{tabular}
@@ -74,7 +74,7 @@ Faza & Wariant & Ops/sec & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 
 \FloatBarrier
 
-Wśród wariantów self-hosted Valkey atomic utrzymał najwyższą przepustowość i najniższe p99 podczas obu faz reshardingu. Redis 7.2 osiągnął wyższą przepustowość niż Valkey legacy i niższe p95 oraz p99, ale miał wyraźnie wyższe p99.9, co wskazuje na pojedyncze większe skoki opóźnień w ogonie rozkładu. Memorystore osiągnął najwyższą przepustowość i najniższe percentyle opóźnień, ale ten wynik należy zestawiać z innym charakterem środowiska: usługa zarządzana działa poza kontrolowanym klastrem Kubernetes i ukrywa część mechanizmów administracyjnych. Z punktu widzenia testu self-hosted najważniejszy wniosek jest taki, że atomowa migracja slotów znacząco skraca okno reshardingu względem klasycznej migracji Valkey, natomiast Redis 7.2 pokazuje, że klasyczna ścieżka migracji w porównywalnej topologii może być znacznie krótsza niż w testowanym wariancie Valkey legacy.
+Wśród wariantów self-hosted Valkey atomic utrzymał najwyższą przepustowość i najniższe p99 podczas obu faz reshardingu. Redis 7.2 po uruchomieniu na tym samym profilu 2~vCPU/7~GiB osiągnął przepustowość i opóźnienia zbliżone do Valkey legacy, a jednocześnie zachował krótszy czas klasycznej migracji slotów. Valkey legacy miał nieco niższą przepustowość i wyższe p99 niż Redis 7.2, ale różnica była znacznie mniejsza niż w poprzednim zestawie danych. Memorystore miał stabilne opóźnienia i bardzo krótki czas skalowania w dół, lecz w tym zestawie pomiarów nie osiągnął najwyższej przepustowości. Z punktu widzenia testu self-hosted najważniejszy wniosek jest taki, że atomowa migracja slotów znacząco skraca okno reshardingu względem klasycznej migracji Valkey, a jednocześnie utrzymuje najkorzystniejsze opóźnienia klienta.
 
 \section{Rolling upgrade klastra Valkey}
 
