@@ -11,6 +11,7 @@ import pandas as pd
 
 from src.chart_markers import mark_test_window
 from src.failover import parse_time_series
+from src.metrics import extract_metric
 
 matplotlib.use("Agg")
 
@@ -104,6 +105,7 @@ def analyse_reshard_runs(
             continue
 
         ts = parse_time_series(run_result)
+        metric = extract_metric(run_result)
         all_ts.append(ts)
         all_windows.append([])
 
@@ -171,6 +173,11 @@ def analyse_reshard_runs(
             "explicit_rebalance_status": timing.get("explicit_rebalance_status"),
             "explicit_rebalance_slots_before": timing.get("explicit_rebalance_slots_before"),
             "explicit_rebalance_slots_after": timing.get("explicit_rebalance_slots_after"),
+            "ops_sec": metric.ops_sec,
+            "p50": metric.p50,
+            "p95": metric.p95,
+            "p99": metric.p99,
+            "p999": metric.p999,
         }
         row["wait_check_duration_s"] = _wait_check_duration(row)
         rows.append(row)

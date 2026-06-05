@@ -45,6 +45,27 @@ def key_slot(key: str) -> int:
     return crc16(key.encode()) % 16384
 
 
+def parse_slot_spec(slot_spec: str | None) -> set[int]:
+    """Parse comma-separated Redis Cluster slot numbers/ranges."""
+    slots: set[int] = set()
+    if not slot_spec:
+        return slots
+
+    for raw_part in slot_spec.split(","):
+        part = raw_part.strip()
+        if not part:
+            continue
+        if "-" in part:
+            start_raw, end_raw = part.split("-", 1)
+            start, end = int(start_raw), int(end_raw)
+        else:
+            start = end = int(part)
+        if start < 0 or end > 16383 or start > end:
+            raise ValueError(f"Invalid Redis Cluster slot range: {part}")
+        slots.update(range(start, end + 1))
+    return slots
+
+
 def discover_slot_owners(rc: RedisCluster) -> dict[int, str]:
     """Map each slot to the node address that owns it."""
     slot_map: dict[int, str] = {}
@@ -78,6 +99,7 @@ def run_check(
     tls_ca_cert: str | None,
     tls_cert: str | None,
     tls_key: str | None,
+    minority_slots_spec: str | None,
 ) -> None:
     print(f"Connecting to {host}:{port} (cluster mode)...")
     redis_kwargs = {
@@ -103,18 +125,27 @@ def run_check(
     print("Connected.")
 
     slot_owners = discover_slot_owners(rc)
-    minority_set = set(minority_pods)
+    minority_slots = parse_slot_spec(minority_slots_spec)
     minority_addrs: set[str] = set()
-    for addr in slot_owners.values():
-        node_host = addr.split(":")[0]
-        for mp in minority_set:
-            if mp in node_host or node_host in mp:
-                minority_addrs.add(addr)
+    if not minority_slots:
+        minority_set = set(minority_pods)
+        for addr in slot_owners.values():
+            node_host = addr.split(":")[0]
+            for mp in minority_set:
+                if mp in node_host or node_host in mp:
+                    minority_addrs.add(addr)
+        minority_slots = {s for s, a in slot_owners.items() if a in minority_addrs}
 
-    minority_slots = {s for s, a in slot_owners.items() if a in minority_addrs}
+    if not minority_slots:
+        raise RuntimeError(
+            "No minority slots were identified. Pass --minority-slots or ensure "
+            "CLUSTER SLOTS announces hosts that match --minority-pods."
+        )
+
     majority_slots = set(range(16384)) - minority_slots
 
     print(f"Minority pods: {minority_pods}")
+    print(f"Minority slot spec: {minority_slots_spec or 'inferred-from-pods'}")
     print(f"Minority addresses: {minority_addrs}")
     print(f"Minority slot count: {len(minority_slots)}")
     print(f"Majority slot count: {len(majority_slots)}")
@@ -360,6 +391,7 @@ def run_check(
         "duration_actual": round(write_duration, 2),
         "wall_start": wall_start,
         "minority_pods": minority_pods,
+        "minority_slots_spec": minority_slots_spec,
         "minority_slot_count": len(minority_slots),
         "majority_slot_count": len(majority_slots),
         "total_attempted": total_attempted,
@@ -441,6 +473,8 @@ def main() -> None:
                         default=float(os.getenv("SPLIT_BRAIN_SLOW_THRESHOLD_MS", "1000")))
     parser.add_argument("--minority-pods", required=True,
                         help="Comma-separated list of minority pod names (e.g. valkey-2,valkey-5)")
+    parser.add_argument("--minority-slots", default=None,
+                        help="Comma-separated minority slot ranges (e.g. 0-5460,12000)")
     parser.add_argument("--tls", action="store_true")
     parser.add_argument("--tls-skip-verify", action="store_true")
     parser.add_argument("--tls-ca-cert", default=None)
@@ -470,6 +504,7 @@ def main() -> None:
         tls_ca_cert=args.tls_ca_cert,
         tls_cert=args.tls_cert,
         tls_key=args.tls_key,
+        minority_slots_spec=args.minority_slots,
     )
 
 

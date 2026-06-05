@@ -1,0 +1,36 @@
+{
+  "mode": "verify",
+  "verify_mode": "size",
+  "run_id": "online-replica-snapshot-10240mb-4-1780209615",
+  "expected_keys": 10485760,
+  "restored_keys": 10485760,
+  "key_count_ok": true,
+  "key_count_ratio": 1.0,
+  "expected_bytes": 10737418240,
+  "used_memory": 14787091648,
+  "used_memory_dataset": 14093290116,
+  "memory_to_expected_ratio": 1.31254,
+  "masters": [
+    {
+      "addr": "10.100.0.161:6379",
+      "dbsize": 3495106,
+      "used_memory": 4928832536,
+      "used_memory_dataset": 4697573556
+    },
+    {
+      "addr": "10.100.1.215:6379",
+      "dbsize": 3495733,
+      "used_memory": 4929685448,
+      "used_memory_dataset": 4698391516
+    },
+    {
+      "addr": "10.100.1.216:6379",
+      "dbsize": 3494921,
+      "used_memory": 4928573664,
+      "used_memory_dataset": 4697325044
+    }
+  ],
+  "verify_errors": 0,
+  "integrity_ok": true,
+  "verify_duration_s": 0.04
+}

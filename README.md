@@ -208,6 +208,13 @@ using [Chaos Mesh](https://chaos-mesh.org/) for fault injection.
 ./k8s/scripts/chaos-mesh-install.sh
 ```
 
+The installer defaults to `containerd`, which matches GKE nodes. For a Docker-based
+local cluster, override the runtime and socket path:
+
+```bash
+CHAOS_RUNTIME=docker CHAOS_SOCKET_PATH=/var/run/docker.sock ./k8s/scripts/chaos-mesh-install.sh
+```
+
 ### Run failover benchmark
 
 Runs memtier_benchmark under sustained load, kills a Valkey master pod at ~30s, and captures

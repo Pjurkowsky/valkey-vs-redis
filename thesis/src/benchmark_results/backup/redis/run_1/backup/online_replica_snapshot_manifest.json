@@ -1,0 +1,68 @@
+{
+  "variant": "redis72_online_replica_pvc_snapshot",
+  "project_id": "redis-vs-valkey",
+  "location": "europe-central2",
+  "zone": "europe-central2-a",
+  "namespace": "redis",
+  "release": "redis72",
+  "created_at_epoch_s": 1780206739,
+  "backup_start": 1780206604,
+  "backup_end": 1780206739,
+  "backup_duration_s": 135,
+  "bgsave_start": 1780206606,
+  "bgsave_end": 1780206648,
+  "bgsave_duration_s": 42,
+  "rdb_validation_start": 1780206648,
+  "rdb_validation_end": 1780206675,
+  "rdb_validation_duration_s": 27,
+  "snapshot_create_start": 1780206675,
+  "snapshot_create_end": 1780206739,
+  "snapshot_create_duration_s": 64,
+  "shards": [
+    {
+      "master_id": "6226a67f83d159420fc29894a63742c4d95b7211",
+      "target_master_pod": "redis72-redis-cluster-0",
+      "source_replica_pod": "redis72-redis-cluster-4",
+      "slots": [
+        "0-5460"
+      ],
+      "source_pvc": "redis-data-redis72-redis-cluster-4",
+      "target_pvc": "redis-data-redis72-redis-cluster-0",
+      "source_disk": "pvc-0e874111-c555-43d4-97d0-fffb9e51b004",
+      "snapshot": "redis72-online-replica-snap-1-20260531-075004-0-from-4",
+      "storage_request": "8Gi",
+      "storage_class": "pd-ssd-rwo",
+      "snapshot_duration_s": 63
+    },
+    {
+      "master_id": "a648115ff9155a98dadfcbd001d0cad7d9c406b6",
+      "target_master_pod": "redis72-redis-cluster-1",
+      "source_replica_pod": "redis72-redis-cluster-5",
+      "slots": [
+        "5461-10922"
+      ],
+      "source_pvc": "redis-data-redis72-redis-cluster-5",
+      "target_pvc": "redis-data-redis72-redis-cluster-1",
+      "source_disk": "pvc-50fb2720-0e56-45f5-a2d5-3c2912c568d0",
+      "snapshot": "redis72-online-replica-snap-1-20260531-075004-1-from-5",
+      "storage_request": "8Gi",
+      "storage_class": "pd-ssd-rwo",
+      "snapshot_duration_s": 63
+    },
+    {
+      "master_id": "0afbfefef5a8b526d45a13b33fd9a5769e8335dd",
+      "target_master_pod": "redis72-redis-cluster-2",
+      "source_replica_pod": "redis72-redis-cluster-3",
+      "slots": [
+        "10923-16383"
+      ],
+      "source_pvc": "redis-data-redis72-redis-cluster-3",
+      "target_pvc": "redis-data-redis72-redis-cluster-2",
+      "source_disk": "pvc-529aff0a-4431-4f37-90e8-f015c6618aaf",
+      "snapshot": "redis72-online-replica-snap-1-20260531-075004-2-from-3",
+      "storage_request": "8Gi",
+      "storage_class": "pd-ssd-rwo",
+      "snapshot_duration_s": 62
+    }
+  ]
+}

@@ -2,41 +2,41 @@
 
 \section{Porównanie reshardingu klastra}
 
-Celem testu było porównanie czasu i wpływu reshardingu na opóźnienia klienta dla trzech wariantów: klasycznej migracji slotów w samodzielnie utrzymywanym klastrze Valkey, atomowej migracji slotów w Valkey oraz zarządzanego klastra Redis w Google Cloud Memorystore. Wariant Memorystore należy interpretować jako pomiar typu black-box, ponieważ użytkownik inicjuje zmianę liczby shardów przez API dostawcy chmurowego, ale nie ma bezpośredniego wglądu w wewnętrzną kolejność przenoszenia slotów, tworzenia lub usuwania węzłów oraz finalnych kontroli stanu.
+Celem testu było porównanie czasu i wpływu reshardingu na opóźnienia klienta dla czterech wariantów: klasycznej migracji slotów w samodzielnie utrzymywanym klastrze Valkey, klasycznej migracji slotów w klastrze Redis 7.2, atomowej migracji slotów w Valkey oraz zarządzanego klastra Redis w Google Cloud Memorystore. Wariant Memorystore należy interpretować jako pomiar typu black-box, ponieważ użytkownik inicjuje zmianę liczby shardów przez API dostawcy chmurowego, ale nie ma bezpośredniego wglądu w wewnętrzną kolejność przenoszenia slotów, tworzenia lub usuwania węzłów oraz finalnych kontroli stanu.
 
-Dla każdego wariantu wykonano po pięć powtórzeń skalowania z trzech do czterech shardów oraz po pięć powtórzeń skalowania z czterech do trzech shardów. Na rysunkach~\ref{fig:reshard-up-comparison} i~\ref{fig:reshard-down-comparison} przedstawiono rozbicie czasu operacji na widoczne fazy. W przypadku Valkey self-hosted osobno widoczny jest czas skalowania infrastruktury, przenoszenia slotów, usuwania dodatkowych węzłów oraz oczekiwania na stabilny stan klastra. W przypadku Memorystore cały czas operacji jest pokazany jako pojedynczy blok zarządzany przez usługę.
+Dla każdego wariantu wykonano po pięć powtórzeń skalowania z trzech do czterech shardów oraz po pięć powtórzeń skalowania z czterech do trzech shardów. Na rysunkach~\ref{fig:reshard-up-comparison} i~\ref{fig:reshard-down-comparison} przedstawiono rozbicie czasu operacji na widoczne fazy. Na osi X zastosowano skróty: \texttt{l} oznacza Valkey legacy, \texttt{r} oznacza Redis 7.2, \texttt{a} oznacza Valkey atomic, a \texttt{m} oznacza Memorystore. W przypadku wariantów self-hosted osobno widoczny jest czas skalowania infrastruktury, przenoszenia slotów, usuwania dodatkowych węzłów oraz oczekiwania na stabilny stan klastra. W przypadku Memorystore cały czas operacji jest pokazany jako pojedynczy blok zarządzany przez usługę.
 
 Procedura wykonania testu, kolejność faz oraz parametry obciążenia zostały opisane w podrozdziale~\ref{subsec:resharding}. Poniżej przedstawiono zmierzone czasy operacji oraz wpływ reshardingu na klienta.
 
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{images/reshard_up_comparison.png}
-    \caption{Porównanie czasu skalowania z trzech do czterech shardów dla migracji legacy, migracji atomowej oraz Memorystore.}
+    \caption{Porównanie czasu skalowania z trzech do czterech shardów dla Valkey legacy, Redis 7.2, Valkey atomic oraz Memorystore.}
     \label{fig:reshard-up-comparison}
 \end{figure}
 
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{images/reshard_down_comparison.png}
-    \caption{Porównanie czasu skalowania z czterech do trzech shardów dla migracji legacy, migracji atomowej oraz Memorystore.}
+    \caption{Porównanie czasu skalowania z czterech do trzech shardów dla Valkey legacy, Redis 7.2, Valkey atomic oraz Memorystore.}
     \label{fig:reshard-down-comparison}
 \end{figure}
 
 \FloatBarrier
 
-Tabela~\ref{tab:reshard-duration} pokazuje średni czas całej operacji administracyjnej wraz z odchyleniem standardowym. Przyspieszenie zostało policzone względem klasycznej migracji slotów Valkey w tej samej fazie testu.
+Tabela~\ref{tab:reshard-duration} pokazuje średni czas całej operacji administracyjnej wraz z odchyleniem standardowym. Przyspieszenie zostało policzone względem klasycznej migracji slotów Valkey w tej samej fazie testu. Wartość mniejsza niż $1\times$ oznacza wariant wolniejszy od Valkey legacy.
 
 \begin{table}[htbp]
 \centering
 \caption{Czas reshardingu i przyspieszenie względem migracji legacy.}
 \label{tab:reshard-duration}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{lrrrrr}
+\begin{tabular}{lrrrrrrr}
 \toprule
-Faza & Legacy [s] & Atomic [s] & Memorystore [s] & Atomic / legacy & Memorystore / legacy \\
+Faza & Valkey legacy [s] & Redis 7.2 [s] & Valkey atomic [s] & Memorystore [s] & Redis / legacy & Atomic / legacy & MS / legacy \\
 \midrule
-3 $\rightarrow$ 4 shardy & $103{,}6 \pm 1{,}5$ & $35{,}6 \pm 6{,}6$ & $166{,}8 \pm 11{,}2$ & $2{,}91\times$ & $0{,}62\times$ \\
-4 $\rightarrow$ 3 shardy & $144{,}8 \pm 6{,}8$ & $55{,}6 \pm 0{,}5$ & $46{,}8 \pm 6{,}9$ & $2{,}60\times$ & $3{,}09\times$ \\
+3 $\rightarrow$ 4 shardy & $103{,}6 \pm 1{,}5$ & $72{,}4 \pm 1{,}5$ & $35{,}6 \pm 6{,}6$ & $166{,}8 \pm 11{,}2$ & $1{,}43\times$ & $2{,}91\times$ & $0{,}62\times$ \\
+4 $\rightarrow$ 3 shardy & $144{,}8 \pm 6{,}8$ & $66{,}6 \pm 1{,}5$ & $55{,}6 \pm 0{,}5$ & $46{,}8 \pm 6{,}9$ & $2{,}17\times$ & $2{,}60\times$ & $3{,}09\times$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -44,9 +44,9 @@ Faza & Legacy [s] & Atomic [s] & Memorystore [s] & Atomic / legacy & Memorystore
 
 \FloatBarrier
 
-Największa różnica między trybem legacy i atomic pojawia się w fazie wykonywanej przez \texttt{valkey-cli --cluster rebalance}. Przy skalowaniu w górę klasyczna migracja zajmowała średnio 76{,}6~s, podczas gdy migracja atomowa 4{,}4~s. Przy skalowaniu w dół różnica była jeszcze bardziej widoczna w części odpowiedzialnej za opróżnienie dodatkowego sharda: 96{,}0~s dla legacy oraz 4{,}0~s dla atomic.
+Redis 7.2 znacząco skrócił czas klasycznego reshardingu względem Valkey legacy: przy skalowaniu w górę z 103{,}6~s do 72{,}4~s, a przy skalowaniu w dół z 144{,}8~s do 66{,}6~s. Różnica wynika głównie z krótszej fazy przenoszenia slotów. Przy skalowaniu w górę migracja slotów zajmowała średnio 76{,}6~s dla Valkey legacy i 36{,}8~s dla Redis 7.2. Przy skalowaniu w dół było to odpowiednio 96{,}0~s oraz 37{,}6~s.
 
-Wynik Memorystore jest asymetryczny. Skalowanie z trzech do czterech shardów trwało średnio 166{,}8~s, czyli dłużej niż oba warianty Valkey self-hosted. Skalowanie z czterech do trzech shardów trwało jednak średnio 46{,}8~s i było szybsze od obu wariantów self-hosted liczonych jako pełna operacja administracyjna.
+Tryb atomowy Valkey pozostał najszybszym wariantem self-hosted przy skalowaniu w górę: cała operacja trwała średnio 35{,}6~s, a sama migracja slotów 4{,}4~s. Przy skalowaniu w dół Valkey atomic trwał średnio 55{,}6~s i był szybszy od Redis 7.2, ale wolniejszy od Memorystore. Wynik Memorystore jest asymetryczny: skalowanie z trzech do czterech shardów trwało średnio 166{,}8~s, czyli dłużej niż wszystkie warianty self-hosted, natomiast skalowanie z czterech do trzech shardów trwało średnio 46{,}8~s i było najkrótszym wynikiem całej grupy.
 
 Wpływ reshardingu na klienta przedstawia tabela~\ref{tab:reshard-latency-throughput}. Wartości percentyli są średnimi z wyników raportowanych przez \texttt{memtier\_benchmark} dla pięciu powtórzeń, natomiast kolumna \textit{ops/sec} zawiera średnią oraz odchylenie standardowe.
 
@@ -59,11 +59,13 @@ Wpływ reshardingu na klienta przedstawia tabela~\ref{tab:reshard-latency-throug
 \toprule
 Faza & Wariant & Ops/sec & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 \midrule
-3 $\rightarrow$ 4 & Legacy & $105\,999{,}91 \pm 1\,144{,}62$ & 1{,}27 & 6{,}17 & 10{,}97 & 19{,}97 \\
-3 $\rightarrow$ 4 & Atomic & $112\,655{,}54 \pm 2\,069{,}61$ & 1{,}28 & 5{,}49 & 10{,}16 & 19{,}53 \\
+3 $\rightarrow$ 4 & Valkey legacy & $105\,999{,}91 \pm 1\,144{,}62$ & 1{,}27 & 6{,}17 & 10{,}97 & 19{,}97 \\
+3 $\rightarrow$ 4 & Redis 7.2 & $108\,241{,}02 \pm 3\,807{,}86$ & 1{,}39 & 5{,}08 & 10{,}21 & 32{,}26 \\
+3 $\rightarrow$ 4 & Valkey atomic & $112\,655{,}54 \pm 2\,069{,}61$ & 1{,}28 & 5{,}49 & 10{,}16 & 19{,}53 \\
 3 $\rightarrow$ 4 & Memorystore & $141\,327{,}99 \pm 1\,985{,}12$ & 1{,}23 & 2{,}01 & 2{,}95 & 6{,}71 \\
-4 $\rightarrow$ 3 & Legacy & $101\,685{,}72 \pm 635{,}51$ & 1{,}62 & 7{,}05 & 11{,}98 & 22{,}07 \\
-4 $\rightarrow$ 3 & Atomic & $114\,688{,}15 \pm 2\,664{,}65$ & 1{,}18 & 5{,}24 & 9{,}41 & 18{,}38 \\
+4 $\rightarrow$ 3 & Valkey legacy & $101\,685{,}72 \pm 635{,}51$ & 1{,}62 & 7{,}05 & 11{,}98 & 22{,}07 \\
+4 $\rightarrow$ 3 & Redis 7.2 & $108\,830{,}41 \pm 4\,923{,}57$ & 1{,}45 & 5{,}14 & 10{,}44 & 33{,}51 \\
+4 $\rightarrow$ 3 & Valkey atomic & $114\,688{,}15 \pm 2\,664{,}65$ & 1{,}18 & 5{,}24 & 9{,}41 & 18{,}38 \\
 4 $\rightarrow$ 3 & Memorystore & $140\,837{,}06 \pm 1\,026{,}09$ & 1{,}47 & 2{,}42 & 3{,}54 & 7{,}45 \\
 \bottomrule
 \end{tabular}
@@ -72,7 +74,7 @@ Faza & Wariant & Ops/sec & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 
 \FloatBarrier
 
-Podczas obu faz atomic utrzymał wyższą przepustowość niż legacy oraz niższe opóźnienia w ogonie rozkładu. Dla skalowania w dół p99 spadło z 11{,}98~ms do 9{,}41~ms, a p99.9 z 22{,}07~ms do 18{,}38~ms. Memorystore osiągnął najwyższą przepustowość i najniższe percentyle opóźnień, ale ten wynik należy zestawiać z innym charakterem środowiska: usługa zarządzana działa poza kontrolowanym klastrem Kubernetes i ukrywa część mechanizmów administracyjnych. Z punktu widzenia testu self-hosted najważniejszy wniosek jest taki, że atomowa migracja slotów znacząco skraca okno reshardingu i jednocześnie ogranicza degradację opóźnień względem klasycznej migracji.
+Wśród wariantów self-hosted Valkey atomic utrzymał najwyższą przepustowość i najniższe p99 podczas obu faz reshardingu. Redis 7.2 osiągnął wyższą przepustowość niż Valkey legacy i niższe p95 oraz p99, ale miał wyraźnie wyższe p99.9, co wskazuje na pojedyncze większe skoki opóźnień w ogonie rozkładu. Memorystore osiągnął najwyższą przepustowość i najniższe percentyle opóźnień, ale ten wynik należy zestawiać z innym charakterem środowiska: usługa zarządzana działa poza kontrolowanym klastrem Kubernetes i ukrywa część mechanizmów administracyjnych. Z punktu widzenia testu self-hosted najważniejszy wniosek jest taki, że atomowa migracja slotów znacząco skraca okno reshardingu względem klasycznej migracji Valkey, natomiast Redis 7.2 pokazuje, że klasyczna ścieżka migracji w porównywalnej topologii może być znacznie krótsza niż w testowanym wariancie Valkey legacy.
 
 \section{Rolling upgrade klastra Valkey}
 
@@ -105,35 +107,39 @@ Przebieg & Czas [s] & Próby & Błędy & Timeouty & Error rate [\%] & p99 [ms] \
 
 \section{Backup i restore}
 
-Celem testu było porównanie czasu wykonania kopii zapasowej i odtworzenia klastra dla dwóch wariantów: samodzielnie utrzymywanego klastra Valkey w Kubernetes z backupem opartym o snapshoty GCE Persistent Disk oraz zarządzanego klastra Redis w Google Cloud Memorystore z wbudowanym mechanizmem backupu. Procedura testu, fazy operacji oraz sposób weryfikacji integralności zostały opisane w podrozdziale~\ref{subsec:backup_restore}. Dla każdego wariantu wykonano po pięć powtórzeń na zbiorze danych o rozmiarze 10\,240~MB (10\,485\,760 kluczy).
+Celem testu było porównanie czasu wykonania kopii zapasowej i odtworzenia klastra dla trzech wariantów: Valkey w Kubernetes, Redis 7.2 w Kubernetes oraz Google Cloud Memorystore. Dla wszystkich wariantów użyto zbioru danych o rozmiarze 10\,240~MB, zawierającego 10\,485\,760 kluczy z losowymi wartościami. Losowe wartości ograniczają wpływ kompresowalności danych na rozmiar plików RDB i czas operacji. Dla każdego wariantu wykonano po pięć powtórzeń.
 
-\subsection{Valkey self-hosted --- PVC snapshots}
+Warianty self-hosted korzystały z procedury online opartej o repliki. W każdej iteracji skrypt wybierał po jednej replice dla każdego mastera, wykonywał na nich \texttt{BGSAVE}, walidował utworzone pliki RDB, a następnie tworzył snapshoty PVC replik. Klaster źródłowy nie był zatrzymywany w fazie backupu. Odtworzenie było wykonywane do świeżego klastra: tworzono dyski ze snapshotów, montowano je jako tymczasowe PVC, kopiowano pliki RDB wewnątrz Kubernetes do PVC masterów, czyszczono PVC replik i uruchamiano klaster docelowy. Dla Memorystore wykorzystano zarządzany mechanizm \texttt{create-backup} oraz utworzenie nowego klastra z parametrem \texttt{--import-managed-backup}.
 
-Tabela~\ref{tab:backup-valkey-phases} przedstawia średni czas poszczególnych faz backupu i odtworzenia wraz z odchyleniem standardowym. Rozbicie na fazy pokazano na rysunku~\ref{fig:valkey-backup-breakdown}.
+Weryfikacja po odtworzeniu została wykonana w trybie \texttt{size}. Oznacza to, że skrypt porównywał oczekiwaną liczbę kluczy z liczbą kluczy widoczną po odtworzeniu i zapisywał rozmiar danych w pamięci, ale nie porównywał wartości każdego klucza. We wszystkich przebiegach liczba kluczy była zgodna z oczekiwaną.
+
+\subsection{Warianty self-hosted}
+
+Tabela~\ref{tab:backup-selfhosted-phases} przedstawia średni czas poszczególnych faz backupu i odtworzenia dla Valkey oraz Redis 7.2. Rozbicie faz pokazano na rysunku~\ref{fig:backup-phase-breakdown}.
 
 \begin{table}[htbp]
 \centering
-\caption{Czas poszczególnych faz backupu i restore dla klastra Valkey (5 powtórzeń, 10~GB danych).}
-\label{tab:backup-valkey-phases}
+\caption{Czas faz backupu i restore dla wariantów self-hosted (5 powtórzeń, 10~GB danych).}
+\label{tab:backup-selfhosted-phases}
 \begin{adjustbox}{max width=\textwidth}
 \begin{tabular}{lrr}
 \toprule
-Faza & Średni czas [s] & Odch. std. [s] \\
+Faza & Valkey [s] & Redis 7.2 [s] \\
 \midrule
 \multicolumn{3}{l}{\textit{Backup}} \\
-\quad BGSAVE & $12{,}2$ & $0{,}84$ \\
-\quad Skalowanie StatefulSet do 0 & $33{,}2$ & $0{,}84$ \\
-\quad Tworzenie snapshotów dysków & $220{,}2$ & $5{,}63$ \\
-\quad \textbf{Łączny czas backupu} & $\mathbf{266{,}0}$ & $\mathbf{5{,}39}$ \\
+\quad BGSAVE na replikach & $30{,}2 \pm 8{,}2$ & $41{,}6 \pm 2{,}7$ \\
+\quad Walidacja RDB & $26{,}4 \pm 0{,}5$ & $26{,}4 \pm 0{,}5$ \\
+\quad Snapshot PVC replik & $68{,}4 \pm 2{,}1$ & $66{,}8 \pm 2{,}3$ \\
+\quad \textbf{Łączny czas backupu} & $\mathbf{126{,}6 \pm 6{,}9}$ & $\mathbf{137{,}0 \pm 3{,}8}$ \\
 \midrule
 \multicolumn{3}{l}{\textit{Restore}} \\
-\quad Tworzenie dysków ze snapshotów & $133{,}0$ & $0{,}00$ \\
-\quad Tworzenie PV/PVC & $9{,}8$ & $3{,}70$ \\
-\quad Uruchomienie podów & $22{,}0$ & $0{,}71$ \\
-\quad Odzyskanie stanu klastra & $3{,}0$ & $2{,}74$ \\
-\quad \textbf{Łączny czas restore} & $\mathbf{169{,}8}$ & $\mathbf{5{,}02}$ \\
-\midrule
-Weryfikacja integralności (10\% próbka) & $256{,}2$ & $10{,}47$ \\
+\quad Utworzenie świeżego klastra & $72{,}0 \pm 4{,}6$ & $79{,}0 \pm 3{,}5$ \\
+\quad Dyski ze snapshotów & $33{,}4 \pm 5{,}6$ & $38{,}6 \pm 7{,}3$ \\
+\quad Kopiowanie RDB w Kubernetes & $69{,}2 \pm 0{,}8$ & $70{,}0 \pm 1{,}6$ \\
+\quad Czyszczenie PVC replik & $43{,}8 \pm 1{,}6$ & $42{,}8 \pm 1{,}6$ \\
+\quad Uruchomienie podów & $24{,}6 \pm 2{,}1$ & $52{,}2 \pm 3{,}3$ \\
+\quad Odzyskanie stanu klastra & $13{,}8 \pm 5{,}8$ & $1{,}2 \pm 0{,}4$ \\
+\quad \textbf{Łączny czas restore} & $\mathbf{295{,}8 \pm 8{,}9}$ & $\mathbf{322{,}8 \pm 6{,}2}$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -141,20 +147,18 @@ Weryfikacja integralności (10\% próbka) & $256{,}2$ & $10{,}47$ \\
 
 \begin{figure}[!htbp]
     \centering
-    \includegraphics[width=\textwidth]{images/valkey_backup_phase_breakdown.png}
-    \caption{Rozbicie czasu backupu i restore klastra Valkey na poszczególne fazy.}
-    \label{fig:valkey-backup-breakdown}
+    \includegraphics[width=\textwidth]{images/backup_phase_breakdown.png}
+    \caption{Rozbicie czasu backupu i restore na fazy dla wariantów self-hosted.}
+    \label{fig:backup-phase-breakdown}
 \end{figure}
 
 \FloatBarrier
 
-Dominującą fazą backupu jest tworzenie snapshotów dysków GCE (średnio 220{,}2~s, co stanowi 83\% całkowitego czasu backupu). Sam zapis RDB trwał jedynie 12{,}2~s. Po stronie odtworzenia najdłuższą operacją jest tworzenie dysków ze snapshotów (133{,}0~s, 78\% czasu restore). Czas uruchomienia podów i osiągnięcia gotowości klastra wyniósł łącznie 25~s.
+W obu wariantach self-hosted najdłuższą fazą backupu było tworzenie snapshotów PVC replik: średnio 68{,}4~s dla Valkey oraz 66{,}8~s dla Redis 7.2. Różnica w łącznym czasie backupu wynika głównie z dłuższego czasu \texttt{BGSAVE} po stronie Redis 7.2. W fazie odtworzenia czasy kopiowania RDB wewnątrz Kubernetes były praktycznie takie same, natomiast Redis 7.2 wymagał dłuższego uruchomienia podów po wstrzyknięciu plików RDB. Łączny czas restore wyniósł średnio 295{,}8~s dla Valkey i 322{,}8~s dla Redis 7.2.
 
-Integralność danych została potwierdzona w 4 z 5 przebiegów. W przebiegu numer 4 weryfikator zgłosił 3 błędy na próbce 1\,048\,576 kluczy (0{,}0003\%), przy zerowej liczbie brakujących kluczy. Ponieważ żadne klucze nie zostały utracone, błędy te mogą wynikać z różnicy w momencie wykonania BGSAVE na poszczególnych shardach.
+\subsection{Memorystore}
 
-\subsection{Memorystore --- zarządzany backup}
-
-Tabela~\ref{tab:backup-memorystore} przedstawia wyniki dla usługi Memorystore.
+Tabela~\ref{tab:backup-memorystore} przedstawia wyniki dla zarządzanego mechanizmu backupu w Google Cloud Memorystore. W tym wariancie wewnętrzne fazy operacji nie są widoczne z perspektywy użytkownika, dlatego mierzony jest łączny czas utworzenia backupu oraz łączny czas utworzenia nowego klastra z backupu.
 
 \begin{table}[htbp]
 \centering
@@ -165,9 +169,9 @@ Tabela~\ref{tab:backup-memorystore} przedstawia wyniki dla usługi Memorystore.
 \toprule
 Faza & Średni czas [s] & Odch. std. [s] \\
 \midrule
-Backup (zarządzany) & $49{,}4$ & $8{,}14$ \\
-Restore (utworzenie klastra z backupu) & $475{,}4$ & $17{,}90$ \\
-Weryfikacja integralności & $470{,}4$ & $8{,}93$ \\
+Backup zarządzany & $118{,}6$ & $1{,}1$ \\
+Restore do nowego klastra & $496{,}0$ & $18{,}7$ \\
+Weryfikacja liczby kluczy & $36{,}6$ & $0{,}9$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -175,16 +179,16 @@ Weryfikacja integralności & $470{,}4$ & $8{,}93$ \\
 
 \FloatBarrier
 
-Backup zarządzany trwał średnio 49{,}4~s, co jest ponad pięciokrotnie szybsze od wariantu self-hosted (266{,}0~s). Wynika to z faktu, że Memorystore nie wymaga zatrzymania klastra ani tworzenia snapshotów wolumenów --- usługa wykonuje kopię wewnętrznie. Natomiast operacja odtworzenia (utworzenie nowego klastra z backupu) trwała średnio 475{,}4~s, czyli prawie trzykrotnie dłużej niż restore w wariancie self-hosted (169{,}8~s). Wynika to z konieczności alokacji i konfiguracji nowej infrastruktury klastra przez dostawcę chmurowego. Integralność danych została potwierdzona we wszystkich pięciu przebiegach.
+Backup Memorystore trwał średnio 118{,}6~s, czyli krócej niż backup Valkey o około 6\% i krócej niż backup Redis 7.2 o około 13\%. Różnica jest jednak znacznie mniejsza niż w poprzednim wariancie offline, ponieważ aktualna procedura self-hosted nie zatrzymuje całego klastra i snapshotuje tylko PVC replik używanych jako źródło backupu. Odtworzenie Memorystore trwało średnio 496{,}0~s. Jest to najdłuższy wynik w porównaniu, ale obejmuje pełne utworzenie nowego klastra zarządzanego przez usługę.
 
 \subsection{Porównanie wariantów}
 
-Rysunek~\ref{fig:backup-comparison} zestawia czasy backupu i restore obu wariantów. Tabela~\ref{tab:backup-comparison-total} podsumowuje łączny czas operacji.
+Rysunek~\ref{fig:backup-comparison} zestawia czasy backupu i restore dla wszystkich trzech wariantów. Tabela~\ref{tab:backup-comparison-total} podsumowuje łączny czas operacji.
 
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=0.85\textwidth]{images/backup_comparison.png}
-    \caption{Porównanie czasu backupu i restore między Valkey self-hosted a Memorystore.}
+    \caption{Porównanie czasu backupu i restore dla Valkey, Redis 7.2 oraz Memorystore.}
     \label{fig:backup-comparison}
 \end{figure}
 
@@ -195,11 +199,12 @@ Rysunek~\ref{fig:backup-comparison} zestawia czasy backupu i restore obu wariant
 \begin{adjustbox}{max width=\textwidth}
 \begin{tabular}{lrrr}
 \toprule
-Operacja & Valkey [s] & Memorystore [s] & Stosunek \\
+Operacja & Valkey [s] & Redis 7.2 [s] & Memorystore [s] \\
 \midrule
-Backup & $266{,}0 \pm 5{,}4$ & $49{,}4 \pm 8{,}1$ & $5{,}38\times$ \\
-Restore & $169{,}8 \pm 5{,}0$ & $475{,}4 \pm 17{,}9$ & $0{,}36\times$ \\
-Łącznie (backup + restore) & $435{,}8$ & $524{,}8$ & $0{,}83\times$ \\
+Backup & $126{,}6 \pm 6{,}9$ & $137{,}0 \pm 3{,}8$ & $118{,}6 \pm 1{,}1$ \\
+Restore & $295{,}8 \pm 8{,}9$ & $322{,}8 \pm 6{,}2$ & $496{,}0 \pm 18{,}7$ \\
+Łącznie (backup + restore) & $422{,}4$ & $459{,}8$ & $614{,}6$ \\
+Zgodna liczba kluczy & $5/5$ & $5/5$ & $5/5$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -207,4 +212,4 @@ Restore & $169{,}8 \pm 5{,}0$ & $475{,}4 \pm 17{,}9$ & $0{,}36\times$ \\
 
 \FloatBarrier
 
-Warianty prezentują odwrócone proporcje: Memorystore oferuje szybki backup (5{,}4$\times$ krótszy), ale wolny restore (2{,}8$\times$ dłuższy). Łączny czas cyklu backup--restore jest w wariancie self-hosted krótszy o~17\% (435{,}8~s vs 524{,}8~s). Kluczowa różnica operacyjna polega na tym, że backup Valkey wymaga niedostępności klastra na czas skalowania w dół i tworzenia snapshotów (łącznie ${\sim}253$~s), natomiast backup Memorystore nie powoduje przestoju w obsłudze zapytań.
+Najkrótszy backup uzyskał Memorystore, ale przewaga nad procedurą online dla Valkey była niewielka. Najkrótszy restore uzyskał Valkey self-hosted, a Redis 7.2 był od niego wolniejszy o około 9\%. Memorystore miał najdłuższy czas odtworzenia, około 1{,}68$\times$ dłuższy niż Valkey i 1{,}54$\times$ dłuższy niż Redis 7.2. Interpretując te wyniki należy uwzględnić różnicę operacyjną: wariant self-hosted wymaga własnej orkiestracji snapshotów, tymczasowych PVC i uruchamiania klastra docelowego, natomiast Memorystore ukrywa te kroki za API usługi zarządzanej.

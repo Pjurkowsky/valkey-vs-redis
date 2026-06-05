@@ -264,7 +264,7 @@ def cmd_backup_snapshot(args: argparse.Namespace) -> None:
     from src.backup_pvc_snapshot import (
         analyse_backup_snapshot_runs,
         plot_backup_comparison,
-        plot_valkey_phase_breakdown,
+        plot_self_hosted_phase_breakdown,
         print_backup_snapshot_summary,
         save_backup_snapshot_csv,
     )
@@ -273,12 +273,12 @@ def cmd_backup_snapshot(args: argparse.Namespace) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     print(f"Loading PVC snapshot backup results from {args.input} ...")
-    vk_df, ms_df = analyse_backup_snapshot_runs(Path(args.input))
+    self_hosted_df, ms_df = analyse_backup_snapshot_runs(Path(args.input))
 
-    print_backup_snapshot_summary(vk_df, ms_df)
-    save_backup_snapshot_csv(vk_df, ms_df, out_dir)
-    plot_backup_comparison(vk_df, ms_df, out_dir)
-    plot_valkey_phase_breakdown(vk_df, out_dir)
+    print_backup_snapshot_summary(self_hosted_df, ms_df)
+    save_backup_snapshot_csv(self_hosted_df, ms_df, out_dir)
+    plot_backup_comparison(self_hosted_df, ms_df, out_dir)
+    plot_self_hosted_phase_breakdown(self_hosted_df, out_dir)
     print(f"\nPlots saved to {out_dir}/")
 
 

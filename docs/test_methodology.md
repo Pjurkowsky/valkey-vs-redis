@@ -211,18 +211,18 @@ Valkey Cluster nie gwarantuje strong consistency. Podczas split-brain:
 
 Skrypt: `k8s/scripts/split_brain_benchmark.sh`
 Checker: `k8s/images/consistency/split_brain_check.py`
-Chaos: `k8s/chaos/split-brain-partition.yaml`
+Chaos: dynamicznie generowany `NetworkChaos` albo plik wskazany przez `CHAOS_YAML`
 
 ```bash
 N=5 bash k8s/scripts/split_brain_benchmark.sh ./results/valkey_split_brain
 ```
 
 **Sekwencja (per run)**:
-1. Skrypt odkrywa topologie klastra (`valkey-cli cluster nodes`) i wybiera master jednego shardu jako minority; jego replika zostaje po stronie majority.
+1. Skrypt odkrywa topologie klastra (`valkey-cli cluster nodes`), wybiera master jednego shardu jako minority i zapisuje zakresy slotow tego mastera; jego replika zostaje po stronie majority.
 2. Labeluje pody: `chaos-side=minority` (1 pod) i `chaos-side=majority` (pozostale pody, w tym replika minority mastera).
 3. Uruchamia `split_brain_check.py` -- klient pisze klucze **bez hash tagow** (format `sb.RUN.cID.SEQ`) aby klucze byly rozproszone po wszystkich slotach/shardach.
-4. Checker rejestruje, ktory klucz trafia do slotu minority, a ktory do majority (na podstawie CRC16 i CLUSTER SLOTS).
-5. Po 30s steady state, skrypt aplikuje `split-brain-partition.yaml` -- obustronny network partition miedzy minority a majority (90s).
+4. Checker rejestruje, ktory klucz trafia do slotu minority, a ktory do majority (na podstawie CRC16 i jawnie przekazanych slotow minority).
+5. Po 30s steady state, skrypt aplikuje `NetworkChaos` -- obustronny network partition miedzy minority a majority. Domyslny czas partycji to `SPLIT_BRAIN_DURATION - SPLIT_BRAIN_STEADY_STATE_WAIT` (dla ustawien domyslnych 90s).
 6. Klient kontynuuje pisanie. Klucze kierowane do minority mastera moga byc ACK'd w oknie miedzy partycja a `cluster-node-timeout`. Po tym czasie minority master zwraca CLUSTERDOWN, a majority promuje replike.
 7. Partycja jest usuwana (heal). Minority master wraca jako replika majority.
 8. Po 15s stabilizacji, checker weryfikuje **wszystkie** ACK'd klucze: klucze z minority slots moga byc utracone.

@@ -1,0 +1,2409 @@
+{
+    "apiVersion": "v1",
+    "items": [
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "845a0bf876d395e767993447de219a607b5f5e2b92c11fb521e751dcb41f1d89",
+                    "checksum/scripts": "109688a8b9be462e6cfc0b4b820b42874f58f10c838fb43460deadd3aa81d61a"
+                },
+                "creationTimestamp": "2026-05-31T05:59:35Z",
+                "generateName": "redis72-redis-cluster-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "redis72",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "app.kubernetes.io/name": "redis-cluster",
+                    "app.kubernetes.io/version": "8.2.1",
+                    "apps.kubernetes.io/pod-index": "0",
+                    "controller-revision-hash": "redis72-redis-cluster-65ddd48579",
+                    "helm.sh/chart": "redis-cluster-13.0.4",
+                    "statefulset.kubernetes.io/pod-name": "redis72-redis-cluster-0",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "redis72-redis-cluster-0",
+                "namespace": "redis",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "redis72-redis-cluster",
+                        "uid": "9fa7a9b8-d5f6-4ded-b3ed-489dfa0cd8a7"
+                    }
+                ],
+                "resourceVersion": "1780207213077983008",
+                "uid": "bda5dea7-b9f1-4f75-a97c-b80833a51563"
+            },
+            "spec": {
+                "affinity": {
+                    "podAntiAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "podAffinityTerm": {
+                                    "labelSelector": {
+                                        "matchLabels": {
+                                            "app.kubernetes.io/instance": "redis72",
+                                            "app.kubernetes.io/name": "redis-cluster"
+                                        }
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname"
+                                },
+                                "weight": 1
+                            }
+                        ]
+                    }
+                },
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "# Backwards compatibility change\nif ! [[ -f /opt/bitnami/redis/etc/redis.conf ]]; then\n    echo COPYING FILE\n    cp  /opt/bitnami/redis/etc/redis-default.conf /opt/bitnami/redis/etc/redis.conf\nfi\npod_index=($(echo \"$POD_NAME\" | tr \"-\" \"\\n\"))\npod_index=\"${pod_index[-1]}\"\nif [[ \"$pod_index\" == \"0\" ]]; then\n  export REDIS_CLUSTER_CREATOR=\"yes\"\n  export REDIS_CLUSTER_REPLICAS=\"1\"\nfi\n/opt/bitnami/scripts/redis-cluster/entrypoint.sh /opt/bitnami/scripts/redis-cluster/run.sh\n"
+                        ],
+                        "command": [
+                            "/bin/bash",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "REDIS_NODES",
+                                "value": "redis72-redis-cluster-0.redis72-redis-cluster-headless redis72-redis-cluster-1.redis72-redis-cluster-headless redis72-redis-cluster-2.redis72-redis-cluster-headless redis72-redis-cluster-3.redis72-redis-cluster-headless redis72-redis-cluster-4.redis72-redis-cluster-headless redis72-redis-cluster-5.redis72-redis-cluster-headless "
+                            },
+                            {
+                                "name": "ALLOW_EMPTY_PASSWORD",
+                                "value": "yes"
+                            },
+                            {
+                                "name": "REDIS_AOF_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_TLS_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_PORT_NUMBER",
+                                "value": "6379"
+                            }
+                        ],
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_liveness_local.sh 6"
+                                ]
+                            },
+                            "failureThreshold": 12,
+                            "initialDelaySeconds": 180,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 7
+                        },
+                        "name": "redis72-redis-cluster",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp-redis",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-redis-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_readiness_local.sh 5"
+                                ]
+                            },
+                            "failureThreshold": 18,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 6
+                        },
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "privileged": false,
+                            "readOnlyRootFilesystem": true,
+                            "runAsGroup": 1001,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1001,
+                            "seLinuxOptions": {},
+                            "seccompProfile": {
+                                "type": "RuntimeDefault"
+                            }
+                        },
+                        "startupProbe": {
+                            "failureThreshold": 36,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "tcp-redis"
+                            },
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config",
+                                "subPath": "redis-default.conf"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir",
+                                "subPath": "app-conf-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir",
+                                "subPath": "app-tmp-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir",
+                                "subPath": "app-logs-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir",
+                                "subPath": "tmp-dir"
+                            }
+                        ]
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": false,
+                "hostname": "redis72-redis-cluster-0",
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-5l0r",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1001,
+                    "fsGroupChangePolicy": "Always"
+                },
+                "serviceAccount": "redis72-redis-cluster",
+                "serviceAccountName": "redis72-redis-cluster",
+                "subdomain": "redis72-redis-cluster-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "redis-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "redis-data-redis72-redis-cluster-0"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 493,
+                            "name": "redis72-redis-cluster-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "redis72-redis-cluster-default"
+                        },
+                        "name": "default-config"
+                    },
+                    {
+                        "emptyDir": {},
+                        "name": "empty-dir"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:44Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:36Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:13Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:13Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:36Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://f27c80b95f7e0823a4c75613fba9dfabf03cafe7cf272e7b73cc97615fed4ade",
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imageID": "docker.io/bitnamilegacy/redis-cluster@sha256:f47d3f26de4041af3c103fb7ad2dd62d37602db469daebccfddbf69b23489faa",
+                        "lastState": {},
+                        "name": "redis72-redis-cluster",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T05:59:43Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1001,
+                                "supplementalGroups": [
+                                    1001
+                                ],
+                                "uid": 1001
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.223",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.223"
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.1.174",
+                "podIPs": [
+                    {
+                        "ip": "10.100.1.174"
+                    }
+                ],
+                "qosClass": "Guaranteed",
+                "startTime": "2026-05-31T05:59:36Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "845a0bf876d395e767993447de219a607b5f5e2b92c11fb521e751dcb41f1d89",
+                    "checksum/scripts": "109688a8b9be462e6cfc0b4b820b42874f58f10c838fb43460deadd3aa81d61a"
+                },
+                "creationTimestamp": "2026-05-31T05:59:35Z",
+                "generateName": "redis72-redis-cluster-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "redis72",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "app.kubernetes.io/name": "redis-cluster",
+                    "app.kubernetes.io/version": "8.2.1",
+                    "apps.kubernetes.io/pod-index": "1",
+                    "controller-revision-hash": "redis72-redis-cluster-65ddd48579",
+                    "helm.sh/chart": "redis-cluster-13.0.4",
+                    "statefulset.kubernetes.io/pod-name": "redis72-redis-cluster-1",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "redis72-redis-cluster-1",
+                "namespace": "redis",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "redis72-redis-cluster",
+                        "uid": "9fa7a9b8-d5f6-4ded-b3ed-489dfa0cd8a7"
+                    }
+                ],
+                "resourceVersion": "1780207205410735011",
+                "uid": "db756540-7cc3-43b7-9319-dd822b5ac0e1"
+            },
+            "spec": {
+                "affinity": {
+                    "podAntiAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "podAffinityTerm": {
+                                    "labelSelector": {
+                                        "matchLabels": {
+                                            "app.kubernetes.io/instance": "redis72",
+                                            "app.kubernetes.io/name": "redis-cluster"
+                                        }
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname"
+                                },
+                                "weight": 1
+                            }
+                        ]
+                    }
+                },
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "# Backwards compatibility change\nif ! [[ -f /opt/bitnami/redis/etc/redis.conf ]]; then\n    echo COPYING FILE\n    cp  /opt/bitnami/redis/etc/redis-default.conf /opt/bitnami/redis/etc/redis.conf\nfi\npod_index=($(echo \"$POD_NAME\" | tr \"-\" \"\\n\"))\npod_index=\"${pod_index[-1]}\"\nif [[ \"$pod_index\" == \"0\" ]]; then\n  export REDIS_CLUSTER_CREATOR=\"yes\"\n  export REDIS_CLUSTER_REPLICAS=\"1\"\nfi\n/opt/bitnami/scripts/redis-cluster/entrypoint.sh /opt/bitnami/scripts/redis-cluster/run.sh\n"
+                        ],
+                        "command": [
+                            "/bin/bash",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "REDIS_NODES",
+                                "value": "redis72-redis-cluster-0.redis72-redis-cluster-headless redis72-redis-cluster-1.redis72-redis-cluster-headless redis72-redis-cluster-2.redis72-redis-cluster-headless redis72-redis-cluster-3.redis72-redis-cluster-headless redis72-redis-cluster-4.redis72-redis-cluster-headless redis72-redis-cluster-5.redis72-redis-cluster-headless "
+                            },
+                            {
+                                "name": "ALLOW_EMPTY_PASSWORD",
+                                "value": "yes"
+                            },
+                            {
+                                "name": "REDIS_AOF_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_TLS_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_PORT_NUMBER",
+                                "value": "6379"
+                            }
+                        ],
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_liveness_local.sh 6"
+                                ]
+                            },
+                            "failureThreshold": 12,
+                            "initialDelaySeconds": 180,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 7
+                        },
+                        "name": "redis72-redis-cluster",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp-redis",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-redis-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_readiness_local.sh 5"
+                                ]
+                            },
+                            "failureThreshold": 18,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 6
+                        },
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "privileged": false,
+                            "readOnlyRootFilesystem": true,
+                            "runAsGroup": 1001,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1001,
+                            "seLinuxOptions": {},
+                            "seccompProfile": {
+                                "type": "RuntimeDefault"
+                            }
+                        },
+                        "startupProbe": {
+                            "failureThreshold": 36,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "tcp-redis"
+                            },
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config",
+                                "subPath": "redis-default.conf"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir",
+                                "subPath": "app-conf-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir",
+                                "subPath": "app-tmp-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir",
+                                "subPath": "app-logs-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir",
+                                "subPath": "tmp-dir"
+                            }
+                        ]
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": false,
+                "hostname": "redis72-redis-cluster-1",
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-5l0r",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1001,
+                    "fsGroupChangePolicy": "Always"
+                },
+                "serviceAccount": "redis72-redis-cluster",
+                "serviceAccountName": "redis72-redis-cluster",
+                "subdomain": "redis72-redis-cluster-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "redis-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "redis-data-redis72-redis-cluster-1"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 493,
+                            "name": "redis72-redis-cluster-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "redis72-redis-cluster-default"
+                        },
+                        "name": "default-config"
+                    },
+                    {
+                        "emptyDir": {},
+                        "name": "empty-dir"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:46Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:37Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:05Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:05Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:37Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://c9652ee2c4b719d296ac3333ccfc1caf827849fa51341f2fe5ffa62995f34d55",
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imageID": "docker.io/bitnamilegacy/redis-cluster@sha256:f47d3f26de4041af3c103fb7ad2dd62d37602db469daebccfddbf69b23489faa",
+                        "lastState": {},
+                        "name": "redis72-redis-cluster",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T05:59:45Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1001,
+                                "supplementalGroups": [
+                                    1001
+                                ],
+                                "uid": 1001
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.223",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.223"
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.1.175",
+                "podIPs": [
+                    {
+                        "ip": "10.100.1.175"
+                    }
+                ],
+                "qosClass": "Guaranteed",
+                "startTime": "2026-05-31T05:59:37Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "845a0bf876d395e767993447de219a607b5f5e2b92c11fb521e751dcb41f1d89",
+                    "checksum/scripts": "109688a8b9be462e6cfc0b4b820b42874f58f10c838fb43460deadd3aa81d61a"
+                },
+                "creationTimestamp": "2026-05-31T05:59:35Z",
+                "generateName": "redis72-redis-cluster-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "redis72",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "app.kubernetes.io/name": "redis-cluster",
+                    "app.kubernetes.io/version": "8.2.1",
+                    "apps.kubernetes.io/pod-index": "2",
+                    "controller-revision-hash": "redis72-redis-cluster-65ddd48579",
+                    "helm.sh/chart": "redis-cluster-13.0.4",
+                    "statefulset.kubernetes.io/pod-name": "redis72-redis-cluster-2",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "redis72-redis-cluster-2",
+                "namespace": "redis",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "redis72-redis-cluster",
+                        "uid": "9fa7a9b8-d5f6-4ded-b3ed-489dfa0cd8a7"
+                    }
+                ],
+                "resourceVersion": "1780207212856079012",
+                "uid": "afa81d28-8460-4320-91b6-5a6054e57a5a"
+            },
+            "spec": {
+                "affinity": {
+                    "podAntiAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "podAffinityTerm": {
+                                    "labelSelector": {
+                                        "matchLabels": {
+                                            "app.kubernetes.io/instance": "redis72",
+                                            "app.kubernetes.io/name": "redis-cluster"
+                                        }
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname"
+                                },
+                                "weight": 1
+                            }
+                        ]
+                    }
+                },
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "# Backwards compatibility change\nif ! [[ -f /opt/bitnami/redis/etc/redis.conf ]]; then\n    echo COPYING FILE\n    cp  /opt/bitnami/redis/etc/redis-default.conf /opt/bitnami/redis/etc/redis.conf\nfi\npod_index=($(echo \"$POD_NAME\" | tr \"-\" \"\\n\"))\npod_index=\"${pod_index[-1]}\"\nif [[ \"$pod_index\" == \"0\" ]]; then\n  export REDIS_CLUSTER_CREATOR=\"yes\"\n  export REDIS_CLUSTER_REPLICAS=\"1\"\nfi\n/opt/bitnami/scripts/redis-cluster/entrypoint.sh /opt/bitnami/scripts/redis-cluster/run.sh\n"
+                        ],
+                        "command": [
+                            "/bin/bash",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "REDIS_NODES",
+                                "value": "redis72-redis-cluster-0.redis72-redis-cluster-headless redis72-redis-cluster-1.redis72-redis-cluster-headless redis72-redis-cluster-2.redis72-redis-cluster-headless redis72-redis-cluster-3.redis72-redis-cluster-headless redis72-redis-cluster-4.redis72-redis-cluster-headless redis72-redis-cluster-5.redis72-redis-cluster-headless "
+                            },
+                            {
+                                "name": "ALLOW_EMPTY_PASSWORD",
+                                "value": "yes"
+                            },
+                            {
+                                "name": "REDIS_AOF_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_TLS_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_PORT_NUMBER",
+                                "value": "6379"
+                            }
+                        ],
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_liveness_local.sh 6"
+                                ]
+                            },
+                            "failureThreshold": 12,
+                            "initialDelaySeconds": 180,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 7
+                        },
+                        "name": "redis72-redis-cluster",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp-redis",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-redis-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_readiness_local.sh 5"
+                                ]
+                            },
+                            "failureThreshold": 18,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 6
+                        },
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "privileged": false,
+                            "readOnlyRootFilesystem": true,
+                            "runAsGroup": 1001,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1001,
+                            "seLinuxOptions": {},
+                            "seccompProfile": {
+                                "type": "RuntimeDefault"
+                            }
+                        },
+                        "startupProbe": {
+                            "failureThreshold": 36,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "tcp-redis"
+                            },
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config",
+                                "subPath": "redis-default.conf"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir",
+                                "subPath": "app-conf-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir",
+                                "subPath": "app-tmp-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir",
+                                "subPath": "app-logs-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir",
+                                "subPath": "tmp-dir"
+                            }
+                        ]
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": false,
+                "hostname": "redis72-redis-cluster-2",
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-7rdq",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1001,
+                    "fsGroupChangePolicy": "Always"
+                },
+                "serviceAccount": "redis72-redis-cluster",
+                "serviceAccountName": "redis72-redis-cluster",
+                "subdomain": "redis72-redis-cluster-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "redis-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "redis-data-redis72-redis-cluster-2"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 493,
+                            "name": "redis72-redis-cluster-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "redis72-redis-cluster-default"
+                        },
+                        "name": "default-config"
+                    },
+                    {
+                        "emptyDir": {},
+                        "name": "empty-dir"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:43Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:36Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:12Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:12Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:36Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://e9255f081653e91b08e0fca731d9b053e9b174f42f6cb3f530dd928a69371953",
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imageID": "docker.io/bitnamilegacy/redis-cluster@sha256:f47d3f26de4041af3c103fb7ad2dd62d37602db469daebccfddbf69b23489faa",
+                        "lastState": {},
+                        "name": "redis72-redis-cluster",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T05:59:43Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1001,
+                                "supplementalGroups": [
+                                    1001
+                                ],
+                                "uid": 1001
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.222",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.222"
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.0.131",
+                "podIPs": [
+                    {
+                        "ip": "10.100.0.131"
+                    }
+                ],
+                "qosClass": "Guaranteed",
+                "startTime": "2026-05-31T05:59:36Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "845a0bf876d395e767993447de219a607b5f5e2b92c11fb521e751dcb41f1d89",
+                    "checksum/scripts": "109688a8b9be462e6cfc0b4b820b42874f58f10c838fb43460deadd3aa81d61a"
+                },
+                "creationTimestamp": "2026-05-31T05:59:35Z",
+                "generateName": "redis72-redis-cluster-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "redis72",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "app.kubernetes.io/name": "redis-cluster",
+                    "app.kubernetes.io/version": "8.2.1",
+                    "apps.kubernetes.io/pod-index": "3",
+                    "controller-revision-hash": "redis72-redis-cluster-65ddd48579",
+                    "helm.sh/chart": "redis-cluster-13.0.4",
+                    "statefulset.kubernetes.io/pod-name": "redis72-redis-cluster-3",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "redis72-redis-cluster-3",
+                "namespace": "redis",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "redis72-redis-cluster",
+                        "uid": "9fa7a9b8-d5f6-4ded-b3ed-489dfa0cd8a7"
+                    }
+                ],
+                "resourceVersion": "1780207213037167005",
+                "uid": "d45634c7-f871-4609-8669-1cce7ff749a8"
+            },
+            "spec": {
+                "affinity": {
+                    "podAntiAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "podAffinityTerm": {
+                                    "labelSelector": {
+                                        "matchLabels": {
+                                            "app.kubernetes.io/instance": "redis72",
+                                            "app.kubernetes.io/name": "redis-cluster"
+                                        }
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname"
+                                },
+                                "weight": 1
+                            }
+                        ]
+                    }
+                },
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "# Backwards compatibility change\nif ! [[ -f /opt/bitnami/redis/etc/redis.conf ]]; then\n    echo COPYING FILE\n    cp  /opt/bitnami/redis/etc/redis-default.conf /opt/bitnami/redis/etc/redis.conf\nfi\npod_index=($(echo \"$POD_NAME\" | tr \"-\" \"\\n\"))\npod_index=\"${pod_index[-1]}\"\nif [[ \"$pod_index\" == \"0\" ]]; then\n  export REDIS_CLUSTER_CREATOR=\"yes\"\n  export REDIS_CLUSTER_REPLICAS=\"1\"\nfi\n/opt/bitnami/scripts/redis-cluster/entrypoint.sh /opt/bitnami/scripts/redis-cluster/run.sh\n"
+                        ],
+                        "command": [
+                            "/bin/bash",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "REDIS_NODES",
+                                "value": "redis72-redis-cluster-0.redis72-redis-cluster-headless redis72-redis-cluster-1.redis72-redis-cluster-headless redis72-redis-cluster-2.redis72-redis-cluster-headless redis72-redis-cluster-3.redis72-redis-cluster-headless redis72-redis-cluster-4.redis72-redis-cluster-headless redis72-redis-cluster-5.redis72-redis-cluster-headless "
+                            },
+                            {
+                                "name": "ALLOW_EMPTY_PASSWORD",
+                                "value": "yes"
+                            },
+                            {
+                                "name": "REDIS_AOF_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_TLS_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_PORT_NUMBER",
+                                "value": "6379"
+                            }
+                        ],
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_liveness_local.sh 6"
+                                ]
+                            },
+                            "failureThreshold": 12,
+                            "initialDelaySeconds": 180,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 7
+                        },
+                        "name": "redis72-redis-cluster",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp-redis",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-redis-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_readiness_local.sh 5"
+                                ]
+                            },
+                            "failureThreshold": 18,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 6
+                        },
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "privileged": false,
+                            "readOnlyRootFilesystem": true,
+                            "runAsGroup": 1001,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1001,
+                            "seLinuxOptions": {},
+                            "seccompProfile": {
+                                "type": "RuntimeDefault"
+                            }
+                        },
+                        "startupProbe": {
+                            "failureThreshold": 36,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "tcp-redis"
+                            },
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config",
+                                "subPath": "redis-default.conf"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir",
+                                "subPath": "app-conf-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir",
+                                "subPath": "app-tmp-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir",
+                                "subPath": "app-logs-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir",
+                                "subPath": "tmp-dir"
+                            }
+                        ]
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": false,
+                "hostname": "redis72-redis-cluster-3",
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-5l0r",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1001,
+                    "fsGroupChangePolicy": "Always"
+                },
+                "serviceAccount": "redis72-redis-cluster",
+                "serviceAccountName": "redis72-redis-cluster",
+                "subdomain": "redis72-redis-cluster-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "redis-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "redis-data-redis72-redis-cluster-3"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 493,
+                            "name": "redis72-redis-cluster-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "redis72-redis-cluster-default"
+                        },
+                        "name": "default-config"
+                    },
+                    {
+                        "emptyDir": {},
+                        "name": "empty-dir"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:44Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:36Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:12Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:12Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:36Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://6a10935b928c7f593f22a69b5fccff105dc5b3b350a93c7b8558b3d29a582b0c",
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imageID": "docker.io/bitnamilegacy/redis-cluster@sha256:f47d3f26de4041af3c103fb7ad2dd62d37602db469daebccfddbf69b23489faa",
+                        "lastState": {},
+                        "name": "redis72-redis-cluster",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T05:59:43Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1001,
+                                "supplementalGroups": [
+                                    1001
+                                ],
+                                "uid": 1001
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.223",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.223"
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.1.173",
+                "podIPs": [
+                    {
+                        "ip": "10.100.1.173"
+                    }
+                ],
+                "qosClass": "Guaranteed",
+                "startTime": "2026-05-31T05:59:36Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "845a0bf876d395e767993447de219a607b5f5e2b92c11fb521e751dcb41f1d89",
+                    "checksum/scripts": "109688a8b9be462e6cfc0b4b820b42874f58f10c838fb43460deadd3aa81d61a"
+                },
+                "creationTimestamp": "2026-05-31T05:59:35Z",
+                "generateName": "redis72-redis-cluster-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "redis72",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "app.kubernetes.io/name": "redis-cluster",
+                    "app.kubernetes.io/version": "8.2.1",
+                    "apps.kubernetes.io/pod-index": "4",
+                    "controller-revision-hash": "redis72-redis-cluster-65ddd48579",
+                    "helm.sh/chart": "redis-cluster-13.0.4",
+                    "statefulset.kubernetes.io/pod-name": "redis72-redis-cluster-4",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "redis72-redis-cluster-4",
+                "namespace": "redis",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "redis72-redis-cluster",
+                        "uid": "9fa7a9b8-d5f6-4ded-b3ed-489dfa0cd8a7"
+                    }
+                ],
+                "resourceVersion": "1780207205792783010",
+                "uid": "caea2e1a-a36f-405d-98f5-cfbb68a182a2"
+            },
+            "spec": {
+                "affinity": {
+                    "podAntiAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "podAffinityTerm": {
+                                    "labelSelector": {
+                                        "matchLabels": {
+                                            "app.kubernetes.io/instance": "redis72",
+                                            "app.kubernetes.io/name": "redis-cluster"
+                                        }
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname"
+                                },
+                                "weight": 1
+                            }
+                        ]
+                    }
+                },
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "# Backwards compatibility change\nif ! [[ -f /opt/bitnami/redis/etc/redis.conf ]]; then\n    echo COPYING FILE\n    cp  /opt/bitnami/redis/etc/redis-default.conf /opt/bitnami/redis/etc/redis.conf\nfi\npod_index=($(echo \"$POD_NAME\" | tr \"-\" \"\\n\"))\npod_index=\"${pod_index[-1]}\"\nif [[ \"$pod_index\" == \"0\" ]]; then\n  export REDIS_CLUSTER_CREATOR=\"yes\"\n  export REDIS_CLUSTER_REPLICAS=\"1\"\nfi\n/opt/bitnami/scripts/redis-cluster/entrypoint.sh /opt/bitnami/scripts/redis-cluster/run.sh\n"
+                        ],
+                        "command": [
+                            "/bin/bash",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "REDIS_NODES",
+                                "value": "redis72-redis-cluster-0.redis72-redis-cluster-headless redis72-redis-cluster-1.redis72-redis-cluster-headless redis72-redis-cluster-2.redis72-redis-cluster-headless redis72-redis-cluster-3.redis72-redis-cluster-headless redis72-redis-cluster-4.redis72-redis-cluster-headless redis72-redis-cluster-5.redis72-redis-cluster-headless "
+                            },
+                            {
+                                "name": "ALLOW_EMPTY_PASSWORD",
+                                "value": "yes"
+                            },
+                            {
+                                "name": "REDIS_AOF_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_TLS_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_PORT_NUMBER",
+                                "value": "6379"
+                            }
+                        ],
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_liveness_local.sh 6"
+                                ]
+                            },
+                            "failureThreshold": 12,
+                            "initialDelaySeconds": 180,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 7
+                        },
+                        "name": "redis72-redis-cluster",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp-redis",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-redis-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_readiness_local.sh 5"
+                                ]
+                            },
+                            "failureThreshold": 18,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 6
+                        },
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "privileged": false,
+                            "readOnlyRootFilesystem": true,
+                            "runAsGroup": 1001,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1001,
+                            "seLinuxOptions": {},
+                            "seccompProfile": {
+                                "type": "RuntimeDefault"
+                            }
+                        },
+                        "startupProbe": {
+                            "failureThreshold": 36,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "tcp-redis"
+                            },
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config",
+                                "subPath": "redis-default.conf"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir",
+                                "subPath": "app-conf-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir",
+                                "subPath": "app-tmp-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir",
+                                "subPath": "app-logs-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir",
+                                "subPath": "tmp-dir"
+                            }
+                        ]
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": false,
+                "hostname": "redis72-redis-cluster-4",
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-7rdq",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1001,
+                    "fsGroupChangePolicy": "Always"
+                },
+                "serviceAccount": "redis72-redis-cluster",
+                "serviceAccountName": "redis72-redis-cluster",
+                "subdomain": "redis72-redis-cluster-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "redis-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "redis-data-redis72-redis-cluster-4"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 493,
+                            "name": "redis72-redis-cluster-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "redis72-redis-cluster-default"
+                        },
+                        "name": "default-config"
+                    },
+                    {
+                        "emptyDir": {},
+                        "name": "empty-dir"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:46Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:38Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:05Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:05Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:38Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://f086537e97f280ac1d4204af28b35d1fd75a360b8eb44800bc593ef8918235ae",
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imageID": "docker.io/bitnamilegacy/redis-cluster@sha256:f47d3f26de4041af3c103fb7ad2dd62d37602db469daebccfddbf69b23489faa",
+                        "lastState": {},
+                        "name": "redis72-redis-cluster",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T05:59:45Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1001,
+                                "supplementalGroups": [
+                                    1001
+                                ],
+                                "uid": 1001
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.222",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.222"
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.0.133",
+                "podIPs": [
+                    {
+                        "ip": "10.100.0.133"
+                    }
+                ],
+                "qosClass": "Guaranteed",
+                "startTime": "2026-05-31T05:59:38Z"
+            }
+        },
+        {
+            "apiVersion": "v1",
+            "kind": "Pod",
+            "metadata": {
+                "annotations": {
+                    "checksum/config": "845a0bf876d395e767993447de219a607b5f5e2b92c11fb521e751dcb41f1d89",
+                    "checksum/scripts": "109688a8b9be462e6cfc0b4b820b42874f58f10c838fb43460deadd3aa81d61a"
+                },
+                "creationTimestamp": "2026-05-31T05:59:35Z",
+                "generateName": "redis72-redis-cluster-",
+                "generation": 1,
+                "labels": {
+                    "app.kubernetes.io/instance": "redis72",
+                    "app.kubernetes.io/managed-by": "Helm",
+                    "app.kubernetes.io/name": "redis-cluster",
+                    "app.kubernetes.io/version": "8.2.1",
+                    "apps.kubernetes.io/pod-index": "5",
+                    "controller-revision-hash": "redis72-redis-cluster-65ddd48579",
+                    "helm.sh/chart": "redis-cluster-13.0.4",
+                    "statefulset.kubernetes.io/pod-name": "redis72-redis-cluster-5",
+                    "topology.kubernetes.io/region": "europe-central2",
+                    "topology.kubernetes.io/zone": "europe-central2-a"
+                },
+                "name": "redis72-redis-cluster-5",
+                "namespace": "redis",
+                "ownerReferences": [
+                    {
+                        "apiVersion": "apps/v1",
+                        "blockOwnerDeletion": true,
+                        "controller": true,
+                        "kind": "StatefulSet",
+                        "name": "redis72-redis-cluster",
+                        "uid": "9fa7a9b8-d5f6-4ded-b3ed-489dfa0cd8a7"
+                    }
+                ],
+                "resourceVersion": "1780207205494367008",
+                "uid": "4b00e761-a296-44c3-82a0-847e2b3ab4e1"
+            },
+            "spec": {
+                "affinity": {
+                    "podAntiAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "podAffinityTerm": {
+                                    "labelSelector": {
+                                        "matchLabels": {
+                                            "app.kubernetes.io/instance": "redis72",
+                                            "app.kubernetes.io/name": "redis-cluster"
+                                        }
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname"
+                                },
+                                "weight": 1
+                            }
+                        ]
+                    }
+                },
+                "automountServiceAccountToken": false,
+                "containers": [
+                    {
+                        "args": [
+                            "# Backwards compatibility change\nif ! [[ -f /opt/bitnami/redis/etc/redis.conf ]]; then\n    echo COPYING FILE\n    cp  /opt/bitnami/redis/etc/redis-default.conf /opt/bitnami/redis/etc/redis.conf\nfi\npod_index=($(echo \"$POD_NAME\" | tr \"-\" \"\\n\"))\npod_index=\"${pod_index[-1]}\"\nif [[ \"$pod_index\" == \"0\" ]]; then\n  export REDIS_CLUSTER_CREATOR=\"yes\"\n  export REDIS_CLUSTER_REPLICAS=\"1\"\nfi\n/opt/bitnami/scripts/redis-cluster/entrypoint.sh /opt/bitnami/scripts/redis-cluster/run.sh\n"
+                        ],
+                        "command": [
+                            "/bin/bash",
+                            "-c"
+                        ],
+                        "env": [
+                            {
+                                "name": "POD_NAME",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "REDIS_NODES",
+                                "value": "redis72-redis-cluster-0.redis72-redis-cluster-headless redis72-redis-cluster-1.redis72-redis-cluster-headless redis72-redis-cluster-2.redis72-redis-cluster-headless redis72-redis-cluster-3.redis72-redis-cluster-headless redis72-redis-cluster-4.redis72-redis-cluster-headless redis72-redis-cluster-5.redis72-redis-cluster-headless "
+                            },
+                            {
+                                "name": "ALLOW_EMPTY_PASSWORD",
+                                "value": "yes"
+                            },
+                            {
+                                "name": "REDIS_AOF_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_TLS_ENABLED",
+                                "value": "no"
+                            },
+                            {
+                                "name": "REDIS_PORT_NUMBER",
+                                "value": "6379"
+                            }
+                        ],
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_liveness_local.sh 6"
+                                ]
+                            },
+                            "failureThreshold": 12,
+                            "initialDelaySeconds": 180,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 7
+                        },
+                        "name": "redis72-redis-cluster",
+                        "ports": [
+                            {
+                                "containerPort": 6379,
+                                "name": "tcp-redis",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 16379,
+                                "name": "tcp-redis-bus",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "exec": {
+                                "command": [
+                                    "/bin/bash",
+                                    "-ec",
+                                    "/scripts/ping_readiness_local.sh 5"
+                                ]
+                            },
+                            "failureThreshold": 18,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 6
+                        },
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "privileged": false,
+                            "readOnlyRootFilesystem": true,
+                            "runAsGroup": 1001,
+                            "runAsNonRoot": true,
+                            "runAsUser": 1001,
+                            "seLinuxOptions": {},
+                            "seccompProfile": {
+                                "type": "RuntimeDefault"
+                            }
+                        },
+                        "startupProbe": {
+                            "failureThreshold": 36,
+                            "initialDelaySeconds": 20,
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "tcpSocket": {
+                                "port": "tcp-redis"
+                            },
+                            "timeoutSeconds": 5
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File",
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config",
+                                "subPath": "redis-default.conf"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir",
+                                "subPath": "app-conf-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir",
+                                "subPath": "app-tmp-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir",
+                                "subPath": "app-logs-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir",
+                                "subPath": "tmp-dir"
+                            }
+                        ]
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": false,
+                "hostname": "redis72-redis-cluster-5",
+                "nodeName": "gke-valkey-bench-default-pool-887856f8-7rdq",
+                "preemptionPolicy": "PreemptLowerPriority",
+                "priority": 0,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {
+                    "fsGroup": 1001,
+                    "fsGroupChangePolicy": "Always"
+                },
+                "serviceAccount": "redis72-redis-cluster",
+                "serviceAccountName": "redis72-redis-cluster",
+                "subdomain": "redis72-redis-cluster-headless",
+                "terminationGracePeriodSeconds": 30,
+                "tolerations": [
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/not-ready",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    },
+                    {
+                        "effect": "NoExecute",
+                        "key": "node.kubernetes.io/unreachable",
+                        "operator": "Exists",
+                        "tolerationSeconds": 300
+                    }
+                ],
+                "volumes": [
+                    {
+                        "name": "redis-data",
+                        "persistentVolumeClaim": {
+                            "claimName": "redis-data-redis72-redis-cluster-5"
+                        }
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 493,
+                            "name": "redis72-redis-cluster-scripts"
+                        },
+                        "name": "scripts"
+                    },
+                    {
+                        "configMap": {
+                            "defaultMode": 420,
+                            "name": "redis72-redis-cluster-default"
+                        },
+                        "name": "default-config"
+                    },
+                    {
+                        "emptyDir": {},
+                        "name": "empty-dir"
+                    }
+                ]
+            },
+            "status": {
+                "conditions": [
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:46Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodReadyToStartContainers"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:38Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Initialized"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:05Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "Ready"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T06:00:05Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "ContainersReady"
+                    },
+                    {
+                        "lastProbeTime": null,
+                        "lastTransitionTime": "2026-05-31T05:59:38Z",
+                        "observedGeneration": 1,
+                        "status": "True",
+                        "type": "PodScheduled"
+                    }
+                ],
+                "containerStatuses": [
+                    {
+                        "allocatedResources": {
+                            "cpu": "2",
+                            "memory": "7Gi"
+                        },
+                        "containerID": "containerd://e8f9fe5b2c0cf51209b4f3d9ac1d9630c9ffa923499ee4f8636a46b713643f34",
+                        "image": "docker.io/bitnamilegacy/redis-cluster:7.2.5-debian-12-r4",
+                        "imageID": "docker.io/bitnamilegacy/redis-cluster@sha256:f47d3f26de4041af3c103fb7ad2dd62d37602db469daebccfddbf69b23489faa",
+                        "lastState": {},
+                        "name": "redis72-redis-cluster",
+                        "ready": true,
+                        "resources": {
+                            "limits": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            },
+                            "requests": {
+                                "cpu": "2",
+                                "memory": "7Gi"
+                            }
+                        },
+                        "restartCount": 0,
+                        "started": true,
+                        "state": {
+                            "running": {
+                                "startedAt": "2026-05-31T05:59:45Z"
+                            }
+                        },
+                        "user": {
+                            "linux": {
+                                "gid": 1001,
+                                "supplementalGroups": [
+                                    1001
+                                ],
+                                "uid": 1001
+                            }
+                        },
+                        "volumeMounts": [
+                            {
+                                "mountPath": "/scripts",
+                                "name": "scripts"
+                            },
+                            {
+                                "mountPath": "/bitnami/redis/data",
+                                "name": "redis-data"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/redis-default.conf",
+                                "name": "default-config"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/etc/",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/tmp",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/opt/bitnami/redis/logs",
+                                "name": "empty-dir"
+                            },
+                            {
+                                "mountPath": "/tmp",
+                                "name": "empty-dir"
+                            }
+                        ]
+                    }
+                ],
+                "hostIP": "10.186.15.222",
+                "hostIPs": [
+                    {
+                        "ip": "10.186.15.222"
+                    }
+                ],
+                "observedGeneration": 1,
+                "phase": "Running",
+                "podIP": "10.100.0.132",
+                "podIPs": [
+                    {
+                        "ip": "10.100.0.132"
+                    }
+                ],
+                "qosClass": "Guaranteed",
+                "startTime": "2026-05-31T05:59:38Z"
+            }
+        }
+    ],
+    "kind": "List",
+    "metadata": {
+        "resourceVersion": ""
+    }
+}
