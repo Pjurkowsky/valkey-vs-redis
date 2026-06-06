@@ -1,0 +1,155 @@
+Name:         redis72-split-brain
+Namespace:    redis
+Labels:       <none>
+Annotations:  <none>
+API Version:  chaos-mesh.org/v1alpha1
+Kind:         NetworkChaos
+Metadata:
+  Creation Timestamp:  2026-06-05T09:08:06Z
+  Finalizers:
+    chaos-mesh/records
+  Generation:        16
+  Resource Version:  1780650576714255013
+  UID:               38af922c-ed0b-4518-84e0-650ab911ad7f
+Spec:
+  Action:     partition
+  Direction:  both
+  Duration:   90s
+  Mode:       all
+  Selector:
+    Label Selectors:
+      app.kubernetes.io/instance:  redis72
+      app.kubernetes.io/name:      redis-cluster
+      Chaos - Side:                minority
+    Namespaces:
+      redis
+  Target:
+    Mode:  all
+    Selector:
+      Label Selectors:
+        app.kubernetes.io/instance:  redis72
+        app.kubernetes.io/name:      redis-cluster
+        Chaos - Side:                majority
+      Namespaces:
+        redis
+Status:
+  Conditions:
+    Status:  True
+    Type:    AllRecovered
+    Status:  False
+    Type:    Paused
+    Status:  True
+    Type:    Selected
+    Status:  False
+    Type:    AllInjected
+  Experiment:
+    Container Records:
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T09:08:07Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T09:09:36Z
+        Type:           Succeeded
+      Id:               redis/redis72-redis-cluster-2
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T09:08:07Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T09:09:36Z
+        Type:           Succeeded
+      Id:               redis/redis72-redis-cluster-1
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T09:08:07Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T09:09:36Z
+        Type:           Succeeded
+      Id:               redis/redis72-redis-cluster-5
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T09:08:07Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T09:09:36Z
+        Type:           Succeeded
+      Id:               redis/redis72-redis-cluster-4
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T09:08:07Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T09:09:36Z
+        Type:           Succeeded
+      Id:               redis/redis72-redis-cluster-3
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T09:08:07Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T09:09:36Z
+        Type:           Succeeded
+      Id:               redis/redis72-redis-cluster-0
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+    Desired Phase:      Stop
+  Instances:
+    redis/redis72-redis-cluster-0:  4
+    redis/redis72-redis-cluster-1:  4
+    redis/redis72-redis-cluster-2:  4
+    redis/redis72-redis-cluster-3:  4
+    redis/redis72-redis-cluster-4:  4
+    redis/redis72-redis-cluster-5:  4
+Events:
+  Type    Reason           Age    From            Message
+  ----    ------           ----   ----            -------
+  Normal  FinalizerInited  4m25s  initFinalizers  Finalizer has been inited
+  Normal  Updated          4m25s  initFinalizers  Successfully update finalizer of resource
+  Normal  Started          4m25s  desiredphase    Experiment has started
+  Normal  Updated          4m25s  desiredphase    Successfully update desiredPhase of resource
+  Normal  Updated          4m24s  records         Successfully update records of resource
+  Normal  Applied          4m24s  records         Successfully apply chaos for redis/redis72-redis-cluster-2
+  Normal  Applied          4m24s  records         Successfully apply chaos for redis/redis72-redis-cluster-1
+  Normal  Updated          4m24s  records         Successfully update records of resource
+  Normal  Applied          4m24s  records         Successfully apply chaos for redis/redis72-redis-cluster-5
+  Normal  Updated          4m24s  records         Successfully update records of resource
+  Normal  Applied          4m24s  records         Successfully apply chaos for redis/redis72-redis-cluster-4
+  Normal  Updated          4m24s  records         Successfully update records of resource
+  Normal  Applied          4m24s  records         Successfully apply chaos for redis/redis72-redis-cluster-3
+  Normal  Updated          4m24s  records         Successfully update records of resource
+  Normal  Applied          4m24s  records         Successfully apply chaos for redis/redis72-redis-cluster-0
+  Normal  Updated          4m24s  records         Successfully update records of resource
+  Normal  TimeUp           2m55s  desiredphase    Time up according to the duration
+  Normal  Updated          2m55s  desiredphase    Successfully update desiredPhase of resource
+  Normal  Updated          2m55s  records         Successfully update records of resource
+  Normal  Recovered        2m55s  records         Successfully recover chaos for redis/redis72-redis-cluster-2
+  Normal  Recovered        2m55s  records         Successfully recover chaos for redis/redis72-redis-cluster-1
+  Normal  Recovered        2m55s  records         Successfully recover chaos for redis/redis72-redis-cluster-5
+  Normal  Recovered        2m55s  records         Successfully recover chaos for redis/redis72-redis-cluster-4
+  Normal  Recovered        2m55s  records         Successfully recover chaos for redis/redis72-redis-cluster-3
+  Normal  Recovered        2m55s  records         Successfully recover chaos for redis/redis72-redis-cluster-0
+  Normal  Updated          2m55s  records         Successfully update records of resource

@@ -2,7 +2,50 @@
 set -euo pipefail
 
 N="${N:-1}"
-NS="vk"
+PROVIDER="${PROVIDER:-valkey}"
+case "${PROVIDER}" in
+  valkey)
+    DEFAULT_NS="vk"
+    DEFAULT_RELEASE="valkey"
+    DEFAULT_CLI_BIN="valkey-cli"
+    DEFAULT_SYSTEM_NAME="Valkey"
+    ;;
+  redis|redis72)
+    PROVIDER="redis72"
+    DEFAULT_NS="redis"
+    DEFAULT_RELEASE="redis72"
+    DEFAULT_CLI_BIN="redis-cli"
+    DEFAULT_SYSTEM_NAME="Redis 7.2"
+    ;;
+  *)
+    echo "ERROR: PROVIDER must be valkey or redis72." >&2
+    exit 1
+    ;;
+esac
+
+NS="${NS:-${DEFAULT_NS}}"
+RELEASE="${RELEASE:-${DEFAULT_RELEASE}}"
+
+case "${PROVIDER}" in
+  valkey)
+    DEFAULT_STS="${RELEASE}"
+    DEFAULT_SERVICE_NAME="${RELEASE}"
+    DEFAULT_POD_SELECTOR="app.kubernetes.io/name=valkey,app.kubernetes.io/instance=${RELEASE}"
+    ;;
+  redis72)
+    DEFAULT_STS="${RELEASE}-redis-cluster"
+    DEFAULT_SERVICE_NAME="${DEFAULT_STS}"
+    DEFAULT_POD_SELECTOR="app.kubernetes.io/name=redis-cluster,app.kubernetes.io/instance=${RELEASE}"
+    ;;
+esac
+
+STS="${STS:-${DEFAULT_STS}}"
+CLI_POD="${CLI_POD:-${STS}-0}"
+CLI_BIN="${CLI_BIN:-${DEFAULT_CLI_BIN}}"
+SYSTEM_NAME="${SYSTEM_NAME:-${DEFAULT_SYSTEM_NAME}}"
+SERVICE_NAME="${SERVICE_NAME:-${DEFAULT_SERVICE_NAME}}"
+POD_SELECTOR="${POD_SELECTOR:-${DEFAULT_POD_SELECTOR}}"
+CHAOS_PREFIX="${CHAOS_PREFIX:-${RELEASE}}"
 IMAGE="${MEMTIER_IMAGE:-memtier_k8s:1}"
 LOCAL_OUT="${1:-./results/failover}"
 REMOTE_OUT="/work/results/failover"
@@ -10,17 +53,19 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 source "${SCRIPT_DIR}/pod_results.sh"
 
-HOST="valkey.vk.svc.cluster.local"
-PORT=6379
-THREADS=4
-CLIENTS=1
-TEST_TIME=120
-KEYS=100000
-DATA_SIZE=1024
-RATIO="1:1"
-STEADY_STATE_WAIT=30
+HOST="${FAILOVER_HOST:-${SERVICE_NAME}.${NS}.svc.cluster.local}"
+PORT="${FAILOVER_PORT:-6379}"
+THREADS="${FAILOVER_THREADS:-4}"
+CLIENTS="${FAILOVER_CLIENTS:-1}"
+TEST_TIME="${FAILOVER_TEST_TIME:-120}"
+KEYS="${FAILOVER_KEYS:-100000}"
+DATA_SIZE="${FAILOVER_DATA_SIZE:-1024}"
+RATIO="${FAILOVER_RATIO:-1:1}"
+STEADY_STATE_WAIT="${FAILOVER_STEADY_STATE_WAIT:-30}"
 FAILOVER_MODE="${FAILOVER_MODE:-masters}"
 FAILOVER_MASTERS="${FAILOVER_MASTERS:-1}"
+FAILOVER_ACTION="${FAILOVER_ACTION:-pod-failure}"
+FAILOVER_DURATION="${FAILOVER_DURATION:-60s}"
 FAILOVER_GRACE_PERIOD="${FAILOVER_GRACE_PERIOD:-1}"
 MEMTIER_STARTED_FILE="/tmp/memtier.started"
 MEMTIER_TLS="${MEMTIER_TLS:-false}"
@@ -29,9 +74,12 @@ MEMTIER_TLS_CACERT="${MEMTIER_TLS_CACERT:-}"
 MEMTIER_TLS_CERT="${MEMTIER_TLS_CERT:-}"
 MEMTIER_TLS_KEY="${MEMTIER_TLS_KEY:-}"
 MEMTIER_TLS_SNI="${MEMTIER_TLS_SNI:-}"
-VALKEY_CLI_TLS="${VALKEY_CLI_TLS:-${MEMTIER_TLS}}"
-VALKEY_CLI_TLS_SKIP_VERIFY="${VALKEY_CLI_TLS_SKIP_VERIFY:-${MEMTIER_TLS_SKIP_VERIFY}}"
-VALKEY_CLI_CACERT="${VALKEY_CLI_CACERT:-/tls/ca.crt}"
+MEMTIER_RECONNECT_ON_ERROR="${MEMTIER_RECONNECT_ON_ERROR:-false}"
+MEMTIER_MAX_RECONNECT_ATTEMPTS="${MEMTIER_MAX_RECONNECT_ATTEMPTS:-1000}"
+MEMTIER_RECONNECT_BACKOFF_FACTOR="${MEMTIER_RECONNECT_BACKOFF_FACTOR:-2}"
+CLI_TLS="${FAILOVER_CLI_TLS:-${VALKEY_CLI_TLS:-${MEMTIER_TLS}}}"
+CLI_TLS_SKIP_VERIFY="${FAILOVER_CLI_TLS_SKIP_VERIFY:-${VALKEY_CLI_TLS_SKIP_VERIFY:-${MEMTIER_TLS_SKIP_VERIFY}}}"
+CLI_CACERT="${FAILOVER_CLI_CACERT:-${VALKEY_CLI_CACERT:-/tls/ca.crt}}"
 
 mkdir -p "${LOCAL_OUT}"
 
@@ -59,33 +107,147 @@ case "${MEMTIER_TLS}" in
     ;;
 esac
 
-VALKEY_CLI_ARGS=()
-case "${VALKEY_CLI_TLS}" in
+MEMTIER_RECONNECT_ARGS=()
+case "${MEMTIER_RECONNECT_ON_ERROR}" in
   1|true|TRUE|yes|YES|on|ON)
-    VALKEY_CLI_ARGS+=(--tls)
-    case "${VALKEY_CLI_TLS_SKIP_VERIFY}" in
+    MEMTIER_RECONNECT_ARGS+=(--reconnect-on-error)
+    MEMTIER_RECONNECT_ARGS+=(--max-reconnect-attempts="${MEMTIER_MAX_RECONNECT_ATTEMPTS}")
+    MEMTIER_RECONNECT_ARGS+=(--reconnect-backoff-factor="${MEMTIER_RECONNECT_BACKOFF_FACTOR}")
+    ;;
+esac
+
+CLI_ARGS=()
+case "${CLI_TLS}" in
+  1|true|TRUE|yes|YES|on|ON)
+    CLI_ARGS+=(--tls)
+    case "${CLI_TLS_SKIP_VERIFY}" in
       1|true|TRUE|yes|YES|on|ON)
-        VALKEY_CLI_ARGS+=(--insecure)
+        CLI_ARGS+=(--insecure)
         ;;
       *)
-        VALKEY_CLI_ARGS+=(--cacert "${VALKEY_CLI_CACERT}")
+        CLI_ARGS+=(--cacert "${CLI_CACERT}")
         ;;
     esac
     ;;
 esac
 
+case "${FAILOVER_ACTION}" in
+  pod-kill|pod-failure)
+    ;;
+  *)
+    echo "ERROR: FAILOVER_ACTION must be pod-kill or pod-failure." >&2
+    exit 1
+    ;;
+esac
+
+selector_label_yaml() {
+  local selector="$1"
+  local pair key value
+
+  IFS=',' read -ra pairs <<<"${selector}"
+  for pair in "${pairs[@]}"; do
+    key="${pair%%=*}"
+    value="${pair#*=}"
+    [[ -n "${key}" && -n "${value}" && "${key}" != "${value}" ]] || continue
+    printf '      %s: "%s"\n' "${key}" "${value}"
+  done
+}
+
+print_config() {
+  cat <<EOF
+==> Failover benchmark configuration
+N=${N}
+PROVIDER=${PROVIDER}
+SYSTEM_NAME=${SYSTEM_NAME}
+NS=${NS}
+RELEASE=${RELEASE}
+STS=${STS}
+CLI_POD=${CLI_POD}
+CLI_BIN=${CLI_BIN}
+SERVICE_NAME=${SERVICE_NAME}
+HOST=${HOST}
+PORT=${PORT}
+IMAGE=${IMAGE}
+LOCAL_OUT=${LOCAL_OUT}
+REMOTE_OUT=${REMOTE_OUT}
+POD_SELECTOR=${POD_SELECTOR}
+THREADS=${THREADS}
+CLIENTS=${CLIENTS}
+TEST_TIME=${TEST_TIME}
+KEYS=${KEYS}
+DATA_SIZE=${DATA_SIZE}
+RATIO=${RATIO}
+STEADY_STATE_WAIT=${STEADY_STATE_WAIT}
+MEMTIER_RECONNECT_ON_ERROR=${MEMTIER_RECONNECT_ON_ERROR}
+MEMTIER_MAX_RECONNECT_ATTEMPTS=${MEMTIER_MAX_RECONNECT_ATTEMPTS}
+MEMTIER_RECONNECT_BACKOFF_FACTOR=${MEMTIER_RECONNECT_BACKOFF_FACTOR}
+FAILOVER_MODE=${FAILOVER_MODE}
+FAILOVER_MASTERS=${FAILOVER_MASTERS}
+FAILOVER_ACTION=${FAILOVER_ACTION}
+FAILOVER_DURATION=${FAILOVER_DURATION}
+FAILOVER_GRACE_PERIOD=${FAILOVER_GRACE_PERIOD}
+EOF
+}
+
+podchaos_action_fields() {
+  case "${FAILOVER_ACTION}" in
+    pod-kill)
+      printf '  gracePeriod: %s\n' "${FAILOVER_GRACE_PERIOD}"
+      ;;
+    pod-failure)
+      printf '  duration: %s\n' "${FAILOVER_DURATION}"
+      ;;
+  esac
+}
+
+cluster_nodes() {
+  kubectl exec "${CLI_POD}" -n "${NS}" -- \
+    "${CLI_BIN}" "${CLI_ARGS[@]}" cluster nodes 2>/dev/null
+}
+
+wait_for_cluster_health() {
+  local timeout_s="${1:-120}"
+  local start elapsed info state slots masters
+  start="$(date +%s)"
+
+  while true; do
+    info="$(kubectl exec "${CLI_POD}" -n "${NS}" -- \
+      "${CLI_BIN}" "${CLI_ARGS[@]}" cluster info 2>/dev/null || true)"
+    state="$(awk -F: '$1=="cluster_state" {gsub(/\r/, "", $2); print $2}' <<<"${info}")"
+    slots="$(awk -F: '$1=="cluster_slots_ok" {gsub(/\r/, "", $2); print $2}' <<<"${info}")"
+    masters="$(cluster_nodes | awk '$3 ~ /master/ && $3 !~ /fail/ {count++} END {print count + 0}' || true)"
+
+    if [[ "${state}" == "ok" && "${slots}" == "16384" && "${masters:-0}" -ge 3 ]]; then
+      return 0
+    fi
+
+    elapsed="$(( $(date +%s) - start ))"
+    if (( elapsed >= timeout_s )); then
+      echo "ERROR: ${SYSTEM_NAME} cluster did not become healthy after ${timeout_s}s." >&2
+      echo "cluster_state=${state:-unknown} cluster_slots_ok=${slots:-unknown} masters=${masters:-unknown}" >&2
+      return 1
+    fi
+    sleep 5
+  done
+}
+
 resolve_pod_name() {
   local host="$1"
-  local pod_table pod_name
+  local pod_table pod_name candidate
 
-  if [[ "${host}" == valkey-* ]]; then
-    echo "${host%%.*}"
+  candidate="${host%%.*}"
+  if kubectl get pod "${candidate}" -n "${NS}" >/dev/null 2>&1; then
+    echo "${candidate}"
     return 0
   fi
 
-  pod_table="$(kubectl get pods -n "${NS}" -o wide --no-headers 2>/dev/null)"
+  pod_table="$(
+    kubectl get pods -n "${NS}" \
+      -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.status.podIP}{"\n"}{end}' \
+      2>/dev/null
+  )"
   pod_name="$(
-    awk -v target="${host}" '$1 == target || $6 == target {print $1; exit}' <<<"${pod_table}"
+    awk -v target="${host}" '$1 == target || $2 == target {print $1; exit}' <<<"${pod_table}"
   )"
 
   if [[ -z "${pod_name}" ]]; then
@@ -126,8 +288,7 @@ get_target_master_pods() {
       break
     fi
   done < <(
-    kubectl exec valkey-0 -n "${NS}" -- \
-      valkey-cli "${VALKEY_CLI_ARGS[@]}" cluster nodes 2>/dev/null \
+    cluster_nodes \
       | awk '$3 ~ /master/ && $3 !~ /fail/ {print $2}'
   )
 
@@ -145,7 +306,7 @@ write_podchaos_manifest() {
 
   local target_pod chaos_name first_doc=1
   for target_pod in "$@"; do
-    chaos_name="valkey-master-kill-${target_pod}"
+    chaos_name="${CHAOS_PREFIX}-master-kill-${target_pod}"
     if [[ "${first_doc}" -eq 0 ]]; then
       printf -- '---\n' >> "${manifest_path}"
     fi
@@ -161,8 +322,8 @@ spec:
       ${NS}:
         - ${target_pod}
   mode: one
-  action: pod-kill
-  gracePeriod: ${FAILOVER_GRACE_PERIOD}
+  action: ${FAILOVER_ACTION}
+$(podchaos_action_fields)
 EOF
     first_doc=0
   done
@@ -174,26 +335,28 @@ write_podchaos_all_manifest() {
 apiVersion: chaos-mesh.org/v1alpha1
 kind: PodChaos
 metadata:
-  name: valkey-kill-all
+  name: ${CHAOS_PREFIX}-kill-all
   namespace: ${NS}
 spec:
   selector:
     namespaces:
       - ${NS}
     labelSelectors:
-      app.kubernetes.io/instance: valkey
+$(selector_label_yaml "${POD_SELECTOR}")
   mode: all
-  action: pod-kill
-  gracePeriod: ${FAILOVER_GRACE_PERIOD}
+  action: ${FAILOVER_ACTION}
+$(podchaos_action_fields)
 EOF
 }
 
 expected_master_chaos_names() {
   local target_pod
   for target_pod in "$@"; do
-    echo "valkey-master-kill-${target_pod}"
+    echo "${CHAOS_PREFIX}-master-kill-${target_pod}"
   done
 }
+
+print_config
 
 for i in $(seq 1 "${N}"); do
   POD_NAME="memtier-failover-${i}"
@@ -215,11 +378,11 @@ for i in $(seq 1 "${N}"); do
     mapfile -t TARGET_MASTER_PODS < <(get_target_master_pods "${FAILOVER_MASTERS}")
     if [[ "${#TARGET_MASTER_PODS[@]}" -lt "${FAILOVER_MASTERS}" ]]; then
       echo "[${i}] ERROR: could not determine ${FAILOVER_MASTERS} target master pod(s)."
-      echo "[${i}] INFO: visible master nodes from valkey-0:"
-      kubectl exec valkey-0 -n "${NS}" -- valkey-cli "${VALKEY_CLI_ARGS[@]}" cluster nodes 2>/dev/null | grep master || true
+      echo "[${i}] INFO: visible master nodes from ${CLI_POD}:"
+      cluster_nodes | grep master || true
       exit 1
     fi
-    TARGET_DESC="killing ${FAILOVER_MASTERS} master pod(s): ${TARGET_MASTER_PODS[*]}"
+    TARGET_DESC="${FAILOVER_ACTION} for ${FAILOVER_MASTERS} master pod(s): ${TARGET_MASTER_PODS[*]}"
   fi
 
   CHAOS_FILE="$(mktemp /tmp/failover-chaos-XXXX.yaml)"
@@ -227,12 +390,15 @@ for i in $(seq 1 "${N}"); do
     write_podchaos_manifest "${CHAOS_FILE}" "${TARGET_MASTER_PODS[@]}"
   else
     write_podchaos_all_manifest "${CHAOS_FILE}"
-    TARGET_DESC="killing all Valkey pods"
+    TARGET_DESC="${FAILOVER_ACTION} for all ${SYSTEM_NAME} pods"
   fi
   echo ""
   echo "=========================================="
   echo "  Failover run ${i}/${N}"
   echo "=========================================="
+
+  echo "[${i}] Waiting for ${SYSTEM_NAME} cluster health before run..."
+  wait_for_cluster_health 120
 
   kubectl delete -f "${CHAOS_FILE}" -n "${NS}" --ignore-not-found 2>/dev/null || true
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
@@ -263,6 +429,7 @@ memtier_benchmark \
   --protocol=redis \
   --cluster-mode \
   ${MEMTIER_TLS_ARGS[*]} \
+  ${MEMTIER_RECONNECT_ARGS[*]} \
   --threads='${THREADS}' --clients='${CLIENTS}' \
   --test-time='${TEST_TIME}' \
   --key-maximum='${KEYS}' \
@@ -302,7 +469,7 @@ EOF
   echo "[${i}] Waiting ${STEADY_STATE_WAIT}s for steady state..."
   sleep "${STEADY_STATE_WAIT}"
 
-  echo "[${i}] Injecting chaos: ${TARGET_DESC} (gracePeriod=${FAILOVER_GRACE_PERIOD}s)..."
+  echo "[${i}] Injecting chaos: ${TARGET_DESC} (duration=${FAILOVER_DURATION}, gracePeriod=${FAILOVER_GRACE_PERIOD}s)..."
   echo "[${i}] Generated PodChaos manifest:"
   sed 's/^/  /' "${CHAOS_FILE}"
   CHAOS_EPOCH_S="$(kubectl exec "${POD_NAME}" -n "${NS}" -- date +%s 2>/dev/null || date +%s)"
@@ -312,6 +479,10 @@ EOF
   "memtier_started_epoch_s": ${MEMTIER_STARTED_EPOCH_S:-null},
   "chaos_epoch_s": ${CHAOS_EPOCH_S},
   "steady_state_wait_s": ${STEADY_STATE_WAIT},
+  "provider": "${PROVIDER}",
+  "system": "${SYSTEM_NAME}",
+  "action": "${FAILOVER_ACTION}",
+  "duration": "${FAILOVER_DURATION}",
   "target": "${TARGET_DESC}",
   "grace_period_s": ${FAILOVER_GRACE_PERIOD}
 }
@@ -322,7 +493,7 @@ EOF
   if [[ "${FAILOVER_MODE}" == "masters" ]]; then
     mapfile -t CHAOS_NAMES < <(expected_master_chaos_names "${TARGET_MASTER_PODS[@]}")
   else
-    CHAOS_NAMES=("valkey-kill-all")
+    CHAOS_NAMES=("${CHAOS_PREFIX}-kill-all")
   fi
   for chaos_name in "${CHAOS_NAMES[@]}"; do
     if ! kubectl get podchaos "${chaos_name}" -n "${NS}" >/dev/null 2>&1; then
@@ -358,9 +529,10 @@ EOF
   rm -f "${CHAOS_FILE}"
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found
 
-  echo "[${i}] Waiting for Valkey cluster to stabilize..."
-  kubectl rollout status sts/valkey -n "${NS}" --timeout=120s
-  sleep 10
+  echo "[${i}] Waiting for ${SYSTEM_NAME} cluster to stabilize..."
+  kubectl rollout status "sts/${STS}" -n "${NS}" --timeout=120s
+  kubectl wait pod -n "${NS}" -l "${POD_SELECTOR}" --for=condition=Ready --timeout=120s
+  wait_for_cluster_health 120
 
   echo "[${i}] Done. Result: ${LOCAL_OUT}/${OUT_FILE}"
 done

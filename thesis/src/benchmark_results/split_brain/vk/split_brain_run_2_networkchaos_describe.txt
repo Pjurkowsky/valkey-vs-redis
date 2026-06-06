@@ -1,0 +1,157 @@
+Name:         valkey-split-brain
+Namespace:    vk
+Labels:       <none>
+Annotations:  <none>
+API Version:  chaos-mesh.org/v1alpha1
+Kind:         NetworkChaos
+Metadata:
+  Creation Timestamp:  2026-06-05T07:39:27Z
+  Finalizers:
+    chaos-mesh/records
+  Generation:        18
+  Resource Version:  1780645257524719024
+  UID:               78dee7fa-708e-43f8-92f4-16757b5f9b0f
+Spec:
+  Action:     partition
+  Direction:  both
+  Duration:   90s
+  Mode:       all
+  Selector:
+    Label Selectors:
+      app.kubernetes.io/instance:  valkey
+      app.kubernetes.io/name:      valkey
+      Chaos - Side:                minority
+    Namespaces:
+      vk
+  Target:
+    Mode:  all
+    Selector:
+      Label Selectors:
+        app.kubernetes.io/instance:  valkey
+        app.kubernetes.io/name:      valkey
+        Chaos - Side:                majority
+      Namespaces:
+        vk
+Status:
+  Conditions:
+    Status:  False
+    Type:    AllInjected
+    Status:  True
+    Type:    AllRecovered
+    Status:  False
+    Type:    Paused
+    Status:  True
+    Type:    Selected
+  Experiment:
+    Container Records:
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T07:39:28Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T07:40:57Z
+        Type:           Succeeded
+      Id:               vk/valkey-0
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T07:39:28Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T07:40:57Z
+        Type:           Succeeded
+      Id:               vk/valkey-1
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T07:39:28Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T07:40:57Z
+        Type:           Succeeded
+      Id:               vk/valkey-4
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T07:39:28Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T07:40:57Z
+        Type:           Succeeded
+      Id:               vk/valkey-5
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T07:39:28Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T07:40:57Z
+        Type:           Succeeded
+      Id:               vk/valkey-3
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+      Events:
+        Operation:      Apply
+        Timestamp:      2026-06-05T07:39:28Z
+        Type:           Succeeded
+        Operation:      Recover
+        Timestamp:      2026-06-05T07:40:57Z
+        Type:           Succeeded
+      Id:               vk/valkey-2
+      Injected Count:   1
+      Phase:            Not Injected
+      Recovered Count:  1
+      Selector Key:     .Target
+    Desired Phase:      Stop
+  Instances:
+    vk/valkey-0:  6
+    vk/valkey-1:  6
+    vk/valkey-2:  6
+    vk/valkey-3:  6
+    vk/valkey-4:  6
+    vk/valkey-5:  6
+Events:
+  Type    Reason           Age    From            Message
+  ----    ------           ----   ----            -------
+  Normal  FinalizerInited  5m9s   initFinalizers  Finalizer has been inited
+  Normal  Updated          5m9s   initFinalizers  Successfully update finalizer of resource
+  Normal  Started          5m9s   desiredphase    Experiment has started
+  Normal  Updated          5m9s   desiredphase    Successfully update desiredPhase of resource
+  Normal  Updated          5m8s   records         Successfully update records of resource
+  Normal  Applied          5m8s   records         Successfully apply chaos for vk/valkey-0
+  Normal  Updated          5m8s   records         Successfully update records of resource
+  Normal  Applied          5m8s   records         Successfully apply chaos for vk/valkey-1
+  Normal  Updated          5m8s   records         Successfully update records of resource
+  Normal  Applied          5m8s   records         Successfully apply chaos for vk/valkey-4
+  Normal  Updated          5m8s   records         Successfully update records of resource
+  Normal  Applied          5m8s   records         Successfully apply chaos for vk/valkey-5
+  Normal  Updated          5m8s   records         Successfully update records of resource
+  Normal  Applied          5m8s   records         Successfully apply chaos for vk/valkey-3
+  Normal  Updated          5m8s   records         Successfully update records of resource
+  Normal  Applied          5m8s   records         Successfully apply chaos for vk/valkey-2
+  Normal  Updated          5m8s   records         Successfully update records of resource
+  Normal  TimeUp           3m39s  desiredphase    Time up according to the duration
+  Normal  Updated          3m39s  desiredphase    Successfully update desiredPhase of resource
+  Normal  Updated          3m39s  records         Successfully update records of resource
+  Normal  Recovered        3m39s  records         Successfully recover chaos for vk/valkey-0
+  Normal  Recovered        3m39s  records         Successfully recover chaos for vk/valkey-1
+  Normal  Recovered        3m39s  records         Successfully recover chaos for vk/valkey-4
+  Normal  Recovered        3m39s  records         Successfully recover chaos for vk/valkey-5
+  Normal  Updated          3m39s  records         Successfully update records of resource
+  Normal  Recovered        3m39s  records         Successfully recover chaos for vk/valkey-3
+  Normal  Recovered        3m39s  records         Successfully recover chaos for vk/valkey-2
+  Normal  Updated          3m39s  records         Successfully update records of resource

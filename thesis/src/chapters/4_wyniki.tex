@@ -76,6 +76,52 @@ Faza & Wariant & Ops/sec & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 
 Wśród wariantów self-hosted Valkey atomic utrzymał najwyższą przepustowość i najniższe p99 podczas obu faz reshardingu. Redis 7.2 po uruchomieniu na tym samym profilu 2~vCPU/7~GiB osiągnął przepustowość i opóźnienia zbliżone do Valkey legacy, a jednocześnie zachował krótszy czas klasycznej migracji slotów. Valkey legacy miał nieco niższą przepustowość i wyższe p99 niż Redis 7.2, ale różnica była znacznie mniejsza niż w poprzednim zestawie danych. Memorystore miał stabilne opóźnienia i bardzo krótki czas skalowania w dół, lecz w tym zestawie pomiarów nie osiągnął najwyższej przepustowości. Z punktu widzenia testu self-hosted najważniejszy wniosek jest taki, że atomowa migracja slotów znacząco skraca okno reshardingu względem klasycznej migracji Valkey, a jednocześnie utrzymuje najkorzystniejsze opóźnienia klienta.
 
+\section{Spójność danych podczas partycji sieciowej}
+
+Celem testu split-brain było sprawdzenie, czy w czasie partycji sieciowej klient może otrzymać potwierdzenie zapisu, który po odtworzeniu spójności klastra nie będzie już widoczny. Procedura testu została opisana w podrozdziale~\ref{subsec:split_brain}. Dla Valkey oraz Redis 7.2 wykonano po pięć powtórzeń. Każde powtórzenie trwało 120~s, z czego pierwsze 30~s stanowiło fazę stabilną, a kolejne 90~s obejmowało partycję sieciową między jednym masterem mniejszościowym a pozostałymi węzłami klastra. Klient testowy używał 50 równoległych workerów i zapisywał klucze rozłożone po całej przestrzeni 16384 slotów.
+
+Tabela~\ref{tab:split-brain-summary} zestawia wyniki zagregowane dla pięciu powtórzeń. Rozróżniono dwa typy negatywnego efektu widocznego z perspektywy klienta. Pierwszym są utracone zapisy potwierdzone, czyli klucze, dla których operacja \texttt{SET} zakończyła się sukcesem, ale po naprawie partycji klucz nie był dostępny. Drugim są zapisy odrzucone przez klaster, dla których klient otrzymał błąd, na przykład \texttt{CLUSTERDOWN}; takie operacje oznaczają utratę dostępności, ale nie są traktowane jako utrata potwierdzonych danych.
+
+\begin{table}[htbp]
+\centering
+\caption{Wyniki testu split-brain dla Valkey i Redis 7.2 (5 powtórzeń).}
+\label{tab:split-brain-summary}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrrrrrr}
+\toprule
+Wariant & Potwierdzone & Utracone & Loss rate [\%] & Minority loss [\%] & Majority loss [\%] & Odrzucone & Odrzucone [\%] \\
+\midrule
+Valkey & 2\,001\,315 & 106\,604 & 5{,}33 & 15{,}98 & 0{,}00 & 0 & 0{,}0000 \\
+Redis 7.2 & 1\,969\,922 & 106\,474 & 5{,}41 & 16{,}22 & 0{,}00 & 50 & 0{,}0025 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/split_brain_valkey/split_brain_comparison.png}
+    \caption{Wyniki testu split-brain dla Valkey: utrata potwierdzonych kluczy, wskaźnik utraty według strony partycji oraz żądania dotknięte awarią.}
+    \label{fig:split-brain-valkey}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/split_brain_redis72/split_brain_comparison.png}
+    \caption{Wyniki testu split-brain dla Redis 7.2: utrata potwierdzonych kluczy, wskaźnik utraty według strony partycji oraz żądania dotknięte awarią.}
+    \label{fig:split-brain-redis72}
+\end{figure}
+
+\FloatBarrier
+
+W obu wariantach utrata danych wystąpiła we wszystkich pięciu powtórzeniach i dotyczyła wyłącznie slotów należących pierwotnie do izolowanego mastera mniejszościowego. Dla Valkey utracono 106\,604 z 2\,001\,315 potwierdzonych zapisów, co odpowiada 5{,}33\% wszystkich potwierdzonych operacji oraz 15{,}98\% potwierdzonych zapisów skierowanych do slotów mniejszościowych. Dla Redis 7.2 utracono 106\,474 z 1\,969\,922 potwierdzonych zapisów, czyli 5{,}41\% wszystkich potwierdzonych operacji oraz 16{,}22\% potwierdzonych zapisów do slotów mniejszościowych.
+
+Nie zaobserwowano utraty potwierdzonych zapisów po stronie większościowej. Oznacza to, że po stronie większości klastra mechanizm promocji repliki zachował spójny obraz danych, natomiast zapisy przyjęte przez odizolowanego mastera mniejszościowego przed pełnym wykryciem awarii zostały utracone po jego ponownym dołączeniu jako repliki. Jest to zgodne z modelem asynchronicznej replikacji Redis Cluster i Valkey Cluster: potwierdzenie zapisu przez mastera nie gwarantuje, że zapis został już utrwalony po stronie repliki, która później może zostać promowana.
+
+Różnica między wariantami była niewielka pod względem utraty potwierdzonych danych. Redis 7.2 zarejestrował dodatkowo 50 zapisów odrzuconych jawnie błędem \texttt{ClusterDownError}, wszystkie dla slotów mniejszościowych. Odpowiada to 0{,}0025\% wszystkich prób zapisu. Z punktu widzenia klienta są to operacje jednoznacznie niezaakceptowane przez klaster, a więc powinny zostać obsłużone przez retry lub logikę degradacji aplikacji. W Valkey w tym zestawie powtórzeń nie wystąpiły jawnie odrzucone zapisy, natomiast pojawiło się 103 żądań dotkniętych awarią przez przekroczenie progu opóźnienia. W Redis 7.2 takich żądań było łącznie 270, wliczając 50 błędów \texttt{CLUSTERDOWN}.
+
+Najważniejszy wniosek z testu jest taki, że oba warianty zachowują się jakościowo podobnie: partycja mniejszościowa może prowadzić do utraty zapisów, które klient uznał za zakończone sukcesem, ale utrata ogranicza się do shardu odciętego od większości. Sam fakt, że część operacji zwraca błąd \texttt{CLUSTERDOWN}, nie jest utratą danych, lecz sygnałem utraty dostępności. Z perspektywy aplikacji bardziej krytyczne są operacje potwierdzone i później utracone, ponieważ klient nie ma bezpośredniego sygnału, że wymagają ponownego zapisu.
+
 \section{Rolling upgrade klastra Valkey}
 
 Celem testu rolling upgrade było sprawdzenie, jak klaster Valkey zachowuje się podczas aktualizacji wersji wykonywanej pod obciążeniem. Procedura testu, parametry \texttt{memtier\_benchmark} oraz sposób działania klienta kontrolnego zostały opisane w podrozdziale~\ref{subsec:rolling_upgrade}. Wyniki dla pięciu powtórzeń przedstawiono w tabeli~\ref{tab:upgrade-results}.

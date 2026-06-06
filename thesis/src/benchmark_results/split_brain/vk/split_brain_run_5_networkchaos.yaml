@@ -1,0 +1,127 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"chaos-mesh.org/v1alpha1","kind":"NetworkChaos","metadata":{"annotations":{},"name":"valkey-split-brain","namespace":"vk"},"spec":{"action":"partition","direction":"both","duration":"90s","mode":"all","selector":{"labelSelectors":{"app.kubernetes.io/instance":"valkey","app.kubernetes.io/name":"valkey","chaos-side":"minority"},"namespaces":["vk"]},"target":{"mode":"all","selector":{"labelSelectors":{"app.kubernetes.io/instance":"valkey","app.kubernetes.io/name":"valkey","chaos-side":"majority"},"namespaces":["vk"]}}}}
+  creationTimestamp: "2026-06-05T07:59:05Z"
+  finalizers:
+  - chaos-mesh/records
+  generation: 18
+  name: valkey-split-brain
+  namespace: vk
+  resourceVersion: "1780646435670191024"
+  uid: 267f4371-3f99-4be0-9c90-e1fe674bc8ff
+spec:
+  action: partition
+  direction: both
+  duration: 90s
+  mode: all
+  selector:
+    labelSelectors:
+      app.kubernetes.io/instance: valkey
+      app.kubernetes.io/name: valkey
+      chaos-side: minority
+    namespaces:
+    - vk
+  target:
+    mode: all
+    selector:
+      labelSelectors:
+        app.kubernetes.io/instance: valkey
+        app.kubernetes.io/name: valkey
+        chaos-side: majority
+      namespaces:
+      - vk
+status:
+  conditions:
+  - status: "True"
+    type: Selected
+  - status: "False"
+    type: AllInjected
+  - status: "True"
+    type: AllRecovered
+  - status: "False"
+    type: Paused
+  experiment:
+    containerRecords:
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T07:59:05Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T08:00:35Z"
+        type: Succeeded
+      id: vk/valkey-4
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T07:59:05Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T08:00:35Z"
+        type: Succeeded
+      id: vk/valkey-1
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T07:59:05Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T08:00:35Z"
+        type: Succeeded
+      id: vk/valkey-5
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T07:59:06Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T08:00:35Z"
+        type: Succeeded
+      id: vk/valkey-0
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T07:59:06Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T08:00:35Z"
+        type: Succeeded
+      id: vk/valkey-3
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T07:59:06Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T08:00:35Z"
+        type: Succeeded
+      id: vk/valkey-2
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    desiredPhase: Stop
+  instances:
+    vk/valkey-0: 12
+    vk/valkey-1: 12
+    vk/valkey-2: 12
+    vk/valkey-3: 12
+    vk/valkey-4: 12
+    vk/valkey-5: 12

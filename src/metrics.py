@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Optional, Tuple
@@ -91,7 +92,13 @@ def extract_cpu_util_by_pod(
 
 
 def iter_run_results(doc: Dict[str, Any]) -> Iterable[Tuple[int, Dict[str, Any]]]:
-    for i in range(1, 6):
-        key = f"RUN #{i} RESULTS"
-        if key in doc and isinstance(doc[key], dict):
-            yield i, doc[key]
+    runs = []
+    for key, value in doc.items():
+        match = re.fullmatch(r"RUN #(\d+) RESULTS", key)
+        if match and isinstance(value, dict):
+            runs.append((int(match.group(1)), value))
+
+    if runs:
+        yield from sorted(runs)
+    elif isinstance(doc.get("ALL STATS"), dict):
+        yield 1, doc["ALL STATS"]

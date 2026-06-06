@@ -1,0 +1,26 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: valkey-split-brain
+  namespace: vk
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - vk
+    labelSelectors:
+      app.kubernetes.io/name: "valkey"
+      app.kubernetes.io/instance: "valkey"
+      chaos-side: "minority"
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - vk
+      labelSelectors:
+        app.kubernetes.io/name: "valkey"
+        app.kubernetes.io/instance: "valkey"
+        chaos-side: "majority"
+  duration: "90s"

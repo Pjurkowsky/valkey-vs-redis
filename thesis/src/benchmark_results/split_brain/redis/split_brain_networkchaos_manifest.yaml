@@ -1,0 +1,26 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: redis72-split-brain
+  namespace: redis
+spec:
+  action: partition
+  mode: all
+  selector:
+    namespaces:
+      - redis
+    labelSelectors:
+      app.kubernetes.io/name: "redis-cluster"
+      app.kubernetes.io/instance: "redis72"
+      chaos-side: "minority"
+  direction: both
+  target:
+    mode: all
+    selector:
+      namespaces:
+        - redis
+      labelSelectors:
+        app.kubernetes.io/name: "redis-cluster"
+        app.kubernetes.io/instance: "redis72"
+        chaos-side: "majority"
+  duration: "90s"

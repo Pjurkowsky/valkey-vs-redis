@@ -1,0 +1,127 @@
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  annotations:
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"chaos-mesh.org/v1alpha1","kind":"NetworkChaos","metadata":{"annotations":{},"name":"redis72-split-brain","namespace":"redis"},"spec":{"action":"partition","direction":"both","duration":"90s","mode":"all","selector":{"labelSelectors":{"app.kubernetes.io/instance":"redis72","app.kubernetes.io/name":"redis-cluster","chaos-side":"minority"},"namespaces":["redis"]},"target":{"mode":"all","selector":{"labelSelectors":{"app.kubernetes.io/instance":"redis72","app.kubernetes.io/name":"redis-cluster","chaos-side":"majority"},"namespaces":["redis"]}}}}
+  creationTimestamp: "2026-06-05T09:26:05Z"
+  finalizers:
+  - chaos-mesh/records
+  generation: 18
+  name: redis72-split-brain
+  namespace: redis
+  resourceVersion: "1780651655689471013"
+  uid: f1a9cf7f-23a1-4131-82b6-a5133723280c
+spec:
+  action: partition
+  direction: both
+  duration: 90s
+  mode: all
+  selector:
+    labelSelectors:
+      app.kubernetes.io/instance: redis72
+      app.kubernetes.io/name: redis-cluster
+      chaos-side: minority
+    namespaces:
+    - redis
+  target:
+    mode: all
+    selector:
+      labelSelectors:
+        app.kubernetes.io/instance: redis72
+        app.kubernetes.io/name: redis-cluster
+        chaos-side: majority
+      namespaces:
+      - redis
+status:
+  conditions:
+  - status: "False"
+    type: Paused
+  - status: "True"
+    type: Selected
+  - status: "False"
+    type: AllInjected
+  - status: "True"
+    type: AllRecovered
+  experiment:
+    containerRecords:
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T09:26:05Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T09:27:35Z"
+        type: Succeeded
+      id: redis/redis72-redis-cluster-0
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T09:26:05Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T09:27:35Z"
+        type: Succeeded
+      id: redis/redis72-redis-cluster-4
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T09:26:06Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T09:27:35Z"
+        type: Succeeded
+      id: redis/redis72-redis-cluster-3
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T09:26:06Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T09:27:35Z"
+        type: Succeeded
+      id: redis/redis72-redis-cluster-2
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T09:26:06Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T09:27:35Z"
+        type: Succeeded
+      id: redis/redis72-redis-cluster-1
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    - events:
+      - operation: Apply
+        timestamp: "2026-06-05T09:26:06Z"
+        type: Succeeded
+      - operation: Recover
+        timestamp: "2026-06-05T09:27:35Z"
+        type: Succeeded
+      id: redis/redis72-redis-cluster-5
+      injectedCount: 1
+      phase: Not Injected
+      recoveredCount: 1
+      selectorKey: .Target
+    desiredPhase: Stop
+  instances:
+    redis/redis72-redis-cluster-0: 10
+    redis/redis72-redis-cluster-1: 10
+    redis/redis72-redis-cluster-2: 10
+    redis/redis72-redis-cluster-3: 10
+    redis/redis72-redis-cluster-4: 10
+    redis/redis72-redis-cluster-5: 10

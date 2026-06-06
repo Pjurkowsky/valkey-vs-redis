@@ -50,6 +50,8 @@ def analyse_split_brain_runs(
         keys_missing = report.get("keys_missing", 0)
         keys_missing_minority = report.get("keys_missing_minority", 0)
         keys_missing_majority = report.get("keys_missing_majority", 0)
+        failed_minority = sum(entry.get("failed_minority", 0) for entry in ts)
+        failed_majority = sum(entry.get("failed_majority", 0) for entry in ts)
 
         acked_rate = []
         failed_rate = []
@@ -77,6 +79,8 @@ def analyse_split_brain_runs(
             "acked_minority": acked_minority,
             "acked_majority": acked_majority,
             "total_failed": total_failed,
+            "failed_minority": failed_minority,
+            "failed_majority": failed_majority,
             "total_slow": total_slow,
             "total_affected": total_affected,
             "affected_rate": report.get(
@@ -101,6 +105,7 @@ def analyse_split_brain_runs(
             "p95_latency_ms": report.get("p95_latency_ms", 0.0),
             "p99_latency_ms": report.get("p99_latency_ms", 0.0),
             "max_latency_ms": report.get("max_latency_ms", 0.0),
+            "failed_error_types": report.get("failed_error_types", {}),
             "chaos_epoch_s": timing.get("chaos_epoch_s"),
         })
 
@@ -132,6 +137,11 @@ def print_split_brain_summary(df: pd.DataFrame) -> None:
     majority_lost = int(df["keys_missing_majority"].sum())
     minority_acked = int(df["acked_minority"].sum())
     majority_acked = int(df["acked_majority"].sum())
+    total_attempted = int(df["total_attempted"].sum())
+    total_failed = int(df["total_failed"].sum())
+    failed_minority = int(df["failed_minority"].sum())
+    failed_majority = int(df["failed_majority"].sum())
+    total_affected = int(df["total_affected"].sum())
 
     print(f"\nPer-side breakdown:")
     print(f"  Minority ACK'd:  {minority_acked}  |  Lost: {minority_lost}"
@@ -140,6 +150,30 @@ def print_split_brain_summary(df: pd.DataFrame) -> None:
     print(f"  Majority ACK'd:  {majority_acked}  |  Lost: {majority_lost}"
           f"  ({majority_lost / majority_acked * 100:.4f}%)" if majority_acked > 0 else
           f"  Majority ACK'd:  {majority_acked}  |  Lost: {majority_lost}")
+
+    print(f"\nClient-visible rejected writes:")
+    if total_attempted > 0:
+        print(f"  Failed writes:   {total_failed} / {total_attempted} attempted"
+              f"  ({total_failed / total_attempted * 100:.4f}%)")
+        print(f"  Affected writes: {total_affected} / {total_attempted} attempted"
+              f"  ({total_affected / total_attempted * 100:.4f}%)")
+    else:
+        print(f"  Failed writes:   {total_failed} / {total_attempted} attempted")
+        print(f"  Affected writes: {total_affected} / {total_attempted} attempted")
+    print(f"  Minority failed: {failed_minority}")
+    print(f"  Majority failed: {failed_majority}")
+
+    error_totals: Dict[str, int] = {}
+    for error_types in df.get("failed_error_types", []):
+        if not isinstance(error_types, dict):
+            continue
+        for name, count in error_types.items():
+            error_totals[name] = error_totals.get(name, 0) + int(count)
+    if error_totals:
+        formatted = ", ".join(
+            f"{name}={count}" for name, count in sorted(error_totals.items())
+        )
+        print(f"  Error types:     {formatted}")
 
     metrics = [
         ("Keys missing (total, per run)", "keys_missing"),
@@ -152,6 +186,8 @@ def print_split_brain_summary(df: pd.DataFrame) -> None:
         ("ACK'd minority", "acked_minority"),
         ("ACK'd majority", "acked_majority"),
         ("Total failed writes", "total_failed"),
+        ("Failed minority", "failed_minority"),
+        ("Failed majority", "failed_majority"),
         ("Affected request rate", "affected_rate"),
         ("p95 latency (ms)", "p95_latency_ms"),
         ("p99 latency (ms)", "p99_latency_ms"),

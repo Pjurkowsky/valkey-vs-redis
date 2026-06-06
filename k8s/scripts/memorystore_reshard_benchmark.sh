@@ -18,6 +18,9 @@ Defaults:
   TARGET_SHARDS=4
   N=5
   TEST_TIME=900
+  VERIFY_RESHARD_DATA=false
+  INTEGRITY_DATASET_MB=100
+  INTEGRITY_VERIFY_MODE=sample
 EOF
 }
 
@@ -38,6 +41,7 @@ LOCATION="${LOCATION:-europe-central2}"
 NS="${NS:-vk}"
 ARTIFACT_REPO="${ARTIFACT_REPO:-valkey-bench}"
 IMAGE="${MEMTIER_IMAGE:-${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPO}/memtier_k8s:1}"
+BACKUP_IMAGE="${BACKUP_IMAGE:-${LOCATION}-docker.pkg.dev/${PROJECT_ID}/${ARTIFACT_REPO}/backup_restore:1}"
 REMOTE_OUT="/work/results/memorystore_reshard"
 
 N="${N:-5}"
@@ -51,8 +55,26 @@ TEST_TIME="${TEST_TIME:-900}"
 KEYS="${MEMTIER_KEYS:-100000}"
 DATA_SIZE="${MEMTIER_DATA_SIZE:-1024}"
 RATIO="${MEMTIER_RATIO:-1:1}"
+MEMTIER_RANDOM_DATA="${MEMTIER_RANDOM_DATA:-false}"
 STEADY_STATE_WAIT="${STEADY_STATE_WAIT:-30}"
 OPERATION_SETTLE_WAIT="${OPERATION_SETTLE_WAIT:-30}"
+VERIFY_RESHARD_DATA="${VERIFY_RESHARD_DATA:-false}"
+INTEGRITY_DATASET_MB="${INTEGRITY_DATASET_MB:-100}"
+INTEGRITY_VERIFY_MODE="${INTEGRITY_VERIFY_MODE:-sample}"
+INTEGRITY_RANDOM_DATA="${INTEGRITY_RANDOM_DATA:-true}"
+INTEGRITY_CLEANUP="${INTEGRITY_CLEANUP:-true}"
+INTEGRITY_SEED_TIMEOUT_SECONDS="${INTEGRITY_SEED_TIMEOUT_SECONDS:-14400}"
+INTEGRITY_VERIFY_TIMEOUT_SECONDS="${INTEGRITY_VERIFY_TIMEOUT_SECONDS:-3600}"
+INTEGRITY_RANDOM_DATA_ARG=""
+if [[ "${INTEGRITY_RANDOM_DATA}" == "true" ]]; then
+  INTEGRITY_RANDOM_DATA_ARG="--random-data"
+fi
+MEMTIER_RANDOM_DATA_ARG=""
+case "${MEMTIER_RANDOM_DATA}" in
+  1|true|TRUE|yes|YES|on|ON)
+    MEMTIER_RANDOM_DATA_ARG="--random-data"
+    ;;
+esac
 
 mkdir -p "${LOCAL_OUT}"
 
@@ -246,7 +268,7 @@ start_memtier_pod() {
         --test-time='${TEST_TIME}' \
         --key-maximum='${KEYS}' \
         --data-size='${DATA_SIZE}' \
-        --ratio='${RATIO}' \
+        ${MEMTIER_RANDOM_DATA_ARG:+${MEMTIER_RANDOM_DATA_ARG} }--ratio='${RATIO}' \
         --json-out-file '${REMOTE_OUT}/${out_file}' \
         --run-count 1 \
         --print-percentiles='50,95,99,99.9'
@@ -280,6 +302,211 @@ finish_memtier_pod() {
   fi
 
   kubectl cp "${NS}/${pod_name}:${REMOTE_OUT}/${out_file}" "${LOCAL_OUT}/${out_file}"
+}
+
+wait_for_command_pod() {
+  local pod_name="$1"
+  local timeout_s="$2"
+
+  if ! wait_for_pod_marker "${NS}" "${pod_name}" "${POD_DONE_FILE}" "${timeout_s}"; then
+    echo "ERROR: pod ${pod_name} did not signal completion." >&2
+    print_pod_debug_info "${NS}" "${pod_name}"
+    return 1
+  fi
+
+  local exit_code
+  exit_code="$(read_pod_exit_code "${NS}" "${pod_name}" "${POD_EXIT_CODE_FILE}")"
+  if [[ -z "${exit_code}" || "${exit_code}" != "0" ]]; then
+    echo "ERROR: pod ${pod_name} exited with code ${exit_code:-unknown}." >&2
+    print_pod_debug_info "${NS}" "${pod_name}"
+    return 1
+  fi
+}
+
+wait_for_pod_ready() {
+  local pod_name="$1"
+  local timeout_s="${2:-120}"
+
+  kubectl wait pod/"${pod_name}" -n "${NS}" \
+    --for=condition=Ready --timeout="${timeout_s}s"
+}
+
+run_integrity_seed_pod() {
+  local run_idx="$1"
+  local host="$2"
+  local port="$3"
+  local run_id="$4"
+  local report_file="$5"
+  local pod_name="ms-reshard-seed-${run_idx}"
+
+  kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+  kubectl run "${pod_name}" -n "${NS}" \
+    --image="${BACKUP_IMAGE}" \
+    --restart=Never \
+    --command -- \
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      python /work/backup_restore_seed.py \
+        --mode seed \
+        --host '${host}' --port '${port}' \
+        --target-mb '${INTEGRITY_DATASET_MB}' \
+        --run-id '${run_id}' \
+        ${INTEGRITY_RANDOM_DATA_ARG} \
+        --output '${REMOTE_OUT}/${report_file}'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
+
+  wait_for_command_pod "${pod_name}" "${INTEGRITY_SEED_TIMEOUT_SECONDS}"
+  kubectl cp "${NS}/${pod_name}:${REMOTE_OUT}/${report_file}" "${LOCAL_OUT}/${report_file}"
+  kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null
+}
+
+run_integrity_verify_pod() {
+  local run_idx="$1"
+  local phase="$2"
+  local host="$3"
+  local port="$4"
+  local seed_report="$5"
+  local verify_report="$6"
+  local pod_name="ms-reshard-verify-${phase}-${run_idx}"
+
+  kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+  kubectl run "${pod_name}" -n "${NS}" \
+    --image="${BACKUP_IMAGE}" \
+    --restart=Never \
+    --command -- \
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      while [ ! -f '${REMOTE_OUT}/${seed_report}' ]; do sleep 1; done
+      python /work/backup_restore_seed.py \
+        --mode verify \
+        --host '${host}' --port '${port}' \
+        --seed-report '${REMOTE_OUT}/${seed_report}' \
+        --verify-mode '${INTEGRITY_VERIFY_MODE}' \
+        --output '${REMOTE_OUT}/${verify_report}'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
+
+  wait_for_pod_ready "${pod_name}" 120
+  kubectl cp "${LOCAL_OUT}/${seed_report}" "${NS}/${pod_name}:${REMOTE_OUT}/${seed_report}"
+  wait_for_command_pod "${pod_name}" "${INTEGRITY_VERIFY_TIMEOUT_SECONDS}"
+  kubectl cp "${NS}/${pod_name}:${REMOTE_OUT}/${verify_report}" "${LOCAL_OUT}/${verify_report}"
+  kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null
+
+  local integrity_ok
+  integrity_ok="$("${PYTHON_BIN}" -c "import json; print(str(bool(json.load(open('${LOCAL_OUT}/${verify_report}')).get('integrity_ok', False))).lower())")"
+  if [[ "${integrity_ok}" != "true" ]]; then
+    echo "ERROR: integrity verification failed for ${verify_report}" >&2
+    return 1
+  fi
+}
+
+run_integrity_cleanup_pod() {
+  local run_idx="$1"
+  local host="$2"
+  local port="$3"
+  local seed_report="$4"
+  local pod_name="ms-reshard-cleanup-${run_idx}"
+
+  kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null 2>&1 || true
+  kubectl run "${pod_name}" -n "${NS}" \
+    --image="${BACKUP_IMAGE}" \
+    --restart=Never \
+    --command -- \
+    /bin/sh -c "
+      mkdir -p '${REMOTE_OUT}'
+      while [ ! -f '${REMOTE_OUT}/${seed_report}' ]; do sleep 1; done
+      python /work/backup_restore_seed.py \
+        --mode cleanup \
+        --host '${host}' --port '${port}' \
+        --seed-report '${REMOTE_OUT}/${seed_report}'
+      status=\$?
+      echo \"\$status\" > '${POD_EXIT_CODE_FILE}'
+      touch '${POD_DONE_FILE}'
+      sleep '${POD_HOLD_SECONDS}'
+    "
+
+  wait_for_pod_ready "${pod_name}" 120
+  kubectl cp "${LOCAL_OUT}/${seed_report}" "${NS}/${pod_name}:${REMOTE_OUT}/${seed_report}"
+  wait_for_command_pod "${pod_name}" "${INTEGRITY_VERIFY_TIMEOUT_SECONDS}"
+  kubectl delete pod "${pod_name}" -n "${NS}" --ignore-not-found >/dev/null
+}
+
+write_integrity_summary() {
+  local run_idx="$1"
+  local run_id="$2"
+  local seed_report="$3"
+  local verify_up_report="$4"
+  local verify_down_report="$5"
+  local summary_file="${LOCAL_OUT}/reshard_integrity_${run_idx}.json"
+
+  "${PYTHON_BIN}" - "${summary_file}" "${run_idx}" "${run_id}" "${seed_report}" "${verify_up_report}" "${verify_down_report}" "${LOCAL_OUT}" "${INSTANCE_ID}" "${LOCATION}" "${MEMORYSTORE_PRODUCT}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+summary_path = Path(sys.argv[1])
+run_idx = int(sys.argv[2])
+run_id = sys.argv[3]
+seed_report = sys.argv[4]
+verify_up_report = sys.argv[5]
+verify_down_report = sys.argv[6]
+local_out = Path(sys.argv[7])
+instance_id = sys.argv[8]
+location = sys.argv[9]
+product = sys.argv[10]
+
+def load(name):
+    with (local_out / name).open() as fh:
+        return json.load(fh)
+
+seed = load(seed_report)
+up = load(verify_up_report)
+down = load(verify_down_report)
+
+doc = {
+    "run": run_idx,
+    "run_id": run_id,
+    "provider": f"memorystore_{product}",
+    "instance": instance_id,
+    "location": location,
+    "dataset_mb": seed.get("target_mb"),
+    "seed_report": seed_report,
+    "verify_up_report": verify_up_report,
+    "verify_down_report": verify_down_report,
+    "seed_completed": bool(seed.get("completed", False)),
+    "seed_written_keys": seed.get("written_keys", 0),
+    "seed_random_data": bool(seed.get("random_data", False)),
+    "verify_up_integrity_ok": bool(up.get("integrity_ok", False)),
+    "verify_down_integrity_ok": bool(down.get("integrity_ok", False)),
+    "integrity_ok": bool(up.get("integrity_ok", False)) and bool(down.get("integrity_ok", False)),
+    "verify_mode": down.get("verify_mode", up.get("verify_mode", "unknown")),
+    "verify_up": {
+        "sample_size": up.get("sample_size"),
+        "keys_found": up.get("keys_found"),
+        "keys_missing": up.get("keys_missing"),
+        "verify_errors": up.get("verify_errors"),
+        "verify_duration_s": up.get("verify_duration_s"),
+    },
+    "verify_down": {
+        "sample_size": down.get("sample_size"),
+        "keys_found": down.get("keys_found"),
+        "keys_missing": down.get("keys_missing"),
+        "verify_errors": down.get("verify_errors"),
+        "verify_duration_s": down.get("verify_duration_s"),
+    },
+}
+
+with summary_path.open("w") as fh:
+    json.dump(doc, fh, indent=2)
+    fh.write("\n")
+PY
 }
 
 write_up_timing() {
@@ -358,10 +585,22 @@ echo "LOCATION=${LOCATION}"
 echo "INSTANCE_ID=${INSTANCE_ID}"
 echo "DISCOVERY_ENDPOINT=${DISCOVERY_HOST}:${PORT}"
 echo "MEMTIER_IMAGE=${IMAGE}"
+echo "MEMTIER_THREADS=${THREADS}"
+echo "MEMTIER_CLIENTS=${CLIENTS}"
+echo "MEMTIER_KEYS=${KEYS}"
+echo "MEMTIER_DATA_SIZE=${DATA_SIZE}"
+echo "MEMTIER_RATIO=${RATIO}"
+echo "MEMTIER_RANDOM_DATA=${MEMTIER_RANDOM_DATA}"
+echo "BACKUP_IMAGE=${BACKUP_IMAGE}"
 echo "N=${N}"
 echo "TEST_TIME=${TEST_TIME}"
 echo "ORIGINAL_SHARDS=${ORIGINAL_SHARDS}"
 echo "TARGET_SHARDS=${TARGET_SHARDS}"
+echo "VERIFY_RESHARD_DATA=${VERIFY_RESHARD_DATA}"
+echo "INTEGRITY_DATASET_MB=${INTEGRITY_DATASET_MB}"
+echo "INTEGRITY_VERIFY_MODE=${INTEGRITY_VERIFY_MODE}"
+echo "INTEGRITY_RANDOM_DATA=${INTEGRITY_RANDOM_DATA}"
+echo "INTEGRITY_CLEANUP=${INTEGRITY_CLEANUP}"
 
 ensure_shard_count "${ORIGINAL_SHARDS}"
 
@@ -374,6 +613,16 @@ for i in $(seq 1 "${N}"); do
   UP_POD="memtier-ms-reshard-up-${i}"
   UP_OUT="reshard_run_${i}.json"
   UP_STATUS="success"
+  INTEGRITY_RUN_ID="ms_reshard_${i}_$(date +%s)"
+  SEED_REPORT="seed_report_reshard_${i}.json"
+  VERIFY_UP_REPORT="verify_report_reshard_up_${i}.json"
+  VERIFY_DOWN_REPORT="verify_report_reshard_down_${i}.json"
+
+  if [[ "${VERIFY_RESHARD_DATA}" == "true" ]]; then
+    echo "[${i}] Seeding ${INTEGRITY_DATASET_MB} MB integrity dataset..."
+    run_integrity_seed_pod "${i}" "${DISCOVERY_HOST}" "${PORT}" "${INTEGRITY_RUN_ID}" "${SEED_REPORT}"
+    echo "[${i}] Integrity seed report saved: ${LOCAL_OUT}/${SEED_REPORT}"
+  fi
 
   echo "[${i}] Starting memtier for managed reshard-up (test-time=${TEST_TIME}s)..."
   start_memtier_pod "${UP_POD}" "${UP_OUT}" "${DISCOVERY_HOST}" "${PORT}"
@@ -397,6 +646,17 @@ for i in $(seq 1 "${N}"); do
   if [[ "${UP_STATUS}" != "success" ]]; then
     echo "[${i}] Reshard-up failed; stopping before downscale." >&2
     exit 1
+  fi
+
+  if [[ "${VERIFY_RESHARD_DATA}" == "true" ]]; then
+    echo "[${i}] Verifying integrity after reshard-up..."
+    if ! run_integrity_verify_pod "${i}" "up" "${DISCOVERY_HOST}" "${PORT}" "${SEED_REPORT}" "${VERIFY_UP_REPORT}"; then
+      if [[ "${INTEGRITY_CLEANUP}" == "true" ]]; then
+        run_integrity_cleanup_pod "${i}" "${DISCOVERY_HOST}" "${PORT}" "${SEED_REPORT}" || true
+      fi
+      exit 1
+    fi
+    echo "[${i}] Reshard-up integrity OK: ${LOCAL_OUT}/${VERIFY_UP_REPORT}"
   fi
 
   echo "[${i}] Waiting ${OPERATION_SETTLE_WAIT}s before downscale phase..."
@@ -429,6 +689,23 @@ for i in $(seq 1 "${N}"); do
     echo "[${i}] Reshard-down failed; attempting restore to ${ORIGINAL_SHARDS} shards." >&2
     update_shard_count "${ORIGINAL_SHARDS}" "restore" "${i}" || true
     exit 1
+  fi
+
+  if [[ "${VERIFY_RESHARD_DATA}" == "true" ]]; then
+    echo "[${i}] Verifying integrity after reshard-down..."
+    if ! run_integrity_verify_pod "${i}" "down" "${DISCOVERY_HOST}" "${PORT}" "${SEED_REPORT}" "${VERIFY_DOWN_REPORT}"; then
+      if [[ "${INTEGRITY_CLEANUP}" == "true" ]]; then
+        run_integrity_cleanup_pod "${i}" "${DISCOVERY_HOST}" "${PORT}" "${SEED_REPORT}" || true
+      fi
+      exit 1
+    fi
+    write_integrity_summary "${i}" "${INTEGRITY_RUN_ID}" "${SEED_REPORT}" "${VERIFY_UP_REPORT}" "${VERIFY_DOWN_REPORT}"
+    echo "[${i}] Reshard integrity summary saved: ${LOCAL_OUT}/reshard_integrity_${i}.json"
+
+    if [[ "${INTEGRITY_CLEANUP}" == "true" ]]; then
+      echo "[${i}] Cleaning up integrity dataset..."
+      run_integrity_cleanup_pod "${i}" "${DISCOVERY_HOST}" "${PORT}" "${SEED_REPORT}"
+    fi
   fi
 
   echo "[${i}] Done."

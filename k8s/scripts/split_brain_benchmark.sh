@@ -4,27 +4,66 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Split-brain consistency benchmark
 #
-# Partitions Valkey nodes into minority (1 shard) and majority (2 shards),
+# Partitions cluster nodes into minority (1 shard) and majority (2 shards),
 # writes keys spread across all hash slots, then verifies which ACK'd keys
 # on minority-side slots were lost after the partition heals.
 # ---------------------------------------------------------------------------
 
 N="${N:-5}"
-NS="${NS:-vk}"
-RELEASE="${RELEASE:-valkey}"
-STS="${STS:-${RELEASE}}"
-CLI_POD="${VALKEY_CLI_POD:-${STS}-0}"
-SERVICE_NAME="${SERVICE_NAME:-${RELEASE}}"
+PROVIDER="${PROVIDER:-valkey}"
+case "${PROVIDER}" in
+  valkey)
+    DEFAULT_NS="vk"
+    DEFAULT_RELEASE="valkey"
+    DEFAULT_CLI_BIN="valkey-cli"
+    DEFAULT_SYSTEM_NAME="Valkey"
+    ;;
+  redis|redis72)
+    PROVIDER="redis72"
+    DEFAULT_NS="redis"
+    DEFAULT_RELEASE="redis72"
+    DEFAULT_CLI_BIN="redis-cli"
+    DEFAULT_SYSTEM_NAME="Redis 7.2"
+    ;;
+  *)
+    echo "ERROR: PROVIDER must be valkey or redis72." >&2
+    exit 1
+    ;;
+esac
+
+NS="${NS:-${DEFAULT_NS}}"
+RELEASE="${RELEASE:-${DEFAULT_RELEASE}}"
+
+case "${PROVIDER}" in
+  valkey)
+    DEFAULT_STS="${RELEASE}"
+    DEFAULT_SERVICE_NAME="${RELEASE}"
+    DEFAULT_CHAOS_NAME="${RELEASE}-split-brain"
+    DEFAULT_POD_SELECTOR="app.kubernetes.io/name=valkey,app.kubernetes.io/instance=${RELEASE}"
+    ;;
+  redis72)
+    DEFAULT_STS="${RELEASE}-redis-cluster"
+    DEFAULT_SERVICE_NAME="${DEFAULT_STS}"
+    DEFAULT_CHAOS_NAME="${RELEASE}-split-brain"
+    DEFAULT_POD_SELECTOR="app.kubernetes.io/name=redis-cluster,app.kubernetes.io/instance=${RELEASE}"
+    ;;
+esac
+
+STS="${STS:-${DEFAULT_STS}}"
+CLI_POD="${CLI_POD:-${VALKEY_CLI_POD:-${STS}-0}}"
+CLI_BIN="${CLI_BIN:-${DEFAULT_CLI_BIN}}"
+SYSTEM_NAME="${SYSTEM_NAME:-${DEFAULT_SYSTEM_NAME}}"
+SERVICE_NAME="${SERVICE_NAME:-${DEFAULT_SERVICE_NAME}}"
 IMAGE="${CONSISTENCY_IMAGE:-consistency_checker:2}"
 LOCAL_OUT="${1:-./results/split_brain}"
 REMOTE_OUT="/work/results/split_brain"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CHAOS_YAML="${CHAOS_YAML:-}"
-CHAOS_NAME="${CHAOS_NAME:-valkey-split-brain}"
+CHAOS_NAME="${CHAOS_NAME:-${DEFAULT_CHAOS_NAME}}"
 CHAOS_NAMESPACE="${CHAOS_NAMESPACE:-${NS}}"
 CHAOS_MESH_NAMESPACE="${CHAOS_MESH_NAMESPACE:-chaos-mesh}"
 CHAOS_DAEMON_NAME="${CHAOS_DAEMON_NAME:-chaos-daemon}"
-VALKEY_POD_SELECTOR="${VALKEY_POD_SELECTOR:-app.kubernetes.io/name=valkey,app.kubernetes.io/instance=${RELEASE}}"
+POD_SELECTOR="${POD_SELECTOR:-${VALKEY_POD_SELECTOR:-${DEFAULT_POD_SELECTOR}}}"
 
 source "${SCRIPT_DIR}/pod_results.sh"
 
@@ -63,17 +102,20 @@ print_config() {
   cat <<EOF
 ==> Split-brain benchmark configuration
 N=${N}
+PROVIDER=${PROVIDER}
+SYSTEM_NAME=${SYSTEM_NAME}
 NS=${NS}
 RELEASE=${RELEASE}
 STS=${STS}
 CLI_POD=${CLI_POD}
+CLI_BIN=${CLI_BIN}
 SERVICE_NAME=${SERVICE_NAME}
 HOST=${HOST}
 PORT=${PORT}
 IMAGE=${IMAGE}
 LOCAL_OUT=${LOCAL_OUT}
 REMOTE_OUT=${REMOTE_OUT}
-VALKEY_POD_SELECTOR=${VALKEY_POD_SELECTOR}
+POD_SELECTOR=${POD_SELECTOR}
 CHAOS_NAME=${CHAOS_NAME}
 CHAOS_NAMESPACE=${CHAOS_NAMESPACE}
 CHAOS_MESH_NAMESPACE=${CHAOS_MESH_NAMESPACE}
@@ -107,7 +149,7 @@ write_yaml_label_selectors() {
       continue
     fi
     if [[ "${selector}" != *=* || "${selector}" == *"!="* ]]; then
-      echo "ERROR: VALKEY_POD_SELECTOR only supports comma-separated key=value selectors for NetworkChaos generation: ${selector}" >&2
+      echo "ERROR: POD_SELECTOR only supports comma-separated key=value selectors for NetworkChaos generation: ${selector}" >&2
       return 1
     fi
     key="${selector%%=*}"
@@ -134,7 +176,7 @@ spec:
       - ${NS}
     labelSelectors:
 EOF
-    write_yaml_label_selectors "${VALKEY_POD_SELECTOR}" 6
+    write_yaml_label_selectors "${POD_SELECTOR}" 6
     cat <<EOF
       chaos-side: "minority"
   direction: both
@@ -145,7 +187,7 @@ EOF
         - ${NS}
       labelSelectors:
 EOF
-    write_yaml_label_selectors "${VALKEY_POD_SELECTOR}" 8
+    write_yaml_label_selectors "${POD_SELECTOR}" 8
     cat <<EOF
         chaos-side: "majority"
   duration: "${CHAOS_DURATION}"
@@ -184,7 +226,7 @@ preflight() {
   wait_for_cluster_ok "${CLUSTER_HEALTH_TIMEOUT}"
 }
 
-# -- TLS args for checker and valkey-cli ---------------------------------
+# -- TLS args for checker and cluster CLI --------------------------------
 
 CHECKER_TLS_ARGS=()
 case "${SPLIT_BRAIN_TLS}" in
@@ -200,16 +242,16 @@ case "${SPLIT_BRAIN_RETRY_ON_TIMEOUT}" in
     ;;
 esac
 
-VALKEY_CLI_ARGS=()
+CLI_ARGS=()
 case "${VALKEY_CLI_TLS}" in
   1|true|TRUE|yes|YES|on|ON)
-    VALKEY_CLI_ARGS+=(--tls)
+    CLI_ARGS+=(--tls)
     case "${VALKEY_CLI_TLS_SKIP_VERIFY}" in
       1|true|TRUE|yes|YES|on|ON)
-        VALKEY_CLI_ARGS+=(--insecure)
+        CLI_ARGS+=(--insecure)
         ;;
       *)
-        VALKEY_CLI_ARGS+=(--cacert "${VALKEY_CLI_CACERT}")
+        CLI_ARGS+=(--cacert "${VALKEY_CLI_CACERT}")
         ;;
     esac
     ;;
@@ -223,7 +265,7 @@ discover_minority() {
   # Returns "<pod-name>|<slot-ranges>".
   local nodes_output
   nodes_output="$(kubectl exec "${CLI_POD}" -n "${NS}" -- \
-    valkey-cli "${VALKEY_CLI_ARGS[@]}" cluster nodes 2>/dev/null)"
+    "${CLI_BIN}" "${CLI_ARGS[@]}" cluster nodes 2>/dev/null)"
 
   local target_master_id target_master_pod target_master_slots
   target_master_id="$(echo "${nodes_output}" | awk '$3 ~ /master/ && $3 !~ /fail/ {print $1; exit}')"
@@ -243,7 +285,7 @@ discover_minority() {
 
   local replica_pod
   replica_pod="$(echo "${nodes_output}" | awk -v mid="${target_master_id}" \
-    '$4 == mid && $3 ~ /slave/ {addr=$2; sub(/:.*/, "", addr); sub(/,.*/, "", addr); print addr}')"
+    '$4 == mid && $3 ~ /(slave|replica)/ {addr=$2; sub(/:.*/, "", addr); sub(/,.*/, "", addr); print addr}')"
 
   if [[ -z "${target_master_pod}" ]]; then
     echo "ERROR: could not find a master node" >&2
@@ -268,8 +310,9 @@ discover_minority() {
 
 resolve_address_to_pod() {
   local addr="$1"
-  if [[ "${addr}" == valkey-* ]]; then
-    echo "${addr%%.*}"
+  local candidate="${addr%%.*}"
+  if kubectl get pod "${candidate}" -n "${NS}" >/dev/null 2>&1; then
+    echo "${candidate}"
     return 0
   fi
   local pod_table
@@ -290,7 +333,7 @@ wait_for_cluster_ok() {
 
   while [[ "${elapsed}" -lt "${timeout_s}" ]]; do
     info="$(kubectl exec "${CLI_POD}" -n "${NS}" -- \
-      valkey-cli "${VALKEY_CLI_ARGS[@]}" cluster info 2>/dev/null || true)"
+      "${CLI_BIN}" "${CLI_ARGS[@]}" cluster info 2>/dev/null || true)"
     state="$(awk -F: '$1 == "cluster_state" {gsub(/\r/, "", $2); print $2}' <<<"${info}")"
     slots_assigned="$(awk -F: '$1 == "cluster_slots_assigned" {gsub(/\r/, "", $2); print $2}' <<<"${info}")"
     slots_ok="$(awk -F: '$1 == "cluster_slots_ok" {gsub(/\r/, "", $2); print $2}' <<<"${info}")"
@@ -303,20 +346,20 @@ wait_for_cluster_ok() {
     elapsed=$((elapsed + 2))
   done
 
-  echo "ERROR: Valkey cluster did not become healthy within ${timeout_s}s" >&2
+  echo "ERROR: ${SYSTEM_NAME} cluster did not become healthy within ${timeout_s}s" >&2
   kubectl exec "${CLI_POD}" -n "${NS}" -- \
-    valkey-cli "${VALKEY_CLI_ARGS[@]}" cluster info >&2 || true
+    "${CLI_BIN}" "${CLI_ARGS[@]}" cluster info >&2 || true
   return 1
 }
 
 label_pods() {
   local -a minority_pods=("$@")
   local all_pods
-  all_pods="$(kubectl get pods -n "${NS}" -l "${VALKEY_POD_SELECTOR}" \
+  all_pods="$(kubectl get pods -n "${NS}" -l "${POD_SELECTOR}" \
     -o jsonpath='{.items[*].metadata.name}')"
 
   if [[ -z "${all_pods}" ]]; then
-    echo "ERROR: no Valkey pods matched selector '${VALKEY_POD_SELECTOR}'" >&2
+    echo "ERROR: no ${SYSTEM_NAME} pods matched selector '${POD_SELECTOR}'" >&2
     return 1
   fi
 
@@ -425,7 +468,7 @@ for i in $(seq 1 "${N}"); do
   echo "[${i}] Labeling pods (minority/majority)..."
   label_pods "${MINORITY_PODS[@]}"
 
-  kubectl get pods -n "${NS}" -l "${VALKEY_POD_SELECTOR}" \
+  kubectl get pods -n "${NS}" -l "${POD_SELECTOR}" \
     --show-labels --no-headers | grep -E 'chaos-side' || true
 
   # Start checker pod
@@ -515,7 +558,7 @@ EOF
   echo "[${i}] Cleaning up..."
   cleanup_run_resources "${POD_NAME}"
 
-  echo "[${i}] Waiting for Valkey cluster to stabilize..."
+  echo "[${i}] Waiting for ${SYSTEM_NAME} cluster to stabilize..."
   kubectl rollout status "sts/${STS}" -n "${NS}" --timeout="${ROLLOUT_TIMEOUT}"
   wait_for_cluster_ok "${CLUSTER_HEALTH_TIMEOUT}"
   sleep 15

@@ -18,6 +18,25 @@ DROP_THRESHOLD = 0.50
 STARTUP_IGNORE_SECONDS = 3
 ERROR_RESPONSE_RE = re.compile(r"handle error response:\s*(-[A-Z0-9_]+)")
 TIMESTAMPED_LOG_RE = re.compile(r"^(\d{10,})(?:\.\d+)?\t(.*)$")
+CONNECTION_DROPPED_RE = re.compile(r"\bconnection dropped\.", re.IGNORECASE)
+CONNECTION_ERROR_RE = re.compile(r"\bConnection error:\s*(.+)$")
+MEMTIER_PROGRESS_RE = re.compile(
+    r"\[RUN #\d+\s+\d+%,\s*(\d+)\s+secs\].*?:\s*"
+    r"(\d+)\s+ops,\s*([-0-9.]+)\s+\(avg:.*?\)\s+ops/sec,"
+    r".*?,\s*([-0-9a-zA-Z.]+)\s+\(avg:.*?\)\s+msec latency"
+)
+
+TS_COLUMNS = [
+    "second",
+    "count",
+    "avg_latency",
+    "min_latency",
+    "max_latency",
+    "p50",
+    "p95",
+    "p99",
+    "p999",
+]
 
 
 def parse_time_series(run_result: Dict[str, Any]) -> pd.DataFrame:
@@ -40,7 +59,67 @@ def parse_time_series(run_result: Dict[str, Any]) -> pd.DataFrame:
             "p999": entry.get("p99.90", float("nan")),
         })
 
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows, columns=TS_COLUMNS)
+
+
+def parse_log_time_series(log_path: Path) -> pd.DataFrame:
+    """Extract an approximate per-second series from memtier progress logs.
+
+    memtier can emit an empty JSON time-series when all worker threads restart
+    after connection failures. The progress log still contains the observable
+    client-side throughput, so use it as a fallback for failover detection.
+    """
+    if not log_path.exists():
+        return pd.DataFrame(columns=TS_COLUMNS)
+
+    rows_by_second: Dict[int, Dict[str, Any]] = {}
+    offset = 0
+    last_raw_second: Optional[int] = None
+
+    with log_path.open(errors="replace") as fh:
+        for line in fh:
+            _, message = _parse_timestamped_log_line(line)
+            match = MEMTIER_PROGRESS_RE.search(message)
+            if not match:
+                continue
+
+            raw_second = int(match.group(1))
+            cumulative_ops = int(match.group(2))
+            ops_per_second = _safe_float(match.group(3))
+            latency = _safe_float(match.group(4))
+
+            if last_raw_second is not None and raw_second < last_raw_second:
+                offset += last_raw_second + 1
+            last_raw_second = raw_second
+
+            second = offset + raw_second
+            count = 0 if cumulative_ops == 0 else max(0.0, ops_per_second)
+            current = rows_by_second.get(second)
+            if current is not None and current["count"] >= count:
+                continue
+
+            rows_by_second[second] = {
+                "second": second,
+                "count": count,
+                "avg_latency": latency,
+                "min_latency": latency,
+                "max_latency": latency,
+                "p50": latency,
+                "p95": latency,
+                "p99": latency,
+                "p999": latency,
+            }
+
+    rows = [rows_by_second[sec] for sec in sorted(rows_by_second)]
+    return pd.DataFrame(rows, columns=TS_COLUMNS)
+
+
+def _safe_float(value: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return float("nan")
+    return parsed if np.isfinite(parsed) else float("nan")
 
 
 def detect_failover(ts: pd.DataFrame, chaos_second: Optional[int] = None) -> Dict[str, Any]:
@@ -128,7 +207,7 @@ def parse_memtier_error_log(
     log_path: Optional[Path],
     run_start_ms: Optional[float] = None,
 ) -> Tuple[Dict[str, Any], pd.DataFrame]:
-    """Count application-level error replies printed by memtier."""
+    """Count client-visible errors printed by memtier."""
     if log_path is None or not log_path.exists():
         return {
             "log_file": None,
@@ -148,10 +227,16 @@ def parse_memtier_error_log(
         for line in fh:
             timestamp_s, message = _parse_timestamped_log_line(line)
             match = ERROR_RESPONSE_RE.search(message)
-            if not match:
+            connection_error = CONNECTION_ERROR_RE.search(message)
+            if match:
+                error_type = match.group(1)
+            elif CONNECTION_DROPPED_RE.search(message):
+                error_type = "CONNECTION_DROPPED"
+            elif connection_error:
+                error_type = "CONNECTION_ERROR"
+            else:
                 continue
 
-            error_type = match.group(1)
             error_types[error_type] += 1
 
             if timestamp_s is not None and run_start_ms is not None:
@@ -172,6 +257,8 @@ def parse_memtier_error_log(
         "log_file": log_path.name,
         "failed_request_count": int(sum(error_types.values())),
         "clusterdown_errors": int(error_types.get("-CLUSTERDOWN", 0)),
+        "connection_errors": int(error_types.get("CONNECTION_ERROR", 0)),
+        "connection_dropped": int(error_types.get("CONNECTION_DROPPED", 0)),
         "error_response_types": ", ".join(
             f"{error_type}:{count}" for error_type, count in sorted(error_types.items())
         ),
@@ -291,6 +378,8 @@ def analyse_failover_runs(json_dir: Path) -> Tuple[pd.DataFrame, List[pd.DataFra
         timing_metrics = parse_failover_timing(_timing_path_for_run(f), run_start_ms)
 
         ts = parse_time_series(run_result)
+        if ts.empty:
+            ts = parse_log_time_series(f.with_suffix(".log"))
         metrics = detect_failover(ts, timing_metrics.get("chaos_second"))
         metrics.update(timing_metrics)
 
@@ -359,10 +448,14 @@ def _print_memtier_error_summary(df: pd.DataFrame) -> None:
         runs_with_errors = int((error_df["failed_request_count"] > 0).sum())
         total_failed = int(error_df["failed_request_count"].sum())
         total_clusterdown = int(error_df["clusterdown_errors"].sum())
-        print("\nMemtier error responses from logs:")
-        print(f"  Runs with failed responses: {runs_with_errors}/{len(error_df)}")
-        print(f"  Failed responses total:     {total_failed}")
-        print(f"  CLUSTERDOWN responses:      {total_clusterdown}")
+        total_connection_errors = int(error_df.get("connection_errors", pd.Series(dtype=int)).sum())
+        total_connection_dropped = int(error_df.get("connection_dropped", pd.Series(dtype=int)).sum())
+        print("\nMemtier client-visible errors from logs:")
+        print(f"  Runs with errors:       {runs_with_errors}/{len(error_df)}")
+        print(f"  Error events total:     {total_failed}")
+        print(f"  CLUSTERDOWN responses:  {total_clusterdown}")
+        print(f"  Connection errors:      {total_connection_errors}")
+        print(f"  Connection dropped:     {total_connection_dropped}")
 
 
 def save_failover_csv(df: pd.DataFrame, out_dir: Path) -> None:
