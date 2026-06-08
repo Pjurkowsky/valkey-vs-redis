@@ -224,10 +224,12 @@ def analyse_resilience_runs(
                 if baseline_ops > 0:
                     ts = _trim_terminal_partial_bucket(ts, baseline_ops)
         all_ts.append(ts)
-        event_start_s, event_end_s = _event_window_for_file(json_dir, f, scenario)
+        timing = _timing_for_file(json_dir, f, scenario)
+        event_start_s, event_end_s = _event_window_for_file(json_dir, f, scenario, timing)
         metrics = detect_degradation(ts)
         metrics["file"] = f.name
         metrics["scenario"] = scenario
+        metrics.update(_timing_metrics(timing))
         metrics["event_start_s"] = event_start_s
         metrics["event_end_s"] = event_end_s
         metrics["event_duration_s"] = (
@@ -249,12 +251,26 @@ def _event_window_for_file(
     json_dir: Path,
     result_file: Path,
     scenario: str,
+    timing: Optional[Dict[str, Any]] = None,
 ) -> Tuple[Optional[float], Optional[float]]:
+    timing = timing if timing is not None else _timing_for_file(json_dir, result_file, scenario)
+    if timing:
+        if scenario == "maxmemory" and "test_time_s" in timing:
+            return 0.0, float(timing["test_time_s"])
+
+        start = _relative_event_start(timing)
+        duration = timing.get("stress_duration_s")
+        if duration is None:
+            duration = timing.get("pressure_duration_s", STRESS_DURATIONS[scenario])
+
+        if start is not None:
+            return start, start + float(duration)
+
     if scenario != "maxmemory":
         start = float(STRESS_START_SECOND)
         return start, start + float(STRESS_DURATIONS[scenario])
 
-    run_idx = result_file.stem.rsplit("_", 1)[-1]
+    run_idx = _result_suffix(result_file, scenario)
     timing_file = json_dir / f"maxmemory_resilience_timing_{run_idx}.json"
     if not timing_file.exists():
         start = float(STRESS_START_SECOND)
@@ -269,6 +285,97 @@ def _event_window_for_file(
     start = float(timing.get("steady_state_wait_s", STRESS_START_SECOND))
     duration = float(timing.get("pressure_duration_s", STRESS_DURATIONS[scenario]))
     return start, start + duration
+
+
+def _timing_for_file(
+    json_dir: Path,
+    result_file: Path,
+    scenario: str,
+) -> Optional[Dict[str, Any]]:
+    run_idx = _result_suffix(result_file, scenario)
+    timing_prefixes = {
+        "cpu": "resilience_cpu",
+        "memory": "resilience_mem",
+        "memory-extreme": "resilience_mem_extreme",
+        "maxmemory": "maxmemory_resilience",
+    }
+    timing_file = json_dir / f"{timing_prefixes[scenario]}_timing_{run_idx}.json"
+    if not timing_file.exists():
+        return None
+
+    with timing_file.open() as fh:
+        timing = json.load(fh)
+    timing["timing_file"] = timing_file.name
+    return timing
+
+
+def _result_suffix(result_file: Path, scenario: str) -> str:
+    result_prefixes = {
+        "cpu": "resilience_cpu_run_",
+        "memory": "resilience_mem_run_",
+        "memory-extreme": "resilience_mem_extreme_run_",
+        "maxmemory": "resilience_maxmemory_run_",
+    }
+    prefix = result_prefixes[scenario]
+    if result_file.stem.startswith(prefix):
+        return result_file.stem[len(prefix):]
+    return result_file.stem.rsplit("_", 1)[-1]
+
+
+def _relative_event_start(timing: Dict[str, Any]) -> Optional[float]:
+    chaos_epoch_s = timing.get("chaos_epoch_s")
+    started_epoch_s = timing.get("memtier_started_epoch_s")
+    if chaos_epoch_s is not None and started_epoch_s is not None:
+        return max(0.0, float(chaos_epoch_s) - float(started_epoch_s))
+
+    steady_state = timing.get("steady_state_wait_s")
+    if steady_state is not None:
+        return float(steady_state)
+
+    return None
+
+
+def _timing_metrics(timing: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not timing:
+        return {
+            "timing_file": None,
+            "run": None,
+            "phase": None,
+            "target": None,
+            "target_mb": None,
+            "maxmemory_reference_mb": None,
+            "prefill_report": None,
+            "prefill_memtier_file": None,
+            "target_master_count": None,
+            "target_pods": None,
+            "chaos_epoch_s": None,
+            "memtier_started_epoch_s": None,
+            "stress_duration_s": None,
+            "cpu_workers": None,
+            "cpu_load": None,
+        }
+
+    target_pods = timing.get("target_pods")
+    if isinstance(target_pods, list):
+        target_pods = ", ".join(str(pod) for pod in target_pods)
+
+    return {
+        "timing_file": timing.get("timing_file"),
+        "run": timing.get("run"),
+        "phase": timing.get("phase"),
+        "target": timing.get("target"),
+        "target_mb": timing.get("target_mb"),
+        "maxmemory_reference_mb": timing.get("maxmemory_reference_mb"),
+        "prefill_report": timing.get("prefill_report"),
+        "prefill_memtier_file": timing.get("prefill_memtier_file"),
+        "target_master_count": timing.get("target_master_count"),
+        "target_pods": target_pods,
+        "chaos_epoch_s": timing.get("chaos_epoch_s"),
+        "memtier_started_epoch_s": timing.get("memtier_started_epoch_s"),
+        "stress_duration_s": timing.get("stress_duration_s", timing.get("pressure_duration_s")),
+        "cpu_workers": timing.get("cpu_workers"),
+        "cpu_load": timing.get("cpu_load"),
+    }
 
 
 def print_resilience_summary(df: pd.DataFrame, scenario: str) -> None:
