@@ -17,6 +17,7 @@ Environment:
   PORT=6379
   N=1
   TEST_TIME=30
+  PREFILL_METHOD=seed|none           seed fills first; none leaves cluster empty
   SEED_ALLOW_PARTIAL=true           keep seed report even when maxmemory rejects writes
   STOP_AFTER_ERRORS=50
   RANDOM_DATA=false
@@ -115,6 +116,7 @@ source "${SCRIPT_DIR}/pod_results.sh"
 MAXMEMORY_POLICY="${MAXMEMORY_POLICY:-allkeys-lru}"
 CONFIGURE_POLICY="${CONFIGURE_POLICY:-true}"
 CONFIGURE_MAXMEMORY="${CONFIGURE_MAXMEMORY:-${VALKEY_MAXMEMORY:-}}"
+PREFILL_METHOD="${PREFILL_METHOD:-seed}"
 SEED_ALLOW_PARTIAL="${SEED_ALLOW_PARTIAL:-true}"
 TTL_SECONDS="${TTL_SECONDS:-0}"
 FLUSH_BETWEEN_RUNS="${FLUSH_BETWEEN_RUNS:-true}"
@@ -129,6 +131,15 @@ KEYS="${KEYS:-100000}"
 DATA_SIZE="${DATA_SIZE:-1024}"
 RATIO="${RATIO:-1:1}"
 VARIANT="${VARIANT:-${PROVIDER}_maxmemory_allkeys_lru}"
+
+case "${PREFILL_METHOD}" in
+  seed|none)
+    ;;
+  *)
+    echo "ERROR: PREFILL_METHOD must be seed or none; got ${PREFILL_METHOD}." >&2
+    exit 1
+    ;;
+esac
 
 mkdir -p "${LOCAL_OUT}"
 
@@ -400,6 +411,7 @@ write_summary() {
   local timing_file="${15}"
   local maxmemory_mb="${16}"
   local monitor_file="${17}"
+  local prefill_method="${18}"
 
   "${PYTHON_BIN}" - \
     "${summary_file}" \
@@ -432,7 +444,8 @@ write_summary() {
     "${TEST_TIME}" \
     "${KEYS}" \
     "${DATA_SIZE}" \
-    "${RATIO}" <<'PY'
+    "${RATIO}" \
+    "${prefill_method}" <<'PY'
 import json
 import sys
 from pathlib import Path
@@ -469,6 +482,7 @@ from pathlib import Path
     keys,
     data_size,
     ratio,
+    prefill_method,
 ) = sys.argv[1:]
 
 def load(path):
@@ -568,7 +582,7 @@ summary = {
     "target_mode": target_mode,
     "policy": policy,
     "observed_policy": first_master(after_fill, "maxmemory_policy"),
-    "prefill_method": "seed",
+    "prefill_method": prefill_method,
     "ttl_seconds": seed_report.get("ttl_seconds") or 0,
     "maxmemory_policy": policy,
     "observed_policy_after_fill": first_master(after_fill, "maxmemory_policy"),
@@ -648,7 +662,11 @@ summary = {
     "memtier_p95_ms": percentiles.get("p95.00"),
     "memtier_p99_ms": percentiles.get("p99.00"),
     "memtier_p999_ms": percentiles.get("p99.90"),
-    "prefill_report_status": "seed_completed" if seed_report.get("completed") else "seed_partial",
+    "prefill_report_status": (
+        "none" if prefill_method == "none"
+        else "seed_completed" if seed_report.get("completed")
+        else "seed_partial"
+    ),
     "prefill_sample_count": (monitor or {}).get("sample_count"),
     "prefill_dbsize_growth_ops_sec_to_100": round(prefill_dbsize_ops_sec, 3) if prefill_dbsize_ops_sec is not None else None,
     "prefill_last_dbsize_growth_ops_sec_to_100": round(prefill_last_dbsize_ops_sec, 3) if prefill_last_dbsize_ops_sec is not None else None,
@@ -720,6 +738,7 @@ SERVICE_NAME=${SERVICE_NAME}
 HOST=${HOST}
 PORT=${PORT}
 TARGET_MB=${TARGET_MB}
+PREFILL_METHOD=${PREFILL_METHOD}
 SEED_ALLOW_PARTIAL=${SEED_ALLOW_PARTIAL}
 STOP_AFTER_ERRORS=${STOP_AFTER_ERRORS}
 RANDOM_DATA=${RANDOM_DATA}
@@ -809,13 +828,41 @@ for i in $(seq 1 "${N}"); do
   echo "[${i}] Maxmemory reference: ${MAXMEMORY_MB} MB; seed target=${RUN_TARGET_MB} MB"
   PREFILL_START_EPOCH="$(date +%s)"
 
-  echo "[${i}] Seeding cluster to maxmemory pressure (${RUN_TARGET_MB} MB target)..."
-  seed_fill "${SEED_POD}" "${SEED_REPORT}" "${RUN_TARGET_MB}" "${RUN_ID}"
-  PREFILL_END_EPOCH="$(date +%s)"
+  if [[ "${PREFILL_METHOD}" == "seed" ]]; then
+    echo "[${i}] Seeding cluster to maxmemory pressure (${RUN_TARGET_MB} MB target)..."
+    seed_fill "${SEED_POD}" "${SEED_REPORT}" "${RUN_TARGET_MB}" "${RUN_ID}"
+    PREFILL_END_EPOCH="$(date +%s)"
+    prefill_duration="$("${PYTHON_BIN}" -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}')).get('seed_duration_s'))")"
+    prefill_keys="$("${PYTHON_BIN}" -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}')).get('written_keys'))")"
+    echo "[${i}] Seed done: ${prefill_keys} keys in ${prefill_duration}s"
+  else
+    echo "[${i}] Baseline mode: leaving cluster empty before memtier."
+    PREFILL_END_EPOCH="$(date +%s)"
+    prefill_duration=0
+    prefill_keys=0
+    cat > "${LOCAL_OUT}/${SEED_REPORT}" <<EOF
+{
+  "mode": "baseline_no_prefill",
+  "run_id": $(json_string "${RUN_ID}"),
+  "target_mb": ${RUN_TARGET_MB},
+  "target_keys": 0,
+  "written_keys": 0,
+  "total_bytes": 0,
+  "seed_duration_s": 0,
+  "errors": 0,
+  "write_errors": 0,
+  "oom_errors": 0,
+  "completed": true,
+  "stopped_early": false,
+  "ttl_seconds": ${TTL_SECONDS},
+  "allow_partial": false,
+  "random_data": false,
+  "first_error": null,
+  "last_error": null
+}
+EOF
+  fi
   PREFILL_REACHED_EPOCH=""
-  prefill_duration="$("${PYTHON_BIN}" -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}')).get('seed_duration_s'))")"
-  prefill_keys="$("${PYTHON_BIN}" -c "import json; print(json.load(open('${LOCAL_OUT}/${SEED_REPORT}')).get('written_keys'))")"
-  echo "[${i}] Seed done: ${prefill_keys} keys in ${prefill_duration}s"
 
   echo "[${i}] Capturing after-fill snapshot..."
   snapshot_cluster "${SNAP_FILL_POD}" "after_fill" "${LOCAL_OUT}/${AFTER_FILL_FILE}"
@@ -855,7 +902,7 @@ for i in $(seq 1 "${N}"); do
   "memtier_file": $(json_string "${MEMTIER_FILE}"),
   "memtier_log": $(json_string "${MEMTIER_LOG}"),
   "seed_report": $(json_string "${SEED_REPORT}"),
-  "prefill_method": "seed",
+  "prefill_method": $(json_string "${PREFILL_METHOD}"),
   "prefill_keys": ${prefill_keys},
   "prefill_duration_s": ${prefill_duration}
 }
@@ -878,7 +925,8 @@ EOF
     "${MEMTIER_LOG}" \
     "${TIMING_FILE}" \
     "${MAXMEMORY_MB}" \
-    ""
+    "" \
+    "${PREFILL_METHOD}"
 
   echo "[${i}] Summary saved: ${LOCAL_OUT}/${SUMMARY_FILE}"
   echo "[${i}] Waiting for ${SYSTEM_NAME} cluster health after run..."
