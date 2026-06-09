@@ -11,10 +11,10 @@ cluster:
 valkeyConfig: |
   maxmemory 1gb
   maxmemory-policy allkeys-lru
-  cluster-preferred-endpoint-type ip
+  cluster-preferred-endpoint-type hostname
 
 metrics:
-  enabled: false
+  enabled: true
   serviceMonitor:
     enabled: true
     extraLabels:

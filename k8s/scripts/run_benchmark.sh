@@ -35,6 +35,8 @@ fi
 
 source "${SCRIPT_DIR}/pod_results.sh"
 
+POD_WAIT_TIMEOUT="${POD_WAIT_TIMEOUT:-43200}"
+
 normalize_bool() {
   case "${1:-}" in
     1|true|TRUE|yes|YES|on|ON)
@@ -133,10 +135,17 @@ apply_valkey_runtime_flags() {
   fi
 }
 
-if [[ "${PROVIDER}" != "valkey" && "${PROVIDER}" != "memorystore" ]]; then
-  echo "ERROR: PROVIDER must be valkey or memorystore." >&2
-  exit 1
-fi
+case "${PROVIDER}" in
+  valkey|memorystore)
+    ;;
+  redis|redis72)
+    PROVIDER="redis72"
+    ;;
+  *)
+    echo "ERROR: PROVIDER must be valkey, redis72, or memorystore." >&2
+    exit 1
+    ;;
+esac
 
 PYTHON_BIN="$(command -v python3 || command -v python || true)"
 
@@ -229,10 +238,18 @@ EOF
 }
 
 if [[ "${PROVIDER}" == "valkey" ]]; then
+  STS="${STS:-${RELEASE}}"
+  CONTAINER="${CONTAINER:-valkey}"
   HOST="${HOST:-${RELEASE}.${NS}.svc.cluster.local}"
   BENCHMARKED_SYSTEM="${BENCHMARKED_SYSTEM:-Valkey Cluster in Kubernetes}"
   VARIANT="${VARIANT:-valkey}"
   apply_valkey_runtime_flags
+elif [[ "${PROVIDER}" == "redis72" ]]; then
+  STS="${STS:-${RELEASE}-redis-cluster}"
+  CONTAINER="${CONTAINER:-${STS}}"
+  HOST="${HOST:-${STS}.${NS}.svc.cluster.local}"
+  BENCHMARKED_SYSTEM="${BENCHMARKED_SYSTEM:-Redis 7.2 Cluster in Kubernetes}"
+  VARIANT="${VARIANT:-redis72}"
 else
   if [[ "${MEMORYSTORE_PRODUCT}" != "redis" && "${MEMORYSTORE_PRODUCT}" != "valkey" ]]; then
     echo "ERROR: MEMORYSTORE_PRODUCT must be redis or valkey." >&2
@@ -270,12 +287,16 @@ echo "VARIANT=${VARIANT}"
 echo "BENCHMARKED_SYSTEM=${BENCHMARKED_SYSTEM}"
 echo "NS=${NS}"
 echo "RELEASE=${RELEASE}"
+echo "STS=${STS:-}"
+echo "CONTAINER=${CONTAINER:-}"
 echo "HOST=${HOST}"
 echo "PORT=${PORT}"
 echo "N=${N}"
 echo "MEMTIER_IMAGE=${IMAGE}"
 echo "IMAGE_PULL_POLICY=${IMAGE_PULL_POLICY}"
 echo "LOCAL_OUT=${LOCAL_OUT}"
+echo "POD_WAIT_TIMEOUT=${POD_WAIT_TIMEOUT}"
+echo "POD_HOLD_SECONDS=${POD_HOLD_SECONDS}"
 
 RUN_ARGS=(
   kubectl run "${POD_NAME}" -n "${NS}"
@@ -294,6 +315,12 @@ RUN_ARGS+=(--env="VARIANT=${VARIANT}")
 RUN_ARGS+=(--env="BENCHMARKED_SYSTEM=${BENCHMARKED_SYSTEM}")
 RUN_ARGS+=(--env="NS=${NS}")
 RUN_ARGS+=(--env="RELEASE=${RELEASE}")
+if [ -n "${STS:-}" ]; then
+  RUN_ARGS+=(--env="STS=${STS}")
+fi
+if [ -n "${CONTAINER:-}" ]; then
+  RUN_ARGS+=(--env="CONTAINER=${CONTAINER}")
+fi
 RUN_ARGS+=(--env="HOST=${HOST}")
 RUN_ARGS+=(--env="PORT=${PORT}")
 RUN_ARGS+=(--env="N=${N}")
@@ -306,6 +333,8 @@ for var in \
   MEMTIER_PIPELINE \
   MEMTIER_TEST_TIME \
   MEMTIER_KEYS \
+  MEMTIER_TARGET_DATASET_MB \
+  MEMTIER_VALUE_OVERHEAD_BYTES \
   MEMTIER_RANDOM_DATA \
   MEMTIER_TLS \
   MEMTIER_TLS_SKIP_VERIFY \
@@ -313,7 +342,15 @@ for var in \
   MEMTIER_TLS_CERT \
   MEMTIER_TLS_KEY \
   MEMTIER_TLS_SNI \
-  MEMTIER_STATSD_PORT
+  MEMTIER_STATSD_PORT \
+  RESET_BETWEEN_RUNS \
+  RESET_COMMAND_TIMEOUT \
+  WARMUP_BEFORE_RUNS \
+  MEMTIER_WARMUP_THREADS \
+  MEMTIER_WARMUP_CLIENTS \
+  MEMTIER_WARMUP_PIPELINE \
+  MEMTIER_WARMUP_RATIO \
+  MEMTIER_WARMUP_KEY_PATTERN
 do
   if [ -n "${!var:-}" ]; then
     RUN_ARGS+=(--env="${var}=${!var}")
@@ -345,7 +382,7 @@ echo "==> Waiting for benchmark pod to finish writing results..."
 kubectl wait pod/"${POD_NAME}" -n "${NS}" \
   --for=condition=Ready --timeout=60s 2>/dev/null || true
 
-if ! wait_for_pod_marker "${NS}" "${POD_NAME}" "${POD_DONE_FILE}" 7200; then
+if ! wait_for_pod_marker "${NS}" "${POD_NAME}" "${POD_DONE_FILE}" "${POD_WAIT_TIMEOUT}"; then
   echo "==> Benchmark pod did not signal completion."
   print_pod_debug_info "${NS}" "${POD_NAME}"
   exit 1

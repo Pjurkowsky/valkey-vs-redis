@@ -35,11 +35,15 @@ Valkey deployed in cluster mode:
 | Client threads  | 4                                                    |
 | Clients/thread  | 25                                                   |
 | Pipeline        | 10                                                   |
-| Test time       | 300s per run                                        |
-| Keyspace        | 1,000,000 keys                                      |
+| Test time       | 120s per run (`MEMTIER_TEST_TIME`)                  |
+| Keyspace        | up to 1,000,000 keys; capped per payload by target dataset size |
+| Target dataset  | 1,536 MB by default (`MEMTIER_TARGET_DATASET_MB`)    |
+| Data pattern    | random payload data by default (`MEMTIER_RANDOM_DATA=true`) |
 
 
 Metrics collected: ops/sec, latency distribution (p50, p95, p99, p99.9), CPU utilization, memory usage.
+
+For self-hosted runs, the benchmark resets data and seeds the effective keyspace before each measured repetition. This keeps later runs from inheriting a partially full or evicting cluster state from earlier cases.
 
 ## Deployment
 

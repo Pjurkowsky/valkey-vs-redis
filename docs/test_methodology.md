@@ -75,35 +75,47 @@ H1: Klaster Valkey osiaga wyzszy throughput (OPS) i nizsze latencje (p95/p99/p99
 --threads 4
 --clients 25
 --pipeline 10
---test-time 300
---key-maximum 1000000
---run-count 5
---print-all-runs
+--test-time 120
+--key-maximum <effective_keyspace>
+--random-data
+--run-count 1
 --print-percentiles 50,95,99,99.9
 --json-out-file <cpu>_<payload>_<ratio>.json
 ```
 
 > **Uwaga**: `--pipeline 10` moze zawyzyc throughput w stosunku do scenariuszy produkcyjnych. W pracy nalezy jawnie raportowac ten parametr jako czesc konfiguracji testu.
 
+Skrypt uruchamia `memtier_benchmark` osobno dla kazdego powtorzenia `N`.
+Przed kazdym mierzonym powtorzeniem self-hosted klastra wykonywany jest reset danych
+(`FLUSHALL` na masterach wykrytych przez `CLUSTER SLOTS`), a nastepnie automatyczny seed
+keyspace'u przez write-only `memtier_benchmark` (`--ratio 1:0`, `--key-pattern S:S`).
+Pojedyncze raporty seed i pomiaru sa zachowywane pod
+`raw/<cpu>_<payload>_<ratio>/seed_<N>.json` oraz `raw/<cpu>_<payload>_<ratio>/run_<N>.json`.
+Plik najwyzszego poziomu `<cpu>_<payload>_<ratio>.json` laczy mierzone powtorzenia jako
+`RUN #N RESULTS`, aby analiza mogla czytac wynik w dotychczasowym formacie.
+
+Efektywny keyspace jest ograniczany per payload, aby dataset miescil sie w pamieci.
+Domyslnie `MEMTIER_KEYS=1000000` jest gornym limitem, a `MEMTIER_TARGET_DATASET_MB=1536`
+okresla docelowy globalny rozmiar danych dla calego klastra. Dla domyslnych payloadow daje
+to orientacyjnie: 1 KB -> 1 000 000 kluczy, 10 KB -> ok. 153 000 kluczy,
+1000 KB -> ok. 1 500 kluczy. Wyliczenie uwzglednia `MEMTIER_VALUE_OVERHEAD_BYTES=256`
+jako konserwatywny narzut per klucz.
+
+Payload jest domyslnie generowany jako random data (`MEMTIER_RANDOM_DATA=true`), aby duze
+wartosci nie byly zdominowane przez artefakty powtarzalnego, latwo kompresowalnego wzorca.
+
 ### Procedura
 
 1. Zainstaluj Valkey i Redis Cluster z identycznymi Helm values (ta sama liczba shardow, ta sama wielkosc maxmemory).
 2. Zbuduj i wgraj obraz `memtier_k8s:1` do klastra.
 3. Uruchom RBAC: `kubectl apply -f k8s/memtier_rbac.yaml`.
-4. **(Warm-up)** Przed wlasciwym testem uruchom 30-sekundowy warm-up na tym samym keyspace, zeby zaladowac dane do pamieci Valkey:
-
-   ```bash
-   memtier_benchmark --cluster-mode -s valkey.vk.svc.cluster.local -p 6379 \
-     --threads 4 --clients 25 --test-time 30 --key-maximum 1000000
-   ```
-
-5. Uruchom benchmark przez `k8s/scripts/run_benchmark.sh` (skrypt automatycznie zmienia CPU limit przed kazdym zestawem konfiguracji):
+4. Uruchom benchmark przez `k8s/scripts/run_benchmark.sh` (skrypt automatycznie zmienia CPU limit przed kazdym zestawem konfiguracji, resetuje dane i seeduje keyspace przed kazdym powtorzeniem):
 
    ```bash
    bash k8s/scripts/run_benchmark.sh --output ./results/valkey_memtier
    ```
 
-6. Powtorz identycznie dla Redis Cluster (z innym hostem/namespacem).
+5. Powtorz identycznie dla Redis Cluster (z innym hostem/namespacem).
 
 ### Metryki zbierane
 
@@ -111,6 +123,10 @@ H1: Klaster Valkey osiaga wyzszy throughput (OPS) i nizsze latencje (p95/p99/p99
 |---|---|
 | ops/sec | memtier JSON: `RUN #N RESULTS > Totals > Ops/sec` |
 | p50, p95, p99, p99.9 latency (ms) | memtier JSON: `Totals > Percentile Latencies` |
+| reset danych | `FLUSHALL` przed kazdym powtorzeniem `N` dla self-hosted klastra |
+| seed/warm-up | write-only seed przed kazdym powtorzeniem `N`, raportowany jako `raw/.../seed_<N>.json` |
+| effective keyspace | `workload.key_maximum` w pliku wyniku |
+| data pattern | `workload.random_data`; domyslnie `true` |
 | CPU utilization (cores) | Prometheus: `rate(container_cpu_usage_seconds_total{pod=~"valkey-.*"}[30s])` |
 | Memory (working set, MB) | Prometheus: `container_memory_working_set_bytes{pod=~"valkey-.*"}` |
 
