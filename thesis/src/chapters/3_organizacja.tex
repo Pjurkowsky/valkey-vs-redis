@@ -284,6 +284,43 @@ Mierzone metryki obejmują: liczbę utraconych potwierdzonych kluczy z podziałe
 
 \subsection{Resilience przy niedoborze zasobów}\label{subsec:resilience}
 
+Testy resilience badają zachowanie klastra podczas niedoboru zasobów systemowych. Zbadano dwa scenariusze: obciążenie CPU masterów oraz presję pamięci z polityką eksmisji. Oba scenariusze są ograniczone do wariantów self-hosted, ponieważ wymagają wstrzykiwania awarii na poziomie podów Kubernetes. Dla każdej konfiguracji wykonano po pięć powtórzeń.
+
+\subsubsection{Obciążenie CPU}
+
+Scenariusz obciążenia CPU polega na wstrzyknięciu stresu procesora na wybrane pody pełniące rolę mastera za pomocą zasobu \texttt{StressChaos} z Chaos Mesh. Procedura każdego powtórzenia przebiega następująco:
+
+\begin{enumerate}
+    \item uruchomienie poda z \texttt{memtier\_benchmark} zgodnie z profilem z tabeli~\ref{tab:profil_operacyjny};
+    \item stabilizacja obciążenia przez 30~s;
+    \item identyfikacja aktualnych masterów w klastrze poleceniem \texttt{CLUSTER NODES} i wybranie zadanej liczby podów docelowych;
+    \item wygenerowanie i zastosowanie manifestu \texttt{StressChaos} uruchamiającego 4~procesy obciążające CPU (\texttt{workers: 4}, \texttt{load: 100}) na wybranych masterach przez 30~s;
+    \item kontynuacja pomiaru przez \texttt{memtier\_benchmark} do zakończenia okna 120~s;
+    \item zapis wyników JSON, logów oraz pliku z parametrami obciążenia.
+\end{enumerate}
+
+Test wykonano w trzech wariantach: obciążenie jednego, dwóch oraz trzech masterów (z trzech dostępnych w klastrze). Pozwala to zaobserwować, jak degradacja rośnie w zależności od odsetka dotkniętych shardów.
+
+Mierzone metryki obejmują: spadek przepustowości względem poziomu bazowego (próg degradacji 80\%), czas trwania degradacji, minimalne ops/sec w oknie obciążenia, szczytowe opóźnienie p99 i p99.9 podczas stresu, bazowy poziom ops/sec i p99 przed obciążeniem oraz informację, czy po zakończeniu obciążenia nastąpił powrót do co najmniej 90\% poziomu bazowego.
+
+\subsubsection{Presja pamięci}
+
+Scenariusz presji pamięci bada zachowanie klastra po wypełnieniu pamięci do limitu \texttt{maxmemory} z aktywną polityką eksmisji \texttt{allkeys-lru}. Procedura każdego powtórzenia przebiega następująco:
+
+\begin{enumerate}
+    \item konfiguracja polityki eksmisji na wszystkich węzłach klastra poleceniem \texttt{CONFIG SET maxmemory-policy allkeys-lru};
+    \item zapisanie stanu klastra przed wypełnieniem (zużycie pamięci, liczba kluczy, liczba eksmisji);
+    \item wypełnienie klastra za pomocą narzędzia \texttt{backup\_restore\_seed.py} liczbą kluczy wystarczającą do osiągnięcia 100\% limitu \texttt{maxmemory} (3\,145\,728 kluczy o rozmiarze 1~KB przy limicie 3072~MB na shard);
+    \item zapisanie stanu klastra po wypełnieniu (zużycie pamięci, liczba kluczy, liczba eksmisji, błędy OOM);
+    \item uruchomienie poda z \texttt{memtier\_benchmark} na 30~s z obciążeniem mieszanym zgodnym z profilem z tabeli~\ref{tab:profil_operacyjny};
+    \item zapisanie stanu klastra po zakończeniu obserwacji;
+    \item zapis raportu JSON zawierającego wszystkie pomiary, raport seedowania oraz wyniki \texttt{memtier\_benchmark}.
+\end{enumerate}
+
+Między kolejnymi powtórzeniami klaster jest czyszczony poleceniem \texttt{FLUSHALL}, aby zapewnić powtarzalny punkt startowy. Limit \texttt{maxmemory} wynosi 3072~MB na shard, co odpowiada konfiguracji używanej w pozostałych testach self-hosted.
+
+Mierzone metryki obejmują: liczbę eksmitowanych kluczy z podziałem na fazę wypełniania i fazę obserwacji, liczbę kluczy pozostających po teście (\texttt{dbsize}), wykorzystaną pamięć po teście, przepustowość i opóźnienie p99 w oknie obserwacji, liczbę błędów OOM, liczbę błędów zapisu, czas seedowania oraz informację, czy osiągnięto 100\% limitu \texttt{maxmemory}.
+
 \section{Testy utrzymywalności}\label{sec:testy_utrzymywalnosci}
 
 Testy utrzymywalności służą weryfikacji hipotezy H4. Ich celem jest ocena, ile pracy operacyjnej wymaga utrzymanie klastra self-hosted w porównaniu z usługą zarządzaną. W tej części obok metryk technicznych mierzone są również liczba kroków, liczba komend, czas wykonania procedury, konieczność ręcznej interwencji oraz ryzyko błędnej konfiguracji. W rozdziale z wynikami przedstawiono dwa scenariusze wykonywane pod obciążeniem: rolling upgrade oraz resharding klastra.

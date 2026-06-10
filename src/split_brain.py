@@ -321,41 +321,41 @@ def plot_split_brain_comparison(results_df: pd.DataFrame, out_dir: Path) -> None
 
     # Panel 1: keys lost (stacked minority/majority)
     ax_loss.bar(x, results_df["keys_missing_minority"], color="#c44e52",
-                edgecolor="black", linewidth=0.5, label="Lost (minority slots)")
+                edgecolor="black", linewidth=0.5, label="Utracone (sloty mniejszości)")
     ax_loss.bar(x, results_df["keys_missing_majority"],
                 bottom=results_df["keys_missing_minority"],
                 color="#dd8452", edgecolor="black", linewidth=0.5,
-                label="Lost (majority slots)")
+                label="Utracone (sloty większości)")
     ax_loss.set_xticks(x)
-    ax_loss.set_xticklabels([f"Run {j + 1}" for j in range(n)])
-    ax_loss.set_ylabel("Keys lost (ACK'd but missing)")
-    ax_loss.set_title("Data Loss per Run")
+    ax_loss.set_xticklabels([f"Przebieg {j + 1}" for j in range(n)])
+    ax_loss.set_ylabel("Utracone klucze (potwierdzone, brakujące)")
+    ax_loss.set_title("Utrata danych w przebiegu")
     ax_loss.legend(fontsize=8)
     if results_df["keys_missing"].sum() > 0:
         mean_val = results_df["keys_missing"].mean()
         ax_loss.axhline(mean_val, linestyle="--", color="gray", linewidth=0.7,
-                        label=f"Mean total: {mean_val:.1f}")
+                        label=f"Średnia łącznie: {mean_val:.1f}")
         ax_loss.legend(fontsize=8)
 
     # Panel 2: minority vs majority loss rate
     width = 0.35
     ax_rate.bar(x - width / 2, results_df["minority_loss_rate"] * 100, width,
-                color="#c44e52", edgecolor="black", linewidth=0.5, label="Minority loss %")
+                color="#c44e52", edgecolor="black", linewidth=0.5, label="Utrata mniejszości [%]")
     ax_rate.bar(x + width / 2, results_df["majority_loss_rate"] * 100, width,
-                color="#55a868", edgecolor="black", linewidth=0.5, label="Majority loss %")
+                color="#55a868", edgecolor="black", linewidth=0.5, label="Utrata większości [%]")
     ax_rate.set_xticks(x)
-    ax_rate.set_xticklabels([f"Run {j + 1}" for j in range(n)])
-    ax_rate.set_ylabel("Loss rate (%)")
-    ax_rate.set_title("Loss Rate by Partition Side")
+    ax_rate.set_xticklabels([f"Przebieg {j + 1}" for j in range(n)])
+    ax_rate.set_ylabel("Wskaźnik utraty [%]")
+    ax_rate.set_title("Wskaźnik utraty wg strony partycji")
     ax_rate.legend(fontsize=8)
 
     # Panel 3: affected request rate
     ax_affected.bar(x, results_df["affected_rate"] * 100, color="#dd8452",
                     edgecolor="black", linewidth=0.5)
     ax_affected.set_xticks(x)
-    ax_affected.set_xticklabels([f"Run {j + 1}" for j in range(n)])
-    ax_affected.set_ylabel("Affected requests (%)")
-    ax_affected.set_title("User-Visible Impact per Run")
+    ax_affected.set_xticklabels([f"Przebieg {j + 1}" for j in range(n)])
+    ax_affected.set_ylabel("Żądania dotknięte awarią [%]")
+    ax_affected.set_title("Wpływ widoczny dla użytkownika w przebiegu")
 
     fig.tight_layout()
     fig.savefig(out_dir / "split_brain_comparison.png", dpi=150, bbox_inches="tight")

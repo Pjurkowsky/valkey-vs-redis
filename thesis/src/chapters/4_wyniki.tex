@@ -1,5 +1,81 @@
 \chapter{Wyniki badań}\label{ch:wyniki}
 
+\section{Wydajność bazowa}
+
+Celem testu było porównanie przepustowości i opóźnień klastra Valkey oraz Redis 7.2 przy różnych rozmiarach payloadu, proporcjach operacji i limitach vCPU. Parametry testów wydajnościowych zostały opisane w rozdziale~\ref{tab:parametry_wydajnosci}. Dla obu wariantów wykonano po pięć powtórzeń każdej konfiguracji z limitem 1 oraz 2~vCPU na pod, rozmiarami payloadu 1~KB, 10~KB i 1000~KB oraz trzema proporcjami operacji: tylko odczyt (\texttt{0:1}), tylko zapis (\texttt{1:0}) i mieszany (\texttt{1:1}). Klaster składał się z trzech shardów z jedną repliką na shard.
+
+Tabela~\ref{tab:perf-ops} zestawia średnią przepustowość oraz opóźnienie p99 dla obu wariantów. Kolumna \textit{stosunek} podaje iloraz przepustowości Valkey do Redis 7.2; wartość powyżej $1{,}00$ oznacza wyższą przepustowość Valkey. Rysunek~\ref{fig:perf-ops} przedstawia porównanie graficzne przepustowości, rysunek~\ref{fig:perf-p99} zestawia opóźnienia p99, a rysunek~\ref{fig:perf-heatmap} przedstawia heatmapy ops/sec dla obciążenia mieszanego.
+
+\begin{table}[htbp]
+\centering
+\caption{Przepustowość i opóźnienie p99 dla Valkey i Redis 7.2 (5 powtórzeń na konfigurację).}
+\label{tab:perf-ops}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llrrrrrr}
+\toprule
+Profil & vCPU & \multicolumn{2}{c}{Valkey} & \multicolumn{2}{c}{Redis 7.2} & Stosunek \\
+\cmidrule(lr){3-4} \cmidrule(lr){5-6}
+ & & Ops/sec & p99 [ms] & Ops/sec & p99 [ms] & VK/RD \\
+\midrule
+\multicolumn{7}{l}{\textit{Tylko odczyt}} \\
+\quad 1 KB & 1 & $1\,392\,632 \pm 4\,992$ & 3{,}22 & $1\,296\,401 \pm 26\,140$ & 3{,}62 & 1{,}07 \\
+\quad 1 KB & 2 & $1\,316\,514 \pm 6\,379$ & 3{,}53 & $1\,337\,358 \pm 7\,826$ & 3{,}45 & 0{,}98 \\
+\quad 10 KB & 1 & $279\,332 \pm 8\,057$ & 14{,}27 & $293\,239 \pm 1\,953$ & 13{,}99 & 0{,}95 \\
+\quad 10 KB & 2 & $294\,108 \pm 1\,721$ & 13{,}64 & $292\,633 \pm 1\,743$ & 13{,}68 & 1{,}01 \\
+\quad 1000 KB & 1 & $4\,768 \pm 92$ & 686{,}49 & $72\,221 \pm 4\,836$ & 182{,}68 & 0{,}07 \\
+\quad 1000 KB & 2 & $5\,169 \pm 26$ & 622{,}59 & $71\,411 \pm 5\,229$ & 185{,}14 & 0{,}07 \\
+\midrule
+\multicolumn{7}{l}{\textit{Tylko zapis}} \\
+\quad 1 KB & 1 & $1\,551\,441 \pm 9\,088$ & 3{,}62 & $1\,236\,962 \pm 53\,150$ & 4{,}58 & 1{,}25 \\
+\quad 1 KB & 2 & $1\,399\,679 \pm 4\,948$ & 4{,}02 & $1\,293\,184 \pm 15\,243$ & 4{,}33 & 1{,}08 \\
+\quad 10 KB & 1 & $232\,986 \pm 5\,516$ & 20{,}48 & $235\,812 \pm 3\,000$ & 21{,}45 & 0{,}99 \\
+\quad 10 KB & 2 & $237\,327 \pm 4\,434$ & 19{,}15 & $234\,892 \pm 3\,912$ & 19{,}58 & 1{,}01 \\
+\quad 1000 KB & 1 & $3\,771 \pm 98$ & 1422{,}13 & $1\,644 \pm 117$ & 3398{,}04 & 2{,}29 \\
+\quad 1000 KB & 2 & $3\,976 \pm 297$ & 1317{,}27 & $2\,013 \pm 23$ & 2392{,}06 & 1{,}97 \\
+\midrule
+\multicolumn{7}{l}{\textit{Mieszany 50/50}} \\
+\quad 1 KB & 1 & $1\,464\,639 \pm 5\,098$ & 3{,}38 & $1\,250\,642 \pm 31\,434$ & 4{,}36 & 1{,}17 \\
+\quad 1 KB & 2 & $1\,444\,051 \pm 15\,092$ & 3{,}51 & $1\,251\,901 \pm 10\,037$ & 4{,}23 & 1{,}15 \\
+\quad 10 KB & 1 & $297\,137 \pm 1\,298$ & 18{,}35 & $281\,815 \pm 644$ & 20{,}30 & 1{,}05 \\
+\quad 10 KB & 2 & $296\,522 \pm 934$ & 18{,}12 & $285\,714 \pm 421$ & 18{,}82 & 1{,}04 \\
+\quad 1000 KB & 1 & $3\,841 \pm 218$ & 1405{,}75 & $3\,471 \pm 107$ & 1684{,}27 & 1{,}11 \\
+\quad 1000 KB & 2 & $3\,893 \pm 69$ & 1346{,}76 & $3\,107 \pm 52$ & 1726{,}87 & 1{,}25 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/perf_ops_comparison.png}
+    \caption{Porównanie przepustowości Valkey i Redis 7.2 dla trzech profili obciążenia.}
+    \label{fig:perf-ops}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/perf_p99_comparison.png}
+    \caption{Porównanie opóźnień p99 Valkey i Redis 7.2 dla trzech profili obciążenia.}
+    \label{fig:perf-p99}
+\end{figure}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/perf_heatmap_comparison.png}
+    \caption{Heatmapa ops/sec dla obciążenia mieszanego 50/50 --- Valkey (lewy) i Redis 7.2 (prawy).}
+    \label{fig:perf-heatmap}
+\end{figure}
+
+\FloatBarrier
+
+Przy payloadzie 1~KB i obciążeniu mieszanym Valkey osiągnął 1\,464\,639 ops/sec (1~vCPU) oraz 1\,444\,051 ops/sec (2~vCPU), podczas gdy Redis 7.2 osiągnął odpowiednio 1\,250\,642 i 1\,251\,901 ops/sec. Stosunek przepustowości wyniósł 1{,}17 i 1{,}15 na korzyść Valkey. W profilu write-only 1~KB przewaga była większa: stosunek 1{,}25 przy 1~vCPU. Opóźnienie p99 Valkey było niższe lub porównywalne z Redis 7.2 we wszystkich konfiguracjach z payloadem 1~KB i 10~KB.
+
+Przy payloadzie 10~KB różnice między wariantami były niewielkie. W profilu read-only Redis 7.2 miał nieznacznie wyższą przepustowość przy 1~vCPU (293\,239 vs 279\,332 ops/sec, stosunek 0{,}95), natomiast przy 2~vCPU wyniki były praktycznie równe. Opóźnienia p99 pozostawały zbliżone dla obu wariantów w zakresie 13{,}6--21{,}5~ms.
+
+Przy payloadzie 1000~KB zachowanie wariantów różniło się znacząco w zależności od profilu. W profilu read-only Redis 7.2 osiągnął 72\,221 ops/sec, natomiast Valkey jedynie 4\,768 ops/sec --- stosunek 0{,}07. Opóźnienie p99 Valkey przy tym payloadzie wyniosło 686{,}49~ms wobec 182{,}68~ms dla Redis 7.2. W profilu write-only sytuacja była odwrotna: Valkey osiągnął 3\,771 ops/sec wobec 1\,644 ops/sec dla Redis 7.2, a p99 wyniósł 1422{,}13~ms wobec 3398{,}04~ms. W profilu mieszanym Valkey utrzymał przewagę (3\,841 vs 3\,471 ops/sec). Duża rozbieżność w profilu read-only przy payloadzie 1000~KB wskazuje na istotną różnicę w wydajności obsługi dużych odczytów między tymi dwoma systemami w badanej konfiguracji.
+
+Zwiększenie limitu vCPU z 1 do 2 nie przyniosło proporcjonalnego wzrostu przepustowości. Przy payloadzie 1~KB przepustowość Valkey w profilu mieszanym spadła z 1\,464\,639 do 1\,444\,051 ops/sec, a Redis 7.2 wzrósł minimalnie z 1\,250\,642 do 1\,251\,901 ops/sec. Przy payloadzie 10~KB wyniki 1~vCPU i 2~vCPU były zbliżone. Wskazuje to, że przy tej konfiguracji klienta i pipeline 10 oba systemy osiągały nasycenie przepustowości już przy 1~vCPU dla payloadów 1--10~KB.
+
 \section{Porównanie reshardingu klastra}
 
 Celem testu było porównanie czasu i wpływu reshardingu na opóźnienia klienta dla czterech wariantów: klasycznej migracji slotów w samodzielnie utrzymywanym klastrze Valkey, klasycznej migracji slotów w klastrze Redis 7.2, atomowej migracji slotów w Valkey oraz zarządzanego klastra Redis w Google Cloud Memorystore. Wariant Memorystore należy interpretować jako pomiar typu black-box, ponieważ użytkownik inicjuje zmianę liczby shardów przez API dostawcy chmurowego, ale nie ma bezpośredniego wglądu w wewnętrzną kolejność przenoszenia slotów, tworzenia lub usuwania węzłów oraz finalnych kontroli stanu.
@@ -76,6 +152,40 @@ Faza & Wariant & Ops/sec & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 
 Wśród wariantów self-hosted Valkey atomic utrzymał najwyższą przepustowość i najniższe p99 podczas obu faz reshardingu. Redis 7.2 po uruchomieniu na tym samym profilu 2~vCPU/7~GiB osiągnął przepustowość i opóźnienia zbliżone do Valkey legacy, a jednocześnie zachował krótszy czas klasycznej migracji slotów. Valkey legacy miał nieco niższą przepustowość i wyższe p99 niż Redis 7.2, ale różnica była znacznie mniejsza niż w poprzednim zestawie danych. Memorystore miał stabilne opóźnienia i bardzo krótki czas skalowania w dół, lecz w tym zestawie pomiarów nie osiągnął najwyższej przepustowości. Z punktu widzenia testu self-hosted najważniejszy wniosek jest taki, że atomowa migracja slotów znacząco skraca okno reshardingu względem klasycznej migracji Valkey, a jednocześnie utrzymuje najkorzystniejsze opóźnienia klienta.
 
+\section{Failover mastera}
+
+Celem testu było zmierzenie wpływu awarii pojedynczego mastera na klienta podczas ciągłego obciążenia oraz porównanie zachowania klastra Valkey i Redis 7.2. Procedura testu, sposób wstrzykiwania awarii oraz mierzone metryki zostały opisane w podrozdziale~\ref{subsec:failover}. Dla każdego wariantu wykonano po pięć powtórzeń. Każde powtórzenie trwało 120~s, z czego pierwsze 30~s stanowiło fazę stabilną, po której zasób \texttt{PodChaos} w trybie \texttt{pod-failure} z parametrem \texttt{gracePeriod: 1} usuwał jeden pod pełniący rolę mastera. Test był ograniczony do wariantów self-hosted, ponieważ Memorystore nie udostępnia bezpośredniego dostępu do podów.
+
+Tabela~\ref{tab:failover-summary} zestawia wyniki zagregowane dla pięciu powtórzeń. Czas degradacji oznacza czas, przez który przepustowość klienta spadła poniżej połowy poziomu bazowego, i jest liczony dla przebiegów, w których taka degradacja została wykryta. Kolumny \textit{baseline} odnoszą się do fazy stabilnej przed awarią, natomiast kolumny \textit{w~oknie failoveru} opisują zachowanie klienta w sekundach degradacji.
+
+\begin{table}[htbp]
+\centering
+\caption{Wyniki testu failoveru dla Valkey i Redis 7.2 (5 powtórzeń).}
+\label{tab:failover-summary}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+ & & & \multicolumn{2}{c}{Baseline} & \multicolumn{2}{c}{W oknie failoveru} \\
+\cmidrule(lr){4-5} \cmidrule(lr){6-7}
+Wariant & Wykrycia & Degradacja [s] & Ops/sec & p99 [ms] & Utracone ops & Nieudane żąd. & \texttt{CLUSTERDOWN} \\
+\midrule
+Valkey & $4/5$ & $1{,}00 \pm 0{,}00$ & $71\,660 \pm 1\,949$ & $0{,}17$ & $71\,660 \pm 1\,949$ & $24{,}0 \pm 0{,}0$ & 0 \\
+Redis 7.2 & $5/5$ & $1{,}60 \pm 0{,}55$ & $71\,250 \pm 1\,867$ & $0{,}17$ & $113\,204 \pm 36\,484$ & $24{,}0 \pm 0{,}0$ & 0 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\FloatBarrier
+
+W wariancie Valkey degradacja przepustowości poniżej połowy poziomu bazowego została wykryta w czterech z pięciu powtórzeń i w każdym z tych przebiegów trwała 1~s. W jednym powtórzeniu, w którym awaria dotyczyła poda \texttt{valkey-3}, klient nie zarejestrował spadku przekraczającego przyjęty próg degradacji. W wariancie Redis 7.2 degradacja wystąpiła we wszystkich pięciu powtórzeniach i trwała od 1~s do 2~s, średnio $1{,}60 \pm 0{,}55$~s.
+
+W oknie degradacji zarejestrowana przepustowość klienta spadła do zera ukończonych operacji na sekundę. Sam klaster nie był niedostępny --- awaria dotyczyła 1~z~3~masterów, a pozostałe 2~shardy dalej obsługiwały żądania. Zerowy wynik po stronie klienta wynika z konfiguracji \texttt{memtier\_benchmark}: 4~połączenia (\texttt{threads=4}, \texttt{clients=1}) bez pipeliningu (\texttt{pipeline=1}). Przy tak niskim poziomie współbieżności utrata jednego mastera wyzwala rediscovery topologii klastra (\texttt{CLUSTER SLOTS}) na wszystkich wątkach klienta jednocześnie, blokując kompletowanie jakichkolwiek operacji w danym kubełku 1-sekundowym. Brak odpowiedzi \texttt{CLUSTERDOWN} i szybki powrót do poziomu bazowego potwierdzają, że klaster pozostał operacyjny w trakcie failoveru.
+
+Sumaryczna liczba utraconych operacji w oknie degradacji wyniosła średnio 71\,660 dla Valkey (1~s degradacji $\times$ baseline) oraz 113\,204 dla Redis 7.2 (1{,}6~s $\times$ baseline). Większa wartość dla Redis 7.2 wynika z dłuższego czasu degradacji, a nie z niższej przepustowości bazowej.
+
+W obu wariantach liczba nieudanych żądań w oknie failoveru wyniosła 24 na powtórzenie. Dla Valkey były to średnio 23{,}4 błędów połączenia oraz 0{,}6 zerwanego połączenia na powtórzenie. Dla Redis 7.2 były to średnio 20{,}0 błędów połączenia oraz 4{,}0 zerwane połączenia na powtórzenie. W żadnym powtórzeniu i w żadnym z wariantów nie zaobserwowano odpowiedzi \texttt{CLUSTERDOWN}.
+
 \section{Spójność danych podczas partycji sieciowej}
 
 Celem testu split-brain było sprawdzenie, czy w czasie partycji sieciowej klient może otrzymać potwierdzenie zapisu, który po odtworzeniu spójności klastra nie będzie już widoczny. Procedura testu została opisana w podrozdziale~\ref{subsec:split_brain}. Dla Valkey oraz Redis 7.2 wykonano po pięć powtórzeń. Każde powtórzenie trwało 120~s, z czego pierwsze 30~s stanowiło fazę stabilną, a kolejne 90~s obejmowało partycję sieciową między jednym masterem mniejszościowym a pozostałymi węzłami klastra. Klient testowy używał 50 równoległych workerów i zapisywał klucze rozłożone po całej przestrzeni 16384 slotów.
@@ -98,20 +208,6 @@ Redis 7.2 & 1\,969\,922 & 106\,474 & 5{,}41 & 16{,}22 & 0{,}00 & 50 & 0{,}0025 \
 \end{adjustbox}
 \end{table}
 
-\begin{figure}[!htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/split_brain_valkey/split_brain_comparison.png}
-    \caption{Wyniki testu split-brain dla Valkey: utrata potwierdzonych kluczy, wskaźnik utraty według strony partycji oraz żądania dotknięte awarią.}
-    \label{fig:split-brain-valkey}
-\end{figure}
-
-\begin{figure}[!htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/split_brain_redis72/split_brain_comparison.png}
-    \caption{Wyniki testu split-brain dla Redis 7.2: utrata potwierdzonych kluczy, wskaźnik utraty według strony partycji oraz żądania dotknięte awarią.}
-    \label{fig:split-brain-redis72}
-\end{figure}
-
 \FloatBarrier
 
 W obu wariantach utrata danych wystąpiła we wszystkich pięciu powtórzeniach i dotyczyła wyłącznie slotów należących pierwotnie do izolowanego mastera mniejszościowego. Dla Valkey utracono 106\,604 z 2\,001\,315 potwierdzonych zapisów, co odpowiada 5{,}33\% wszystkich potwierdzonych operacji oraz 15{,}98\% potwierdzonych zapisów skierowanych do slotów mniejszościowych. Dla Redis 7.2 utracono 106\,474 z 1\,969\,922 potwierdzonych zapisów, czyli 5{,}41\% wszystkich potwierdzonych operacji oraz 16{,}22\% potwierdzonych zapisów do slotów mniejszościowych.
@@ -121,6 +217,88 @@ Nie zaobserwowano utraty potwierdzonych zapisów po stronie większościowej. Oz
 Różnica między wariantami była niewielka pod względem utraty potwierdzonych danych. Redis 7.2 zarejestrował dodatkowo 50 zapisów odrzuconych jawnie błędem \texttt{ClusterDownError}, wszystkie dla slotów mniejszościowych. Odpowiada to 0{,}0025\% wszystkich prób zapisu. Z punktu widzenia klienta są to operacje jednoznacznie niezaakceptowane przez klaster, a więc powinny zostać obsłużone przez retry lub logikę degradacji aplikacji. W Valkey w tym zestawie powtórzeń nie wystąpiły jawnie odrzucone zapisy, natomiast pojawiło się 103 żądań dotkniętych awarią przez przekroczenie progu opóźnienia. W Redis 7.2 takich żądań było łącznie 270, wliczając 50 błędów \texttt{CLUSTERDOWN}.
 
 Najważniejszy wniosek z testu jest taki, że oba warianty zachowują się jakościowo podobnie: partycja mniejszościowa może prowadzić do utraty zapisów, które klient uznał za zakończone sukcesem, ale utrata ogranicza się do shardu odciętego od większości. Sam fakt, że część operacji zwraca błąd \texttt{CLUSTERDOWN}, nie jest utratą danych, lecz sygnałem utraty dostępności. Z perspektywy aplikacji bardziej krytyczne są operacje potwierdzone i później utracone, ponieważ klient nie ma bezpośredniego sygnału, że wymagają ponownego zapisu.
+
+\section{Resilience przy niedoborze zasobów}
+
+Celem testów resilience było zmierzenie wpływu niedoboru zasobów na klienta oraz porównanie zachowania klastra Valkey i Redis 7.2. Procedura oraz wspólny profil obciążenia tła zostały opisane w podrozdziale~\ref{subsec:resilience}. Zbadano dwa scenariusze: obciążenie CPU masterów oraz presję pamięci z polityką eksmisji \texttt{allkeys-lru}. Oba scenariusze ograniczono do wariantów self-hosted. Dla każdej konfiguracji wykonano po pięć powtórzeń.
+
+\subsection{Obciążenie CPU}
+
+W scenariuszu CPU na wybranych podach pełniących rolę mastera wstrzykiwano obciążenie procesora: cztery procesy obciążające przy zadanym 100\% udziale CPU przez 30~s, rozpoczynane po fazie stabilnej. Test wykonano dla jednego, dwóch oraz trzech obciążonych masterów. Degradacja oznacza spadek przepustowości klienta poniżej 80\% poziomu bazowego, a powrót oznacza odzyskanie co najmniej 90\% poziomu bazowego po zakończeniu obciążenia. Tabela~\ref{tab:resilience-cpu} przedstawia wyniki zagregowane, a rysunek~\ref{fig:resilience-cpu} porównuje spadek przepustowości oraz szczytowe p99 w zależności od liczby obciążonych masterów.
+
+\begin{table}[htbp]
+\centering
+\caption{Wyniki testu resilience dla obciążenia CPU (5 powtórzeń na konfigurację).}
+\label{tab:resilience-cpu}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+Wariant & Masterzy & Baseline ops/sec & Min ops/sec & Spadek [\%] & Baseline p99 [ms] & Szczyt p99 [ms] & Wykryto & Powrót \\
+\midrule
+Valkey & 1 & $113\,734{,}14 \pm 1\,372{,}04$ & $95\,760{,}20 \pm 3\,084{,}43$ & $15{,}78 \pm 3{,}34$ & $6{,}51$ & $11{,}66$ & $1/5$ & $5/5$ \\
+Valkey & 2 & $116\,098{,}80 \pm 1\,187{,}47$ & $47\,002{,}60 \pm 1\,184{,}42$ & $59{,}51 \pm 1{,}36$ & $6{,}55$ & $19{,}02$ & $5/5$ & $5/5$ \\
+Valkey & 3 & $116\,516{,}62 \pm 1\,215{,}75$ & $45\,554{,}60 \pm 1\,864{,}53$ & $60{,}90 \pm 1{,}50$ & $6{,}30$ & $18{,}24$ & $5/5$ & $5/5$ \\
+Redis 7.2 & 1 & $109\,712{,}45 \pm 2\,574{,}40$ & $94\,037{,}60 \pm 3\,059{,}41$ & $14{,}27 \pm 2{,}55$ & $10{,}32$ & $40{,}96$ & $0/5$ & $5/5$ \\
+Redis 7.2 & 2 & $108\,688{,}88 \pm 1\,289{,}76$ & $71\,841{,}40 \pm 2\,880{,}63$ & $33{,}90 \pm 2{,}66$ & $10{,}47$ & $49{,}41$ & $5/5$ & $5/5$ \\
+Redis 7.2 & 3 & $108\,880{,}06 \pm 1\,868{,}37$ & $16\,860{,}00 \pm 1\,178{,}23$ & $84{,}51 \pm 1{,}11$ & $9{,}45$ & $89{,}91$ & $5/5$ & $5/5$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/resilience_cpu_comparison.png}
+    \caption{Spadek przepustowości oraz szczytowe p99 w zależności od liczby obciążonych masterów dla Valkey i Redis 7.2.}
+    \label{fig:resilience-cpu}
+\end{figure}
+
+\FloatBarrier
+
+Przy jednym obciążonym masterze spadek przepustowości był zbliżony dla obu wariantów i wyniósł średnio 15{,}78\% dla Valkey oraz 14{,}27\% dla Redis 7.2. W tej konfiguracji spadek poniżej progu 80\% poziomu bazowego został wykryty w jednym z pięciu powtórzeń dla Valkey i w żadnym powtórzeniu dla Redis 7.2. Przy dwóch obciążonych masterach spadek wyniósł 59{,}51\% dla Valkey oraz 33{,}90\% dla Redis 7.2. Przy trzech obciążonych masterach spadek wyniósł 60{,}90\% dla Valkey oraz 84{,}51\% dla Redis 7.2.
+
+Szczytowe opóźnienie p99 w oknie obciążenia rosło wraz z liczbą obciążonych masterów. Dla Valkey wyniosło ono 11{,}66~ms, 19{,}02~ms i 18{,}24~ms odpowiednio dla jednego, dwóch i trzech masterów, przy bazowym p99 około 6{,}3--6{,}6~ms. Dla Redis 7.2 wyniosło ono 40{,}96~ms, 49{,}41~ms i 89{,}91~ms, przy bazowym p99 około 9{,}5--10{,}5~ms. We wszystkich konfiguracjach i powtórzeniach klient odzyskiwał poziom bazowy po zakończeniu obciążenia (powrót 5/5), a w żadnym powtórzeniu nie wykryto restartu poda.
+
+\subsection{Presja pamięci}
+
+W scenariuszu presji pamięci klaster konfigurowano z polityką eksmisji \texttt{allkeys-lru} oraz limitem \texttt{maxmemory} odpowiadającym 3072~MB na shard, a następnie wypełniano go 3\,145\,728 kluczami o rozmiarze 1~KB, czyli ilością danych przekraczającą limit pamięci. Po wypełnieniu uruchamiano 30~sekundowe okno obciążenia mieszanego (memtier) i rejestrowano liczbę eksmitowanych kluczy, wykorzystaną pamięć, liczbę błędów OOM oraz błędów zapisu. Tabela~\ref{tab:resilience-maxmemory} zestawia wyniki, a rysunek~\ref{fig:resilience-maxmemory} porównuje eksmisje, przepustowość oraz p99.
+
+\begin{table}[htbp]
+\centering
+\caption{Wyniki testu resilience dla presji pamięci z polityką \texttt{allkeys-lru} (5 powtórzeń).}
+\label{tab:resilience-maxmemory}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrr}
+\toprule
+Metryka & Valkey & Redis 7.2 \\
+\midrule
+Zapisane klucze & $3\,145\,728$ & $3\,145\,728$ \\
+Eksmisje (wypełnianie) & $808\,279 \pm 107$ & $843\,035 \pm 35$ \\
+Eksmisje (obserwacja) & $23\,713 \pm 235$ & $25\,176 \pm 331$ \\
+Eksmisje łącznie & $831\,992 \pm 271$ & $868\,211 \pm 316$ \\
+Klucze po teście (dbsize) & $2\,337\,637 \pm 84$ & $2\,300\,057 \pm 9$ \\
+Wykorzystana pamięć [MB] & $3071{,}72$ & $3067{,}94$ \\
+Osiągnięcie maxmemory [\%] & $100{,}0$ & $100{,}0$ \\
+Ops/sec (obserwacja) & $114\,114{,}57 \pm 863{,}27$ & $104\,728{,}53 \pm 3\,185{,}31$ \\
+p99 (obserwacja) [ms] & $8{,}33 \pm 0{,}21$ & $15{,}62 \pm 1{,}07$ \\
+Błędy OOM & 0 & 0 \\
+Błędy zapisu & 0 & 0 \\
+Czas seedowania [s] & $91{,}89 \pm 0{,}44$ & $90{,}06 \pm 0{,}54$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\begin{figure}[!htbp]
+    \centering
+    \includegraphics[width=\textwidth]{images/resilience_maxmemory_comparison.png}
+    \caption{Eksmisje, przepustowość oraz opóźnienie p99 pod presją pamięci dla Valkey i Redis 7.2.}
+    \label{fig:resilience-maxmemory}
+\end{figure}
+
+\FloatBarrier
+
+W obu wariantach wykorzystanie pamięci osiągnęło 100\% limitu \texttt{maxmemory} i nie zarejestrowano błędów OOM ani błędów zapisu. Valkey eksmitował łącznie 831\,992 klucze (808\,279 w fazie wypełniania i 23\,713 w oknie obserwacji), a Redis 7.2 eksmitował łącznie 868\,211 kluczy (843\,035 w fazie wypełniania i 25\,176 w oknie obserwacji). Po teście Valkey utrzymywał 2\,337\,637 kluczy, a Redis 7.2 2\,300\,057 kluczy. W oknie obserwacji Valkey osiągnął średnio 114\,114{,}57 ops/sec przy p99 równym 8{,}33~ms, a Redis 7.2 osiągnął średnio 104\,728{,}53 ops/sec przy p99 równym 15{,}62~ms.
 
 \section{Rolling upgrade klastra Valkey}
 

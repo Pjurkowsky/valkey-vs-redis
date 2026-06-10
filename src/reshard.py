@@ -447,23 +447,23 @@ def plot_reshard_comparison(results_df: pd.DataFrame, out_dir: Path) -> None:
     phase_specs = [
         (
             "up",
-            "Reshard-Up Operation Duration",
+            "Czas operacji skalowania w górę",
             [
-                ("managed_blackbox_duration_s", "Memorystore black box", "#4c4c4c"),
-                ("scale_duration_s", "Scale up", "#64b5cd"),
-                ("wait_check_duration_s", "Wait/check", "#8c8c8c"),
-                ("slot_move_duration_s", "Move slots", "#dd8452"),
+                ("managed_blackbox_duration_s", "Memorystore (black box)", "#4c4c4c"),
+                ("scale_duration_s", "Skalowanie infrastruktury", "#64b5cd"),
+                ("wait_check_duration_s", "Oczekiwanie/kontrola", "#8c8c8c"),
+                ("slot_move_duration_s", "Przenoszenie slotów", "#dd8452"),
             ],
         ),
         (
             "down",
-            "Reshard-Down Operation Duration",
+            "Czas operacji skalowania w dół",
             [
-                ("managed_blackbox_duration_s", "Memorystore black box", "#4c4c4c"),
-                ("reshard_down_duration_s", "Move slots off", "#8172b2"),
-                ("wait_check_duration_s", "Wait/check", "#8c8c8c"),
-                ("del_node_duration_s", "Remove nodes", "#ccb974"),
-                ("scale_down_duration_s", "Scale down", "#64b5cd"),
+                ("managed_blackbox_duration_s", "Memorystore (black box)", "#4c4c4c"),
+                ("reshard_down_duration_s", "Przenoszenie slotów", "#8172b2"),
+                ("wait_check_duration_s", "Oczekiwanie/kontrola", "#8c8c8c"),
+                ("del_node_duration_s", "Usuwanie węzłów", "#ccb974"),
+                ("scale_down_duration_s", "Skalowanie infrastruktury", "#64b5cd"),
             ],
         ),
     ]
@@ -556,8 +556,8 @@ def _plot_phase_duration_breakdown(
 
     ax.set_xticks(x)
     ax.set_xticklabels([_run_label(row) for _, row in phase_df.iterrows()])
-    ax.set_xlabel("Run")
-    ax.set_ylabel("Operation duration (s)")
+    ax.set_xlabel("Przebieg")
+    ax.set_ylabel("Czas operacji [s]")
     ax.set_title(title)
     ax.set_ylim(0, max(label_heights.max() * 1.16, label_heights.max() + 5))
     ax.legend(

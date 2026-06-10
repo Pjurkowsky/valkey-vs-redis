@@ -25,19 +25,19 @@ PHASES = [
 ]
 
 SELF_HOSTED_BACKUP_PHASES = [
-    ("BGSAVE", "bgsave_duration_s", "#4c72b0"),
-    ("RDB validation", "rdb_validation_duration_s", "#55a868"),
-    ("Snapshot create", "snapshot_create_duration_s", "#c44e52"),
+    ("BGSAVE na replikach", "bgsave_duration_s", "#4c72b0"),
+    ("Walidacja RDB", "rdb_validation_duration_s", "#55a868"),
+    ("Tworzenie snapshotów PVC", "snapshot_create_duration_s", "#c44e52"),
 ]
 
 SELF_HOSTED_RESTORE_PHASES = [
-    ("Fresh cluster", "fresh_cluster_create_duration_s", "#8172b2"),
-    ("Source disk create", "source_disk_create_duration_s", "#ccb974"),
-    ("RDB copy", "rdb_incluster_copy_duration_s", "#64b5cd"),
-    ("Replica clear", "replica_clear_duration_s", "#dd8452"),
-    ("Temp cleanup", "temp_source_cleanup_duration_s", "#937860"),
-    ("Pod recreate", "pod_recreate_duration_s", "#da8bc3"),
-    ("Cluster recovery", "cluster_recovery_after_pods_s", "#8c8c8c"),
+    ("Tworzenie świeżego klastra", "fresh_cluster_create_duration_s", "#8172b2"),
+    ("Tworzenie dysków ze snapshotów", "source_disk_create_duration_s", "#ccb974"),
+    ("Kopiowanie RDB", "rdb_incluster_copy_duration_s", "#64b5cd"),
+    ("Czyszczenie PVC replik", "replica_clear_duration_s", "#dd8452"),
+    ("Czyszczenie tymczasowych dysków", "temp_source_cleanup_duration_s", "#937860"),
+    ("Uruchamianie podów", "pod_recreate_duration_s", "#da8bc3"),
+    ("Odzyskiwanie stanu klastra", "cluster_recovery_after_pods_s", "#8c8c8c"),
 ]
 
 
@@ -249,8 +249,8 @@ def plot_backup_comparison(self_hosted_df: pd.DataFrame, ms_df: pd.DataFrame, ou
                 fontweight="bold",
             )
 
-    ax.set_ylabel("Duration (s)")
-    ax.set_title("Backup and restore duration")
+    ax.set_ylabel("Czas [s]")
+    ax.set_title("Czas backupu i restore")
     ax.set_xticks(x)
     ax.set_xticklabels(labels)
     ax.legend()
@@ -272,8 +272,8 @@ def plot_self_hosted_phase_breakdown(self_hosted_df: pd.DataFrame, out_dir: Path
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     for ax, phases, title, total_col in [
-        (axes[0], SELF_HOSTED_BACKUP_PHASES, "Backup phases", "backup_duration_s"),
-        (axes[1], SELF_HOSTED_RESTORE_PHASES, "Restore phases", "restore_duration_s"),
+        (axes[0], SELF_HOSTED_BACKUP_PHASES, "Fazy backupu", "backup_duration_s"),
+        (axes[1], SELF_HOSTED_RESTORE_PHASES, "Fazy restore", "restore_duration_s"),
     ]:
         x = np.arange(len(providers))
         bottoms = np.zeros(len(providers))
@@ -318,7 +318,7 @@ def plot_self_hosted_phase_breakdown(self_hosted_df: pd.DataFrame, out_dir: Path
                 color="#bab0ac",
                 edgecolor="black",
                 linewidth=0.5,
-                label="Other/wait",
+                label="Pozostałe",
             )
             for bar, value, start in zip(bars, residuals, bottoms):
                 if value >= 8:
@@ -344,7 +344,7 @@ def plot_self_hosted_phase_breakdown(self_hosted_df: pd.DataFrame, out_dir: Path
                 fontweight="bold",
             )
         ax.set_title(title)
-        ax.set_ylabel("Duration (s)")
+        ax.set_ylabel("Czas [s]")
         ax.set_xticks(x)
         ax.set_xticklabels(providers)
         ax.grid(axis="y", alpha=0.25)

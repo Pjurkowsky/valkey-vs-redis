@@ -56,7 +56,8 @@ source "${SCRIPT_DIR}/pod_results.sh"
 HOST="${FAILOVER_HOST:-${SERVICE_NAME}.${NS}.svc.cluster.local}"
 PORT="${FAILOVER_PORT:-6379}"
 THREADS="${FAILOVER_THREADS:-4}"
-CLIENTS="${FAILOVER_CLIENTS:-1}"
+CLIENTS="${FAILOVER_CLIENTS:-25}"
+PIPELINE="${FAILOVER_PIPELINE:-10}"
 TEST_TIME="${FAILOVER_TEST_TIME:-120}"
 KEYS="${FAILOVER_KEYS:-100000}"
 DATA_SIZE="${FAILOVER_DATA_SIZE:-1024}"
@@ -173,6 +174,7 @@ REMOTE_OUT=${REMOTE_OUT}
 POD_SELECTOR=${POD_SELECTOR}
 THREADS=${THREADS}
 CLIENTS=${CLIENTS}
+PIPELINE=${PIPELINE}
 TEST_TIME=${TEST_TIME}
 KEYS=${KEYS}
 DATA_SIZE=${DATA_SIZE}
@@ -431,6 +433,7 @@ memtier_benchmark \
   ${MEMTIER_TLS_ARGS[*]} \
   ${MEMTIER_RECONNECT_ARGS[*]} \
   --threads='${THREADS}' --clients='${CLIENTS}' \
+  --pipeline='${PIPELINE}' \
   --test-time='${TEST_TIME}' \
   --key-maximum='${KEYS}' \
   --data-size='${DATA_SIZE}' \
@@ -484,7 +487,10 @@ EOF
   "action": "${FAILOVER_ACTION}",
   "duration": "${FAILOVER_DURATION}",
   "target": "${TARGET_DESC}",
-  "grace_period_s": ${FAILOVER_GRACE_PERIOD}
+  "grace_period_s": ${FAILOVER_GRACE_PERIOD},
+  "threads": ${THREADS},
+  "clients": ${CLIENTS},
+  "pipeline": ${PIPELINE}
 }
 EOF
   kubectl apply -f "${CHAOS_FILE}"
