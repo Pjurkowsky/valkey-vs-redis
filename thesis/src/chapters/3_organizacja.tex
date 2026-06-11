@@ -362,13 +362,15 @@ Zestaw metryk dobrano tak, aby umożliwić ocenę zarówno wydajności, jak i ni
 \toprule
 \textbf{Kategoria} & \textbf{Metryki} \\
 \midrule
-Wydajność & Ops/sec, średnia z powtórzeń, odchylenie standardowe, różnica procentowa względem wariantu odniesienia. \\
-Opóźnienia & p50, p95, p99, p99.9, maksymalne skoki opóźnień podczas awarii lub operacji utrzymaniowych. \\
-Zasoby & Średnie zużycie CPU, zużycie CPU per pod, zużycie pamięci, restarty podów. \\
-Failover & Czas odtworzenia mastera, liczba błędów klienta, czas degradacji, czas powrotu do stabilnego throughputu. \\
-Spójność danych & Liczba utraconych potwierdzonych zapisów, loss rate, liczba błędów podczas partycji. \\
-Utrzymywalność & Liczba kroków, liczba komend, czas procedury, liczba decyzji operatora, możliwość rollbacku. \\
-Koszty & Koszt miesięczny, koszt w przeliczeniu na 100 tys. ops/sec, koszt pracy operacyjnej, koszt zasobów infrastruktury. \\
+Wydajność & Ops/sec, średnia z powtórzeń, odchylenie standardowe, stosunek przepustowości wariantów. \\
+Opóźnienia & p50, p95, p99, p99.9. \\
+Zasoby & Średnie zużycie CPU, zużycie CPU per pod, zużycie pamięci, restarty podów (z Prometheusa). \\
+Failover & Czas degradacji, wykrycia degradacji, utracone operacje, nieudane żądania, odpowiedzi \texttt{CLUSTERDOWN}. \\
+Spójność danych & Utracone potwierdzone zapisy, loss rate, minority/majority loss rate, zapisy odrzucone przez klaster. \\
+Resilience & Spadek przepustowości [\%], min ops/sec, szczytowe p99, eksmisje, błędy OOM, powrót do baseline. \\
+Utrzymywalność & Liczba kroków procedury, liczba komend operatora, czas procedury, error rate klienta kontrolnego. \\
+Backup i restore & Czas faz (BGSAVE, snapshot PVC, kopiowanie RDB, odzyskanie klastra), zgodność liczby kluczy. \\
+Koszty & Koszt miesięczny infrastruktury, koszt na 100 tys. ops/sec, próg opłacalności self-hosted vs~managed. \\
 \bottomrule
 \end{tabularx}
 \end{table}
