@@ -21,10 +21,10 @@ Celem głównym pracy jest przeprowadzenie kompleksowej analizy porównawczej sa
 W pracy przyjęto cztery hipotezy badawcze:
 
 \begin{itemize}
-    \item \textbf{H1:} klaster Valkey osiąga większą przepustowość oraz niższe opóźnienia p95, p99 i p99.9 niż Redis Cluster przy takim samym przydziale zasobów CPU;
+    \item \textbf{H1:} klaster Valkey osiąga większą przepustowość oraz niższe opóźnienia p50, p95, p99 i p99.9 niż Redis Cluster przy takim samym przydziale zasobów CPU;
     \item \textbf{H2:} samodzielnie zarządzany klaster Valkey może być tańszy od usługi zarządzanej przy porównywalnej wydajności i dostępności;
-    \item \textbf{H3:} czas odtworzenia mastera po awarii w klastrze Valkey jest krótszy niż w klastrze Redis~7.2 oraz porównywalny z mechanizmami usług zarządzanych;
-    \item \textbf{H4:} samodzielnie utrzymywany klaster Valkey wymaga większego nakładu pracy operacyjnej niż usługa zarządzana, mimo potencjalnych korzyści wydajnościowych i kosztowych.
+    \item \textbf{H3:} czas odtworzenia mastera po awarii jest krótszy w rozwiązaniach z natywnymi operatorami Kubernetes niż w Redis Cluster i porównywalny z mechanizmami Memorystore;
+    \item \textbf{H4:} klaster Valkey self-hosted wymaga istotnie wyższego nakładu pracy operacyjnej -- mierzonego liczbą kroków procedury, liczbą komend operatora i czasem wykonania -- w scenariuszach upgrade, resharding i backup/restore w porównaniu z Memorystore.
 \end{itemize}
 
 \section{Zastosowane technologie}
@@ -49,9 +49,9 @@ Po drugie, narzędzia AI były wykorzystywane jako pomoc w diagnostyce problemó
 
 \section{Zakres i ograniczenia pracy}
 
-Zakres pracy obejmuje testy wydajnościowe, testy odpornościowe oraz analizę utrzymywalności. W części wydajnościowej badane są operacje odczytu, zapisu oraz mieszane scenariusze odczytu i zapisu. Zmiennymi niezależnymi są liczba vCPU przypisana do poda, rozmiar payloadu oraz proporcja typów operacji. Dla każdej konfiguracji wykonywana jest seria powtórzeń, a wyniki są analizowane z wykorzystaniem średniej, odchylenia standardowego oraz percentyli opóźnień.
+Zakres pracy obejmuje testy wydajnościowe, testy odpornościowe oraz analizę utrzymywalności. W części wydajnościowej badane są operacje odczytu, zapisu oraz mieszane scenariusze odczytu i zapisu. Zmiennymi niezależnymi są liczba vCPU przypisana do poda, rozmiar ładunku danych (ang.~\textit{payload}) oraz proporcja typów operacji. Dla każdej konfiguracji wykonywana jest seria powtórzeń, a wyniki są analizowane z wykorzystaniem średniej, odchylenia standardowego oraz percentyli opóźnień.
 
-W części dotyczącej niezawodności i utrzymywalności uwzględniono scenariusze failover, presję na zasoby CPU i pamięć, aktualizację klastra podczas obciążenia, skalowanie horyzontalne oraz operacje backupu i odtwarzania. Scenariusze te zostały dobrane tak, aby odzwierciedlały zadania, z którymi administratorzy spotykają się w środowiskach produkcyjnych.
+W części dotyczącej niezawodności i utrzymywalności uwzględniono scenariusze automatycznego przełączenia mastera (ang.~\textit{failover}), presję na zasoby CPU i pamięć, aktualizację klastra podczas obciążenia, skalowanie horyzontalne oraz operacje backupu i odtwarzania. Scenariusze te zostały dobrane tak, aby odzwierciedlały zadania, z którymi administratorzy spotykają się w środowiskach produkcyjnych.
 
-Ograniczeniem badań jest brak pełnej kontroli nad konfiguracją usługi Memorystore, która nie pozwala na dowolne ustawienie parametrów odpowiadających wariantom self-hosted. Z tego powodu warianty self-hosted dobrano tak, aby zasobami odpowiadały konfiguracji Memorystore. Dodatkowym ograniczeniem był dostęp do infrastruktury Google Cloud Platform, wynikający z limitu kwot (quota) przypisanych do projektu oraz ograniczonej liczby dostępnych tokenów. Z tego powodu testy wydajnościowe przeprowadzono w środowisku lokalnym, natomiast testy operacyjne i odpornościowe, wymagające pełnego środowiska chmurowego, realizowano w ramach dostępnych zasobów GCP.
+Ograniczeniem badań jest brak pełnej kontroli nad konfiguracją usługi Memorystore, która nie pozwala na dowolne ustawienie parametrów odpowiadających wariantom self-hosted. Z tego powodu warianty self-hosted dobrano tak, aby zasobami odpowiadały konfiguracji Memorystore. Dodatkowym ograniczeniem był dostęp do infrastruktury Google Cloud Platform, wynikający z limitu kwot (quota) przypisanych do projektu oraz ograniczonej liczby dostępnych tokenów. Z tego powodu testy wydajnościowe przeprowadzono w środowisku lokalnym, natomiast testy operacyjne i odpornościowe, wymagające pełnego środowiska chmurowego, realizowano w ramach dostępnych zasobów GCP. Ponadto Memorystore for Redis Cluster nie udostępnia mechanizmu ręcznego failoveru pojedynczego sharda ani dostępu do węzłów~\cite{gcpMemorystoreHA}, co uniemożliwia wstrzyknięcie nagłej awarii mastera i tym samym eksperymentalną weryfikację drugiej części hipotezy H3 dotyczącej porównywalności z usługą zarządzaną.
 

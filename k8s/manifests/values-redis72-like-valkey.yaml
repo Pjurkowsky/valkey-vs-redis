@@ -41,14 +41,19 @@ redis:
   resources:
     requests:
       cpu: "1"
-      memory: "2Gi"
+      memory: "4Gi"
     limits:
       cpu: "1"
-      memory: "2Gi"
+      memory: "4Gi"
   configmap: |-
     maxmemory 1gb
     maxmemory-policy allkeys-lru
     cluster-preferred-endpoint-type ip
+    save ""
+    appendonly no
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit replica 512mb 128mb 60
+    client-output-buffer-limit pubsub 32mb 8mb 60
 
 metrics:
   enabled: false

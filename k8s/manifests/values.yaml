@@ -1,6 +1,14 @@
 image:
   tag: "9.1.0"
 
+resources:
+  requests:
+    cpu: "1"
+    memory: "4Gi"
+  limits:
+    cpu: "1"
+    memory: "4Gi"
+
 cluster:
   enabled: true
   shards: 3
@@ -12,6 +20,11 @@ valkeyConfig: |
   maxmemory 1gb
   maxmemory-policy allkeys-lru
   cluster-preferred-endpoint-type hostname
+  save ""
+  appendonly no
+  client-output-buffer-limit normal 0 0 0
+  client-output-buffer-limit replica 512mb 128mb 60
+  client-output-buffer-limit pubsub 32mb 8mb 60
 
 metrics:
   enabled: true

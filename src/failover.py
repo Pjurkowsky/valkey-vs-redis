@@ -602,6 +602,7 @@ def analyse_failover_runs(json_dir: Path) -> Tuple[pd.DataFrame, List[pd.DataFra
         metrics.update(timing_metrics)
         metrics.update(compare_baseline_to_chaos_window(ts, timing_metrics))
         metrics.update(error_metrics)
+        metrics.update(_compute_error_window(error_metrics, timing_metrics))
         metrics["file"] = f.name
 
         ts = _merge_error_series(ts, error_ts)
@@ -609,6 +610,38 @@ def analyse_failover_runs(json_dir: Path) -> Tuple[pd.DataFrame, List[pd.DataFra
         results.append(metrics)
 
     return pd.DataFrame(results), all_ts
+
+
+def _compute_error_window(
+    error_metrics: Dict[str, Any],
+    timing_metrics: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Derive promotion-time metrics from the client-visible error window.
+
+    The error window (first_error_second .. last_error_second) captures the
+    period during which the client observed failures reaching the affected
+    shard.  Its duration is independent of the PodChaos lifetime and
+    approximates: cluster-node-timeout + replica election + client reconnection.
+    """
+    first_err = error_metrics.get("first_error_second")
+    last_err = error_metrics.get("last_error_second")
+    chaos_second = timing_metrics.get("chaos_second")
+
+    if first_err is not None and last_err is not None:
+        ew = int(last_err) - int(first_err) + 1
+    else:
+        ew = None
+
+    if first_err is not None and chaos_second is not None:
+        delay = int(first_err) - int(chaos_second)
+    else:
+        delay = None
+
+    return {
+        "error_window_duration_s": float(ew) if ew is not None else None,
+        "error_window_duration_ms": float(ew * 1000) if ew is not None else None,
+        "first_error_delay_s": float(delay) if delay is not None else None,
+    }
 
 
 def _timing_path_for_run(run_path: Path) -> Path:
@@ -637,6 +670,8 @@ def print_failover_summary(df: pd.DataFrame) -> None:
 
     detection_metrics = [
         ("Failover duration (ms)", "failover_duration_ms"),
+        ("Error window duration (ms)", "error_window_duration_ms"),
+        ("First error delay (s)", "first_error_delay_s"),
         ("Ops lost", "ops_lost"),
         ("Detected baseline ops/sec", "baseline_ops"),
         ("Peak p99 during failover (ms)", "peak_p99_during"),

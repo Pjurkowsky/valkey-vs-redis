@@ -2,44 +2,97 @@
 
 \section{Wydajność bazowa}
 
-Celem testu było porównanie przepustowości i opóźnień klastra Valkey oraz Redis 7.2 przy różnych rozmiarach payloadu, proporcjach operacji i limitach vCPU. Parametry testów wydajnościowych zostały opisane w rozdziale~\ref{tab:parametry_wydajnosci}. Oba warianty testowano z limitem 1 oraz 2~vCPU na pod, rozmiarami payloadu 1~KB, 10~KB i 1000~KB oraz trzema proporcjami operacji: tylko odczyt (\texttt{0:1}), tylko zapis (\texttt{1:0}) i mieszany (\texttt{1:1}). Klaster składał się z trzech shardów z jedną repliką na shard.
+Celem testu było porównanie przepustowości i opóźnień klastra Valkey oraz Redis 7.2 przy różnych rozmiarach payloadu, proporcjach operacji i limitach vCPU. Parametry testów wydajnościowych zostały opisane w tabeli~\ref{tab:parametry_wydajnosci}. Oba warianty testowano z limitem 1 oraz 2~vCPU na pod, rozmiarami payloadu 1~KB, 10~KB i 1000~KB oraz trzema proporcjami operacji: tylko odczyt (\texttt{0:1}), tylko zapis (\texttt{1:0}) i mieszany (\texttt{1:1}). Klaster składał się z trzech shardów z jedną repliką na shard.
 
-Tabela~\ref{tab:perf-ops} zestawia średnią przepustowość oraz opóźnienie p99 dla obu wariantów. Kolumna \textit{stosunek} podaje iloraz przepustowości Valkey do Redis 7.2; wartość powyżej $1{,}00$ oznacza wyższą przepustowość Valkey. Rysunek~\ref{fig:perf-ops} przedstawia porównanie graficzne przepustowości, rysunek~\ref{fig:perf-p99} zestawia opóźnienia p99, a rysunek~\ref{fig:perf-heatmap} przedstawia heatmapy ops/sec dla obciążenia mieszanego.
+Tabela~\ref{tab:perf-ops} zestawia średnią przepustowość dla obu wariantów. Kolumna \textit{stosunek} podaje iloraz przepustowości Valkey do Redis 7.2; wartość powyżej $1{,}00$ oznacza wyższą przepustowość Valkey. Tabela~\ref{tab:perf-latency} zestawia percentyle opóźnień (p50, p95, p99 i p99.9) wraz z odchyleniem standardowym. Rysunek~\ref{fig:perf-ops} przedstawia porównanie graficzne przepustowości, rysunek~\ref{fig:perf-p99} zestawia opóźnienia p99.
 
 \begin{table}[htbp]
 \centering
-\caption{Przepustowość i opóźnienie p99 dla Valkey i Redis 7.2.}
+\caption{Przepustowość dla Valkey i Redis 7.2.}
 \label{tab:perf-ops}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{llrrrrrr}
+\begin{tabular}{llrrr}
 \toprule
-Profil & vCPU & \multicolumn{2}{c}{Valkey} & \multicolumn{2}{c}{Redis 7.2} & Stosunek \\
-\cmidrule(lr){3-4} \cmidrule(lr){5-6}
- & & Ops/sec & p99 [ms] & Ops/sec & p99 [ms] & VK/RD \\
+Profil & vCPU & Valkey Ops/sec & Redis 7.2 Ops/sec & Stosunek VK/RD \\
+\midrule
+\multicolumn{5}{l}{\textit{Tylko odczyt}} \\
+\quad 1 KB & 1 & $1\,392\,632 \pm 4\,992$ & $1\,296\,401 \pm 26\,140$ & 1{,}07 \\
+\quad 1 KB & 2 & $1\,316\,514 \pm 6\,379$ & $1\,337\,358 \pm 7\,826$ & 0{,}98 \\
+\quad 10 KB & 1 & $279\,332 \pm 8\,057$ & $293\,239 \pm 1\,953$ & 0{,}95 \\
+\quad 10 KB & 2 & $294\,108 \pm 1\,721$ & $292\,633 \pm 1\,743$ & 1{,}01 \\
+\quad 1000 KB & 1 & $4\,768 \pm 92$ & $72\,221 \pm 4\,836$ & 0{,}07 \\
+\quad 1000 KB & 2 & $5\,169 \pm 26$ & $71\,411 \pm 5\,229$ & 0{,}07 \\
+\midrule
+\multicolumn{5}{l}{\textit{Tylko zapis}} \\
+\quad 1 KB & 1 & $1\,551\,441 \pm 9\,088$ & $1\,236\,962 \pm 53\,150$ & 1{,}25 \\
+\quad 1 KB & 2 & $1\,399\,679 \pm 4\,948$ & $1\,293\,184 \pm 15\,243$ & 1{,}08 \\
+\quad 10 KB & 1 & $232\,986 \pm 5\,516$ & $235\,812 \pm 3\,000$ & 0{,}99 \\
+\quad 10 KB & 2 & $237\,327 \pm 4\,434$ & $234\,892 \pm 3\,912$ & 1{,}01 \\
+\quad 1000 KB & 1 & $3\,771 \pm 98$ & $1\,644 \pm 117$ & 2{,}29 \\
+\quad 1000 KB & 2 & $3\,976 \pm 297$ & $2\,013 \pm 23$ & 1{,}97 \\
+\midrule
+\multicolumn{5}{l}{\textit{Mieszany 50/50}} \\
+\quad 1 KB & 1 & $1\,464\,639 \pm 5\,098$ & $1\,250\,642 \pm 31\,434$ & 1{,}17 \\
+\quad 1 KB & 2 & $1\,444\,051 \pm 15\,092$ & $1\,251\,901 \pm 10\,037$ & 1{,}15 \\
+\quad 10 KB & 1 & $297\,137 \pm 1\,298$ & $281\,815 \pm 644$ & 1{,}05 \\
+\quad 10 KB & 2 & $296\,522 \pm 934$ & $285\,714 \pm 421$ & 1{,}04 \\
+\quad 1000 KB & 1 & $3\,841 \pm 218$ & $3\,471 \pm 107$ & 1{,}11 \\
+\quad 1000 KB & 2 & $3\,893 \pm 69$ & $3\,107 \pm 52$ & 1{,}25 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Percentyle opóźnień dla Valkey i Redis 7.2.}
+\label{tab:perf-latency}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lllrrrr}
+\toprule
+Profil & vCPU & Wariant & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 \midrule
 \multicolumn{7}{l}{\textit{Tylko odczyt}} \\
-\quad 1 KB & 1 & $1\,392\,632 \pm 4\,992$ & 3{,}22 & $1\,296\,401 \pm 26\,140$ & 3{,}62 & 1{,}07 \\
-\quad 1 KB & 2 & $1\,316\,514 \pm 6\,379$ & 3{,}53 & $1\,337\,358 \pm 7\,826$ & 3{,}45 & 0{,}98 \\
-\quad 10 KB & 1 & $279\,332 \pm 8\,057$ & 14{,}27 & $293\,239 \pm 1\,953$ & 13{,}99 & 0{,}95 \\
-\quad 10 KB & 2 & $294\,108 \pm 1\,721$ & 13{,}64 & $292\,633 \pm 1\,743$ & 13{,}68 & 1{,}01 \\
-\quad 1000 KB & 1 & $4\,768 \pm 92$ & 686{,}49 & $72\,221 \pm 4\,836$ & 182{,}68 & 0{,}07 \\
-\quad 1000 KB & 2 & $5\,169 \pm 26$ & 622{,}59 & $71\,411 \pm 5\,229$ & 185{,}14 & 0{,}07 \\
+\quad 1 KB & 1 & Valkey & $2{,}11 \pm 0{,}01$ & $2{,}80 \pm 0{,}01$ & $3{,}22 \pm 0{,}01$ & $4{,}31 \pm 0{,}03$ \\
+\quad 1 KB & 1 & Redis 7.2 & $2{,}23 \pm 0{,}04$ & $3{,}08 \pm 0{,}07$ & $3{,}62 \pm 0{,}10$ & $5{,}99 \pm 0{,}44$ \\
+\quad 1 KB & 2 & Valkey & $2{,}22 \pm 0{,}01$ & $3{,}06 \pm 0{,}02$ & $3{,}53 \pm 0{,}02$ & $4{,}52 \pm 0{,}15$ \\
+\quad 1 KB & 2 & Redis 7.2 & $2{,}18 \pm 0{,}02$ & $2{,}99 \pm 0{,}02$ & $3{,}45 \pm 0{,}03$ & $4{,}28 \pm 0{,}08$ \\
+\quad 10 KB & 1 & Valkey & $10{,}48 \pm 0{,}26$ & $12{,}97 \pm 0{,}58$ & $14{,}27 \pm 0{,}47$ & $47{,}36 \pm 0{,}65$ \\
+\quad 10 KB & 1 & Redis 7.2 & $10{,}02 \pm 0{,}07$ & $11{,}90 \pm 0{,}10$ & $13{,}99 \pm 0{,}09$ & $52{,}38 \pm 0{,}53$ \\
+\quad 10 KB & 2 & Valkey & $10{,}00 \pm 0{,}08$ & $12{,}43 \pm 0{,}11$ & $13{,}64 \pm 0{,}05$ & $15{,}05 \pm 0{,}11$ \\
+\quad 10 KB & 2 & Redis 7.2 & $10{,}05 \pm 0{,}06$ & $12{,}39 \pm 0{,}09$ & $13{,}68 \pm 0{,}11$ & $16{,}15 \pm 0{,}59$ \\
+\quad 1000 KB & 1 & Valkey & $629{,}14 \pm 13{,}15$ & $667{,}65 \pm 17{,}62$ & $686{,}49 \pm 17{,}99$ & $715{,}98 \pm 33{,}58$ \\
+\quad 1000 KB & 1 & Redis 7.2 & $41{,}62 \pm 22{,}19$ & $123{,}29 \pm 2{,}93$ & $182{,}68 \pm 4{,}78$ & $268{,}70 \pm 18{,}67$ \\
+\quad 1000 KB & 2 & Valkey & $579{,}99 \pm 2{,}24$ & $608{,}66 \pm 4{,}67$ & $622{,}59 \pm 4{,}10$ & $647{,}17 \pm 12{,}62$ \\
+\quad 1000 KB & 2 & Redis 7.2 & $41{,}93 \pm 21{,}76$ & $125{,}03 \pm 6{,}53$ & $185{,}14 \pm 11{,}59$ & $266{,}44 \pm 28{,}35$ \\
 \midrule
 \multicolumn{7}{l}{\textit{Tylko zapis}} \\
-\quad 1 KB & 1 & $1\,551\,441 \pm 9\,088$ & 3{,}62 & $1\,236\,962 \pm 53\,150$ & 4{,}58 & 1{,}25 \\
-\quad 1 KB & 2 & $1\,399\,679 \pm 4\,948$ & 4{,}02 & $1\,293\,184 \pm 15\,243$ & 4{,}33 & 1{,}08 \\
-\quad 10 KB & 1 & $232\,986 \pm 5\,516$ & 20{,}48 & $235\,812 \pm 3\,000$ & 21{,}45 & 0{,}99 \\
-\quad 10 KB & 2 & $237\,327 \pm 4\,434$ & 19{,}15 & $234\,892 \pm 3\,912$ & 19{,}58 & 1{,}01 \\
-\quad 1000 KB & 1 & $3\,771 \pm 98$ & 1422{,}13 & $1\,644 \pm 117$ & 3398{,}04 & 2{,}29 \\
-\quad 1000 KB & 2 & $3\,976 \pm 297$ & 1317{,}27 & $2\,013 \pm 23$ & 2392{,}06 & 1{,}97 \\
+\quad 1 KB & 1 & Valkey & $1{,}85 \pm 0{,}01$ & $2{,}90 \pm 0{,}02$ & $3{,}62 \pm 0{,}01$ & $5{,}04 \pm 0{,}03$ \\
+\quad 1 KB & 1 & Redis 7.2 & $2{,}30 \pm 0{,}10$ & $3{,}64 \pm 0{,}19$ & $4{,}58 \pm 0{,}23$ & $9{,}76 \pm 1{,}72$ \\
+\quad 1 KB & 2 & Valkey & $2{,}06 \pm 0{,}01$ & $3{,}31 \pm 0{,}01$ & $4{,}02 \pm 0{,}01$ & $5{,}79 \pm 0{,}37$ \\
+\quad 1 KB & 2 & Redis 7.2 & $2{,}24 \pm 0{,}02$ & $3{,}50 \pm 0{,}03$ & $4{,}33 \pm 0{,}03$ & $5{,}62 \pm 0{,}13$ \\
+\quad 10 KB & 1 & Valkey & $12{,}80 \pm 0{,}35$ & $17{,}43 \pm 0{,}44$ & $20{,}48 \pm 2{,}06$ & $59{,}75 \pm 1{,}12$ \\
+\quad 10 KB & 1 & Redis 7.2 & $12{,}79 \pm 0{,}19$ & $17{,}25 \pm 0{,}19$ & $21{,}45 \pm 0{,}58$ & $60{,}52 \pm 0{,}29$ \\
+\quad 10 KB & 2 & Valkey & $12{,}86 \pm 0{,}18$ & $17{,}25 \pm 0{,}33$ & $19{,}15 \pm 0{,}37$ & $24{,}73 \pm 1{,}13$ \\
+\quad 10 KB & 2 & Redis 7.2 & $13{,}03 \pm 0{,}28$ & $17{,}41 \pm 0{,}27$ & $19{,}58 \pm 0{,}42$ & $24{,}65 \pm 0{,}70$ \\
+\quad 1000 KB & 1 & Valkey & $723{,}35 \pm 16{,}28$ & $1\,158{,}35 \pm 115{,}36$ & $1\,422{,}13 \pm 255{,}97$ & $1\,984{,}10 \pm 985{,}48$ \\
+\quad 1000 KB & 1 & Redis 7.2 & $1\,676{,}08 \pm 97{,}38$ & $2\,972{,}06 \pm 327{,}19$ & $3\,398{,}04 \pm 285{,}34$ & $3\,984{,}59 \pm 430{,}28$ \\
+\quad 1000 KB & 2 & Valkey & $707{,}79 \pm 44{,}06$ & $1\,033{,}01 \pm 147{,}58$ & $1\,317{,}27 \pm 225{,}50$ & $1\,885{,}80 \pm 879{,}76$ \\
+\quad 1000 KB & 2 & Redis 7.2 & $1\,435{,}24 \pm 32{,}46$ & $2\,026{,}70 \pm 105{,}16$ & $2\,392{,}06 \pm 244{,}94$ & $2\,942{,}57 \pm 717{,}03$ \\
 \midrule
 \multicolumn{7}{l}{\textit{Mieszany 50/50}} \\
-\quad 1 KB & 1 & $1\,464\,639 \pm 5\,098$ & 3{,}38 & $1\,250\,642 \pm 31\,434$ & 4{,}36 & 1{,}17 \\
-\quad 1 KB & 2 & $1\,444\,051 \pm 15\,092$ & 3{,}51 & $1\,251\,901 \pm 10\,037$ & 4{,}23 & 1{,}15 \\
-\quad 10 KB & 1 & $297\,137 \pm 1\,298$ & 18{,}35 & $281\,815 \pm 644$ & 20{,}30 & 1{,}05 \\
-\quad 10 KB & 2 & $296\,522 \pm 934$ & 18{,}12 & $285\,714 \pm 421$ & 18{,}82 & 1{,}04 \\
-\quad 1000 KB & 1 & $3\,841 \pm 218$ & 1405{,}75 & $3\,471 \pm 107$ & 1684{,}27 & 1{,}11 \\
-\quad 1000 KB & 2 & $3\,893 \pm 69$ & 1346{,}76 & $3\,107 \pm 52$ & 1726{,}87 & 1{,}25 \\
+\quad 1 KB & 1 & Valkey & $2{,}00 \pm 0{,}01$ & $2{,}86 \pm 0{,}01$ & $3{,}38 \pm 0{,}01$ & $4{,}69 \pm 0{,}05$ \\
+\quad 1 KB & 1 & Redis 7.2 & $2{,}32 \pm 0{,}04$ & $3{,}50 \pm 0{,}19$ & $4{,}36 \pm 0{,}28$ & $8{,}07 \pm 1{,}39$ \\
+\quad 1 KB & 2 & Valkey & $2{,}04 \pm 0{,}02$ & $2{,}95 \pm 0{,}04$ & $3{,}51 \pm 0{,}05$ & $4{,}82 \pm 0{,}13$ \\
+\quad 1 KB & 2 & Redis 7.2 & $2{,}35 \pm 0{,}03$ & $3{,}49 \pm 0{,}03$ & $4{,}23 \pm 0{,}05$ & $5{,}72 \pm 0{,}13$ \\
+\quad 10 KB & 1 & Valkey & $9{,}54 \pm 0{,}05$ & $15{,}19 \pm 0{,}11$ & $18{,}35 \pm 0{,}44$ & $57{,}04 \pm 0{,}21$ \\
+\quad 10 KB & 1 & Redis 7.2 & $9{,}34 \pm 0{,}08$ & $16{,}31 \pm 0{,}05$ & $20{,}30 \pm 0{,}75$ & $59{,}75 \pm 0{,}14$ \\
+\quad 10 KB & 2 & Valkey & $9{,}65 \pm 0{,}03$ & $15{,}37 \pm 0{,}11$ & $18{,}12 \pm 0{,}17$ & $23{,}35 \pm 0{,}81$ \\
+\quad 10 KB & 2 & Redis 7.2 & $9{,}41 \pm 0{,}05$ & $16{,}29 \pm 0{,}04$ & $18{,}82 \pm 0{,}09$ & $23{,}81 \pm 0{,}33$ \\
+\quad 1000 KB & 1 & Valkey & $761{,}04 \pm 34{,}32$ & $1\,169{,}82 \pm 98{,}88$ & $1\,405{,}75 \pm 156{,}04$ & $1\,780{,}94 \pm 235{,}91$ \\
+\quad 1000 KB & 1 & Redis 7.2 & $829{,}03 \pm 28{,}17$ & $1\,389{,}36 \pm 52{,}65$ & $1\,684{,}27 \pm 70{,}14$ & $2\,064{,}38 \pm 127{,}44$ \\
+\quad 1000 KB & 2 & Valkey & $752{,}84 \pm 9{,}78$ & $1\,138{,}69 \pm 36{,}64$ & $1\,346{,}76 \pm 50{,}70$ & $1\,641{,}68 \pm 95{,}11$ \\
+\quad 1000 KB & 2 & Redis 7.2 & $949{,}45 \pm 19{,}94$ & $1\,490{,}94 \pm 28{,}38$ & $1\,726{,}87 \pm 41{,}93$ & $1\,975{,}91 \pm 104{,}17$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -57,13 +110,6 @@ Profil & vCPU & \multicolumn{2}{c}{Valkey} & \multicolumn{2}{c}{Redis 7.2} & Sto
     \includegraphics[width=\textwidth]{images/perf_p99_comparison.png}
     \caption{Porównanie opóźnień p99 Valkey i Redis 7.2 dla trzech profili obciążenia.}
     \label{fig:perf-p99}
-\end{figure}
-
-\begin{figure}[!htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/perf_heatmap_comparison.png}
-    \caption{Heatmapa ops/sec dla obciążenia mieszanego 50/50 --- Valkey (lewy) i Redis 7.2 (prawy).}
-    \label{fig:perf-heatmap}
 \end{figure}
 
 \FloatBarrier
@@ -85,34 +131,36 @@ Tabela~\ref{tab:perf-resources} zestawia średnie zużycie CPU i pamięci zmierz
 \toprule
 Profil & vCPU & \multicolumn{2}{c}{Valkey} & \multicolumn{2}{c}{Redis 7.2} \\
 \cmidrule(lr){3-4} \cmidrule(lr){5-6}
- & & CPU [vCPU] & Pamięć [GB] & CPU [vCPU] & Pamięć [GB] \\
+ & & $\Sigma$ CPU [vCPU] & $\Sigma$ Pamięć [GB] & $\Sigma$ CPU [vCPU] & $\Sigma$ Pamięć [GB] \\
 \midrule
 \multicolumn{6}{l}{\textit{Tylko odczyt}} \\
-\quad 1 KB & 1 & 1{,}90 & 2{,}96 & 2{,}07 & 2{,}94 \\
-\quad 1 KB & 2 & 1{,}96 & 2{,}96 & 2{,}03 & 2{,}94 \\
-\quad 10 KB & 1 & 1{,}78 & 4{,}10 & 2{,}20 & 4{,}03 \\
-\quad 10 KB & 2 & 1{,}81 & 4{,}13 & 2{,}25 & 4{,}07 \\
-\quad 1000 KB & 1 & 0{,}99 & 4{,}42 & 1{,}46 & 0{,}81 \\
-\quad 1000 KB & 2 & 0{,}94 & 4{,}45 & 1{,}49 & 0{,}68 \\
+\quad 1 KB & 1 & $1{,}90 \pm 0{,}19$ & $2{,}96 \pm 0{,}00$ & $2{,}07 \pm 0{,}13$ & $2{,}94 \pm 0{,}03$ \\
+\quad 1 KB & 2 & $1{,}96 \pm 0{,}21$ & $2{,}96 \pm 0{,}02$ & $2{,}03 \pm 0{,}12$ & $2{,}94 \pm 0{,}02$ \\
+\quad 10 KB & 1 & $1{,}78 \pm 0{,}08$ & $4{,}10 \pm 0{,}04$ & $2{,}20 \pm 0{,}07$ & $4{,}03 \pm 0{,}06$ \\
+\quad 10 KB & 2 & $1{,}81 \pm 0{,}09$ & $4{,}13 \pm 0{,}00$ & $2{,}25 \pm 0{,}08$ & $4{,}07 \pm 0{,}00$ \\
+\quad 1000 KB & 1 & $0{,}99 \pm 0{,}09$ & $4{,}42 \pm 0{,}10$ & $1{,}46 \pm 0{,}09$ & $0{,}81 \pm 0{,}11$ \\
+\quad 1000 KB & 2 & $0{,}94 \pm 0{,}06$ & $4{,}45 \pm 0{,}07$ & $1{,}49 \pm 0{,}12$ & $0{,}68 \pm 0{,}11$ \\
 \midrule
 \multicolumn{6}{l}{\textit{Tylko zapis}} \\
-\quad 1 KB & 1 & 4{,}65 & 2{,}92 & 3{,}98 & 2{,}96 \\
-\quad 1 KB & 2 & 4{,}53 & 2{,}96 & 4{,}07 & 2{,}93 \\
-\quad 10 KB & 1 & 3{,}67 & 4{,}16 & 3{,}30 & 4{,}12 \\
-\quad 10 KB & 2 & 3{,}72 & 4{,}14 & 3{,}34 & 4{,}11 \\
-\quad 1000 KB & 1 & 2{,}26 & 2{,}12 & 3{,}11 & 4{,}27 \\
-\quad 1000 KB & 2 & 2{,}38 & 2{,}18 & 3{,}35 & 3{,}91 \\
+\quad 1 KB & 1 & $4{,}65 \pm 0{,}19$ & $2{,}92 \pm 0{,}02$ & $3{,}98 \pm 0{,}21$ & $2{,}96 \pm 0{,}02$ \\
+\quad 1 KB & 2 & $4{,}53 \pm 0{,}25$ & $2{,}96 \pm 0{,}03$ & $4{,}07 \pm 0{,}19$ & $2{,}93 \pm 0{,}02$ \\
+\quad 10 KB & 1 & $3{,}67 \pm 0{,}04$ & $4{,}16 \pm 0{,}06$ & $3{,}30 \pm 0{,}04$ & $4{,}12 \pm 0{,}07$ \\
+\quad 10 KB & 2 & $3{,}72 \pm 0{,}05$ & $4{,}14 \pm 0{,}04$ & $3{,}34 \pm 0{,}03$ & $4{,}11 \pm 0{,}05$ \\
+\quad 1000 KB & 1 & $2{,}26 \pm 0{,}21$ & $2{,}12 \pm 0{,}12$ & $3{,}11 \pm 0{,}09$ & $4{,}27 \pm 0{,}07$ \\
+\quad 1000 KB & 2 & $2{,}38 \pm 0{,}30$ & $2{,}18 \pm 0{,}16$ & $3{,}35 \pm 0{,}03$ & $3{,}91 \pm 0{,}03$ \\
 \midrule
 \multicolumn{6}{l}{\textit{Mieszany 50/50}} \\
-\quad 1 KB & 1 & 3{,}15 & 2{,}96 & 3{,}03 & 2{,}97 \\
-\quad 1 KB & 2 & 3{,}21 & 2{,}97 & 3{,}08 & 2{,}96 \\
-\quad 10 KB & 1 & 3{,}49 & 4{,}17 & 3{,}20 & 4{,}11 \\
-\quad 10 KB & 2 & 3{,}57 & 4{,}16 & 3{,}27 & 4{,}10 \\
-\quad 1000 KB & 1 & 1{,}82 & 4{,}32 & 2{,}78 & 5{,}61 \\
-\quad 1000 KB & 2 & 2{,}17 & 4{,}37 & 2{,}86 & 5{,}03 \\
+\quad 1 KB & 1 & $3{,}15 \pm 0{,}08$ & $2{,}96 \pm 0{,}01$ & $3{,}03 \pm 0{,}10$ & $2{,}97 \pm 0{,}02$ \\
+\quad 1 KB & 2 & $3{,}21 \pm 0{,}08$ & $2{,}97 \pm 0{,}01$ & $3{,}08 \pm 0{,}08$ & $2{,}96 \pm 0{,}01$ \\
+\quad 10 KB & 1 & $3{,}49 \pm 0{,}11$ & $4{,}17 \pm 0{,}01$ & $3{,}20 \pm 0{,}07$ & $4{,}11 \pm 0{,}04$ \\
+\quad 10 KB & 2 & $3{,}57 \pm 0{,}10$ & $4{,}16 \pm 0{,}05$ & $3{,}27 \pm 0{,}07$ & $4{,}10 \pm 0{,}02$ \\
+\quad 1000 KB & 1 & $1{,}82 \pm 0{,}12$ & $4{,}32 \pm 0{,}12$ & $2{,}78 \pm 0{,}11$ & $5{,}61 \pm 0{,}40$ \\
+\quad 1000 KB & 2 & $2{,}17 \pm 0{,}09$ & $4{,}37 \pm 0{,}09$ & $2{,}86 \pm 0{,}12$ & $5{,}03 \pm 0{,}16$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
+\vspace{4pt}
+\footnotesize Kolumny $\Sigma$ CPU i $\Sigma$ Pamięć oznaczają sumaryczne zużycie zasobów przez wszystkie 6~podów klastra (3~mastery + 3~repliki). Kolumna vCPU oznacza limit CPU ustawiony na każdym podzie.
 \end{table}
 
 \FloatBarrier
@@ -120,6 +168,8 @@ Profil & vCPU & \multicolumn{2}{c}{Valkey} & \multicolumn{2}{c}{Redis 7.2} \\
 Przy payloadzie 1~KB Valkey zużywał mniej CPU niż Redis 7.2 w profilu read-only (1{,}90 vs 2{,}07~vCPU przy limicie 1~vCPU), ale więcej w profilu write-only (4{,}65 vs 3{,}98~vCPU). Zużycie pamięci było zbliżone dla obu wariantów przy payloadach 1~KB i 10~KB, natomiast przy payloadzie 1000~KB pojawiły się istotne różnice: w profilu read-only Valkey zużywał 4{,}42~GB, podczas gdy Redis 7.2 jedynie 0{,}81~GB, co wskazuje na różnicę w buforowaniu dużych odpowiedzi. W profilu mieszanym 1000~KB Redis 7.2 zużywał 5{,}61~GB wobec 4{,}32~GB dla Valkey.
 
 Zwiększenie limitu vCPU z 1 do 2 nie przyniosło proporcjonalnego wzrostu przepustowości. Przy payloadzie 1~KB przepustowość Valkey w profilu mieszanym spadła z 1\,464\,639 do 1\,444\,051 ops/sec, a Redis 7.2 wzrósł minimalnie z 1\,250\,642 do 1\,251\,901 ops/sec. Przy payloadzie 10~KB wyniki 1~vCPU i 2~vCPU były zbliżone. Wskazuje to, że przy tej konfiguracji klienta i pipeline 10 oba systemy osiągały nasycenie przepustowości już przy 1~vCPU dla payloadów 1--10~KB.
+
+Ponieważ testy wydajnościowe przeprowadzono na lokalnym klastrze minikube, bezwzględne wartości ops/sec nie są bezpośrednio przenoszalne na środowisko produkcyjne. Brak realnej latencji sieciowej (klient i klaster współdzielą interfejs loopback) zawyża mierzoną przepustowość względem konfiguracji z oddzielnymi węzłami. Celem pomiaru jest jednak \textit{porównanie względne} między Valkey a Redis 7.2 w identycznych warunkach --- stosunek przepustowości i różnice opóźnień między wariantami nie powinny zależeć od charakterystyki medium transportowego, ponieważ oba systemy korzystają z tej samej ścieżki sieciowej.
 
 \section{Porównanie reshardingu klastra}
 
@@ -145,31 +195,43 @@ Procedura wykonania testu, kolejność faz oraz parametry obciążenia zostały 
 
 \FloatBarrier
 
-Tabela~\ref{tab:reshard-duration} pokazuje średni czas całej operacji administracyjnej wraz z odchyleniem standardowym. Przyspieszenie zostało policzone względem klasycznej migracji slotów Valkey w tej samej fazie testu. Wartość mniejsza niż $1\times$ oznacza wariant wolniejszy od Valkey legacy.
+Tabela~\ref{tab:reshard-duration} pokazuje średni czas całej operacji administracyjnej wraz z odchyleniem standardowym. Tabela~\ref{tab:reshard-speedup} zestawia przyspieszenie policzone względem klasycznej migracji slotów Valkey w tej samej fazie testu. Wartość większa niż $1\times$ oznacza wariant szybszy od Valkey legacy, a mniejsza niż $1\times$ --- wariant wolniejszy.
 
 \begin{table}[htbp]
 \centering
-\caption{Czas reshardingu i przyspieszenie względem migracji legacy.}
+\caption{Czas reshardingu dla poszczególnych wariantów.}
 \label{tab:reshard-duration}
-\begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{lrrrrrrr}
+\begin{tabular}{lrrrr}
 \toprule
-Faza & Valkey legacy [s] & Redis 7.2 [s] & Valkey atomic [s] & Memorystore [s] & Redis / legacy & Atomic / legacy & MS / legacy \\
+Faza & Valkey legacy [s] & Redis 7.2 [s] & Valkey atomic [s] & Memorystore [s] \\
 \midrule
-3 $\rightarrow$ 4 shardy & $86{,}6 \pm 2{,}2$ & $66{,}8 \pm 1{,}1$ & $30{,}6 \pm 3{,}2$ & $166{,}8 \pm 11{,}2$ & $1{,}30\times$ & $2{,}83\times$ & $0{,}52\times$ \\
-4 $\rightarrow$ 3 shardy & $102{,}6 \pm 0{,}9$ & $54{,}6 \pm 0{,}9$ & $52{,}4 \pm 1{,}1$ & $46{,}8 \pm 6{,}9$ & $1{,}88\times$ & $1{,}96\times$ & $2{,}19\times$ \\
+3 $\rightarrow$ 4 shardy & $86{,}6 \pm 2{,}2$ & $66{,}8 \pm 1{,}1$ & $30{,}6 \pm 3{,}2$ & $166{,}8 \pm 11{,}2$ \\
+4 $\rightarrow$ 3 shardy & $102{,}6 \pm 0{,}9$ & $54{,}6 \pm 0{,}9$ & $52{,}4 \pm 1{,}1$ & $46{,}8 \pm 6{,}9$ \\
 \bottomrule
 \end{tabular}
-\end{adjustbox}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{Przyspieszenie reshardingu względem Valkey legacy.}
+\label{tab:reshard-speedup}
+\begin{tabular}{lrrr}
+\toprule
+Faza & Redis 7.2 & Valkey atomic & Memorystore \\
+\midrule
+3 $\rightarrow$ 4 shardy & $1{,}30\times$ & $2{,}83\times$ & $0{,}52\times$ \\
+4 $\rightarrow$ 3 shardy & $1{,}88\times$ & $1{,}96\times$ & $2{,}19\times$ \\
+\bottomrule
+\end{tabular}
 \end{table}
 
 \FloatBarrier
 
-Redis 7.2 pozostał szybszy od klasycznego reshardingu Valkey legacy, ale po uruchomieniu obu wariantów na profilu odpowiadającym Memorystore różnica była mniejsza niż w poprzednim pomiarze: przy skalowaniu w górę czas spadł z 86{,}6~s do 66{,}8~s, a przy skalowaniu w dół z 102{,}6~s do 54{,}6~s. Różnica wynika głównie z krótszej fazy przenoszenia slotów. Przy skalowaniu w górę migracja slotów zajmowała średnio 58{,}4~s dla Valkey legacy i 34{,}4~s dla Redis 7.2. Przy skalowaniu w dół było to odpowiednio 54{,}6~s oraz 31{,}6~s.
+Redis 7.2 pozostał szybszy od klasycznego reshardingu Valkey legacy: przy skalowaniu w górę czas wyniósł 66{,}8~s wobec 86{,}6~s, a przy skalowaniu w dół 54{,}6~s wobec 102{,}6~s. Różnica wynika głównie z krótszej fazy przenoszenia slotów. Przy skalowaniu w górę migracja slotów zajmowała średnio 58{,}4~s dla Valkey legacy i 34{,}4~s dla Redis 7.2. Przy skalowaniu w dół było to odpowiednio 54{,}6~s oraz 31{,}6~s.
 
 Tryb atomowy Valkey pozostał najszybszym wariantem self-hosted przy skalowaniu w górę: cała operacja trwała średnio 30{,}6~s, a sama migracja slotów 3{,}6~s. Przy skalowaniu w dół Valkey atomic trwał średnio 52{,}4~s i był nieznacznie szybszy od Redis 7.2 oraz wolniejszy od Memorystore. Wynik Memorystore jest asymetryczny: skalowanie z trzech do czterech shardów trwało średnio 166{,}8~s, czyli dłużej niż wszystkie warianty self-hosted, natomiast skalowanie z czterech do trzech shardów trwało średnio 46{,}8~s i było najkrótszym wynikiem całej grupy.
 
-Wpływ reshardingu na klienta przedstawia tabela~\ref{tab:reshard-latency-throughput}. Wartości percentyli są średnimi z wyników raportowanych przez \texttt{memtier\_benchmark}, natomiast kolumna \textit{ops/sec} zawiera średnią oraz odchylenie standardowe.
+Wpływ reshardingu na klienta przedstawia tabela~\ref{tab:reshard-latency-throughput}. Wszystkie wartości są średnimi z pięciu powtórzeń z odchyleniem standardowym.
 
 \begin{table}[htbp]
 \centering
@@ -180,14 +242,14 @@ Wpływ reshardingu na klienta przedstawia tabela~\ref{tab:reshard-latency-throug
 \toprule
 Faza & Wariant & Ops/sec & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 \midrule
-3 $\rightarrow$ 4 & Valkey legacy & $185\,425{,}50 \pm 2\,016{,}95$ & 1{,}05 & 2{,}36 & 4{,}38 & 6{,}50 \\
-3 $\rightarrow$ 4 & Redis 7.2 & $191\,061{,}88 \pm 1\,174{,}35$ & 1{,}05 & 2{,}04 & 3{,}78 & 5{,}96 \\
-3 $\rightarrow$ 4 & Valkey atomic & $194\,364{,}36 \pm 1\,882{,}52$ & 1{,}12 & 1{,}88 & 2{,}41 & 3{,}89 \\
-3 $\rightarrow$ 4 & Memorystore & $141\,327{,}99 \pm 1\,985{,}12$ & 1{,}23 & 2{,}01 & 2{,}95 & 6{,}71 \\
-4 $\rightarrow$ 3 & Valkey legacy & $192\,847{,}16 \pm 1\,325{,}84$ & 1{,}09 & 2{,}19 & 4{,}05 & 5{,}61 \\
-4 $\rightarrow$ 3 & Redis 7.2 & $198\,361{,}03 \pm 2\,581{,}14$ & 1{,}04 & 1{,}91 & 3{,}76 & 5{,}36 \\
-4 $\rightarrow$ 3 & Valkey atomic & $203\,988{,}30 \pm 1\,548{,}27$ & 0{,}99 & 1{,}68 & 2{,}01 & 2{,}95 \\
-4 $\rightarrow$ 3 & Memorystore & $140\,837{,}06 \pm 1\,026{,}09$ & 1{,}47 & 2{,}42 & 3{,}54 & 7{,}45 \\
+3 $\rightarrow$ 4 & Valkey legacy & $185\,426 \pm 2\,017$ & $1{,}05 \pm 0{,}02$ & $2{,}36 \pm 0{,}05$ & $4{,}38 \pm 0{,}20$ & $6{,}50 \pm 0{,}08$ \\
+3 $\rightarrow$ 4 & Redis 7.2 & $191\,062 \pm 1\,174$ & $1{,}05 \pm 0{,}00$ & $2{,}04 \pm 0{,}02$ & $3{,}78 \pm 0{,}04$ & $5{,}96 \pm 0{,}14$ \\
+3 $\rightarrow$ 4 & Valkey atomic & $194\,364 \pm 1\,883$ & $1{,}12 \pm 0{,}02$ & $1{,}88 \pm 0{,}01$ & $2{,}41 \pm 0{,}08$ & $3{,}89 \pm 0{,}16$ \\
+3 $\rightarrow$ 4 & Memorystore & $141\,328 \pm 1\,985$ & $1{,}23 \pm 0{,}07$ & $2{,}01 \pm 0{,}07$ & $2{,}95 \pm 0{,}10$ & $6{,}71 \pm 0{,}20$ \\
+4 $\rightarrow$ 3 & Valkey legacy & $192\,847 \pm 1\,326$ & $1{,}09 \pm 0{,}01$ & $2{,}19 \pm 0{,}03$ & $4{,}05 \pm 0{,}05$ & $5{,}61 \pm 0{,}07$ \\
+4 $\rightarrow$ 3 & Redis 7.2 & $198\,361 \pm 2\,581$ & $1{,}04 \pm 0{,}01$ & $1{,}91 \pm 0{,}01$ & $3{,}76 \pm 0{,}06$ & $5{,}36 \pm 0{,}09$ \\
+4 $\rightarrow$ 3 & Valkey atomic & $203\,988 \pm 1\,548$ & $0{,}99 \pm 0{,}01$ & $1{,}68 \pm 0{,}01$ & $2{,}01 \pm 0{,}03$ & $2{,}95 \pm 0{,}10$ \\
+4 $\rightarrow$ 3 & Memorystore & $140\,837 \pm 1\,026$ & $1{,}47 \pm 0{,}02$ & $2{,}42 \pm 0{,}03$ & $3{,}54 \pm 0{,}06$ & $7{,}45 \pm 0{,}11$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -195,27 +257,27 @@ Faza & Wariant & Ops/sec & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 
 \FloatBarrier
 
-Wśród wariantów self-hosted Valkey atomic utrzymał najwyższą przepustowość i najniższe p99 podczas obu faz reshardingu. Redis 7.2 po uruchomieniu na tym samym profilu 2~vCPU/7~GiB osiągnął przepustowość i opóźnienia zbliżone do Valkey legacy, a jednocześnie zachował krótszy czas klasycznej migracji slotów. Valkey legacy miał nieco niższą przepustowość i wyższe p99 niż Redis 7.2, ale różnica była znacznie mniejsza niż w poprzednim zestawie danych. Memorystore miał stabilne opóźnienia i bardzo krótki czas skalowania w dół, lecz w tym zestawie pomiarów nie osiągnął najwyższej przepustowości. Z punktu widzenia testu self-hosted najważniejszy wniosek jest taki, że atomowa migracja slotów znacząco skraca okno reshardingu względem klasycznej migracji Valkey, a jednocześnie utrzymuje najkorzystniejsze opóźnienia klienta.
+Wśród wariantów self-hosted Valkey atomic utrzymał najwyższą przepustowość i najniższe p99 podczas obu faz reshardingu. Redis 7.2 po uruchomieniu na tym samym profilu 2~vCPU/7~GiB osiągnął przepustowość i opóźnienia zbliżone do Valkey legacy, a jednocześnie zachował krótszy czas klasycznej migracji slotów. Valkey legacy miał nieco niższą przepustowość i wyższe p99 niż Redis 7.2, ale różnica była niewielka. Memorystore miał stabilne opóźnienia i bardzo krótki czas skalowania w dół, lecz nie osiągnął najwyższej przepustowości. Z punktu widzenia testu self-hosted najważniejszy wniosek jest taki, że atomowa migracja slotów znacząco skraca okno reshardingu względem klasycznej migracji Valkey, a jednocześnie utrzymuje najkorzystniejsze opóźnienia klienta.
 
 \section{Failover mastera}
 
-Celem testu było zmierzenie wpływu awarii pojedynczego mastera na przepustowość klastra oraz porównanie zachowania Valkey i Redis 7.2 podczas promocji repliki. Procedura testu, klient obciążeniowy oraz mierzone metryki zostały opisane w podrozdziale~\ref{subsec:failover}. Każde powtórzenie trwało 120~s: pierwsze 30~s stanowiło fazę stabilną, po której zasób \texttt{PodChaos} w trybie \texttt{pod-failure} z parametrem \texttt{gracePeriod: 1} usuwał jeden pod pełniący rolę mastera na czas 60~s. Test z \emph{nagłą} awarią mastera był ograniczony do wariantów self-hosted, ponieważ Memorystore nie udostępnia bezpośredniego dostępu do podów. Dla Memorystore wykonano osobną obserwację typu black-box odpowiadającą failoverowi \emph{planowanemu}, opisaną w podrozdziale~\ref{subsec:failover-memorystore}.
+Celem testu było zmierzenie wpływu awarii pojedynczego mastera na przepustowość klastra oraz porównanie zachowania Valkey i Redis 7.2 podczas promocji repliki. Procedura testu, klient obciążeniowy oraz mierzone metryki zostały opisane w podrozdziale~\ref{subsec:failover}. Każde powtórzenie trwało 120~s: pierwsze 30~s stanowiło fazę stabilną, po której zasób \texttt{PodChaos} w trybie \texttt{pod-failure} z parametrem \texttt{gracePeriod: 1} usuwał jeden pod pełniący rolę mastera na czas 60~s. Test był ograniczony do wariantów self-hosted, ponieważ wymaga wstrzyknięcia nagłej awarii za pomocą Chaos Mesh, co nie jest możliwe w usłudze zarządzanej --- Memorystore for Redis Cluster nie udostępnia bezpośredniego dostępu do węzłów ani mechanizmu ręcznego failoveru pojedynczego sharda~\cite{gcpMemorystoreHA}. Część hipotezy H3 dotycząca porównywalności z Memorystore pozostaje zatem niezweryfikowana.
 
-Tabela~\ref{tab:failover-summary} zestawia zagregowane wyniki. Kolumny \textit{baseline} odnoszą się do fazy stabilnej przed wstrzyknięciem awarii, a kolumny \textit{w~oknie chaos} opisują zachowanie klastra w ciągu 60~s trwania \texttt{PodChaos}. Rysunek~\ref{fig:failover-ts} przedstawia przykładowy przebieg czasowy z jednego powtórzenia, a rysunek~\ref{fig:failover-bars} zestawia zagregowane metryki obu wariantów.
+Tabela~\ref{tab:failover-summary} zestawia zagregowane wyniki. Kolumny \textit{baseline} (poziom bazowy) odnoszą się do fazy stabilnej przed wstrzyknięciem awarii, a kolumny \textit{w~oknie chaos} opisują zachowanie klastra w ciągu 60~s trwania \texttt{PodChaos}. Rysunek~\ref{fig:failover-ts} przedstawia przykładowy przebieg czasowy z jednego powtórzenia.
 
 \begin{table}[htbp]
 \centering
 \caption{Wyniki testu failoveru dla Valkey i Redis 7.2.}
 \label{tab:failover-summary}
 \begin{adjustbox}{max width=\textwidth}
-\begin{tabular}{lrrrrrrrr}
+\begin{tabular}{lrrrrrrr}
 \toprule
- & \multicolumn{2}{c}{Baseline} & \multicolumn{4}{c}{W oknie chaos (60 s)} \\
-\cmidrule(lr){2-3} \cmidrule(lr){4-7}
-Wariant & Ops/sec & p99 [ms] & Ops/sec & Spadek [\%] & Szczytowe p99 [ms] & Błędy poł. & \texttt{CLUSTERDOWN} \\
+ & \multicolumn{2}{c}{Baseline} & \multicolumn{5}{c}{Failover} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-8}
+Wariant & Ops/sec & p99 [ms] & Okno błędów [s] & Ops/sec (chaos) & Spadek [\%] & Szczytowe p99 [ms] & Błędy poł. \\
 \midrule
-Valkey & $4\,407 \pm 90$ & $43{,}1 \pm 0{,}5$ & $2\,806 \pm 165$ & $36{,}3 \pm 3{,}6$ & $6\,340 \pm 217$ & $243 \pm 29$ & 0 \\
-Redis 7.2 & $4\,368 \pm 93$ & $43{,}3 \pm 0{,}6$ & $2\,828 \pm 50$ & $35{,}2 \pm 1{,}7$ & $6\,007 \pm 177$ & $244 \pm 13$ & 0 \\
+Valkey & $4\,407 \pm 90$ & $43{,}1 \pm 0{,}5$ & $18{,}0 \pm 2{,}9$ & $2\,806 \pm 165$ & $36{,}3 \pm 3{,}6$ & $6\,340 \pm 217$ & $243 \pm 29$ \\
+Redis 7.2 & $4\,368 \pm 93$ & $43{,}3 \pm 0{,}6$ & $18{,}4 \pm 0{,}5$ & $2\,828 \pm 50$ & $35{,}2 \pm 1{,}7$ & $6\,007 \pm 177$ & $244 \pm 13$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -228,30 +290,20 @@ Redis 7.2 & $4\,368 \pm 93$ & $43{,}3 \pm 0{,}6$ & $2\,828 \pm 50$ & $35{,}2 \pm
     \label{fig:failover-ts}
 \end{figure}
 
-\begin{figure}[!htbp]
-    \centering
-    \includegraphics[width=\textwidth]{images/failover_comparison_bars.png}
-    \caption{Porównanie zagregowanych metryk failoveru Valkey i Redis 7.2.}
-    \label{fig:failover-bars}
-\end{figure}
 
 \FloatBarrier
 
-Bazowa przepustowość w fazie stabilnej wyniosła $4\,407 \pm 90$ ops/sec dla Valkey i $4\,368 \pm 93$ ops/sec dla Redis 7.2, przy opóźnieniu p99 odpowiednio 43{,}1~ms i 43{,}3~ms. Wartości te są niższe niż w testach wydajnościowych z \texttt{memtier\_benchmark}, ponieważ klient \texttt{failover\_client.py} działa bez pipeliningu i z mniejszą liczbą połączeń.
+Bazowa przepustowość w fazie stabilnej wyniosła $4\,407 \pm 90$ ops/sec dla Valkey i $4\,368 \pm 93$ ops/sec dla Redis 7.2, przy opóźnieniu p99 odpowiednio 43{,}1~ms i 43{,}3~ms. Wartości te są niższe niż w testach wydajnościowych z \texttt{memtier\_benchmark}, ponieważ dedykowany klient failoverowy działa bez pipeliningu i z mniejszą liczbą połączeń.
 
-W oknie 60-sekundowym trwania \texttt{PodChaos} przepustowość spadła do $2\,806 \pm 165$ ops/sec dla Valkey i $2\,828 \pm 50$ ops/sec dla Redis 7.2, co odpowiada spadkowi o $36{,}3 \pm 3{,}6$\% i $35{,}2 \pm 1{,}7$\%. Spadek o~około jedną trzecią jest spójny z utratą jednego z trzech shardów --- operacje kierowane do dotkniętego sharda kończyły się błędem połączenia, natomiast 2/3 ruchu trafiającego do zdrowych shardów było obsługiwane bez przerwy.
+Kluczową metryką jest czas okna błędów klienta (\textit{error window}), mierzony jako liczba sekund od pierwszego do ostatniego błędu połączenia zarejestrowanego przez klienta po stronie dotkniętego sharda. Metryka ta izoluje rzeczywisty czas promocji repliki i ponownego połączenia klienta niezależnie od czasu trwania zasobu \texttt{PodChaos} (60~s). Czas okna błędów wyniósł $18{,}0 \pm 2{,}9$~s dla Valkey i $18{,}4 \pm 0{,}5$~s dla Redis 7.2. Wartości te są spójne z domyślnym \texttt{cluster-node-timeout} (15~s) powiększonym o czas elekcji repliki ($\sim$1--2~s) oraz czas odświeżenia topologii i nawiązania nowego połączenia przez klienta ($\sim$1--2~s).
 
-Czas degradacji poniżej 50\% poziomu bazowego wynosił $22{,}2 \pm 2{,}4$~s dla Valkey i $21{,}8 \pm 1{,}1$~s dla Redis 7.2. Degradacja trwała dłużej niż sam czas promocji repliki, ponieważ zasób \texttt{PodChaos} utrzymywał niedostępność poda przez 60~s, a klient rozpoznawał nową topologię dopiero po ponownym nawiązaniu połączenia z wypromowaną repliką.
+W oknie 60-sekundowym trwania \texttt{PodChaos} przepustowość spadła do $2\,806 \pm 165$ ops/sec dla Valkey i $2\,828 \pm 50$ ops/sec dla Redis 7.2, co odpowiada spadkowi o $36{,}3 \pm 3{,}6$\% i $35{,}2 \pm 1{,}7$\%. Spadek o~około jedną trzecią jest spójny z utratą jednego z trzech shardów --- operacje kierowane do dotkniętego sharda kończyły się błędem połączenia, natomiast 2/3 ruchu trafiającego do zdrowych shardów było obsługiwane bez przerwy. Po zakończeniu okna błędów klient odzyskiwał pełną przepustowość mimo trwającego zasobu \texttt{PodChaos}, ponieważ wypromowana replika przejmowała rolę mastera.
 
 Szczytowe opóźnienie p99 podczas failoveru wyniosło $6\,340 \pm 217$~ms dla Valkey i $6\,007 \pm 177$~ms dla Redis 7.2. Skoki opóźnień odpowiadają sekundom, w których wątki klienta czekały na timeout socketu (1~s) i nawiązywały nowe połączenie.
 
 W obu wariantach klient zarejestrował średnio 243--244 błędów połączenia na powtórzenie. W~żadnym powtórzeniu nie zaobserwowano odpowiedzi \texttt{CLUSTERDOWN}. Dla Valkey dodatkowo wystąpiło kilkanaście wyjątków \texttt{RedisClusterException} w powtórzeniach, w których awaria dotyczyła poda z wieloma slotami.
 
-\subsection{Failover planowany Memorystore (black-box)}\label{subsec:failover-memorystore}
-
-Dla Memorystore for Redis Cluster nie można wstrzyknąć nagłej awarii mastera, dlatego zamiast testu \texttt{PodChaos} wykonano obserwację skoordynowanego failoveru planowanego, wymuszonego symulacją zdarzenia konserwacji (\texttt{gcloud redis clusters update --simulate-maintenance-event}). Procedurę opisano w podrozdziale~\ref{subsec:failover}. Obserwacja ta nie jest równoważna nagłej awarii: failover jest bezstratny, a operacja obejmuje wszystkie shardy, a nie jeden z trzech. Z tego powodu wyniki Memorystore raportowane są osobno i traktowane jako managed baseline, a nie jako bezpośrednie porównanie z wariantami self-hosted.
-
-\dots
+Analiza ujawniła różnicę w opóźnieniu terminacji poda: w wariancie Redis 7.2 pierwszy błąd klienta pojawiał się 1~s po wstrzyknięciu \texttt{PodChaos}, natomiast w wariancie Valkey --- po 31~s. Różnica ta wynika z konfiguracji Kubernetes (parametr \texttt{terminationGracePeriodSeconds} w specyfikacji poda Valkey), a nie z zachowania samego systemu bazodanowego. Po faktycznej terminacji poda oba warianty wykazywały zbliżony czas okna błędów ($\approx$18~s), co potwierdza, że mechanizm promocji repliki działa równoważnie w obu systemach.
 
 \section{Spójność danych podczas partycji sieciowej}
 
@@ -268,8 +320,8 @@ Tabela~\ref{tab:split-brain-summary} zestawia zagregowane wyniki. Rozróżniono 
 \toprule
 Wariant & Potwierdzone & Utracone & Loss rate [\%] & Minority loss [\%] & Majority loss [\%] & Odrzucone & Odrzucone [\%] \\
 \midrule
-Valkey & 2\,001\,315 & 106\,604 & 5{,}33 & 15{,}98 & 0{,}00 & 0 & 0{,}0000 \\
-Redis 7.2 & 1\,969\,922 & 106\,474 & 5{,}41 & 16{,}22 & 0{,}00 & 50 & 0{,}0025 \\
+Valkey & $400\,263 \pm 1\,956$ & $21\,321 \pm 689$ & $5{,}33 \pm 0{,}16$ & $15{,}98 \pm 0{,}49$ & $0{,}00$ & $0$ & $0{,}00$ \\
+Redis 7.2 & $393\,984 \pm 6\,949$ & $21\,295 \pm 1\,911$ & $5{,}40 \pm 0{,}42$ & $16{,}21 \pm 1{,}26$ & $0{,}00$ & $10{,}0 \pm 22{,}4$ & $0{,}00 \pm 0{,}01$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -277,11 +329,11 @@ Redis 7.2 & 1\,969\,922 & 106\,474 & 5{,}41 & 16{,}22 & 0{,}00 & 50 & 0{,}0025 \
 
 \FloatBarrier
 
-W obu wariantach utrata danych wystąpiła we wszystkich powtórzeniach i dotyczyła wyłącznie slotów należących pierwotnie do izolowanego mastera mniejszościowego. Dla Valkey utracono 106\,604 z 2\,001\,315 potwierdzonych zapisów, co odpowiada 5{,}33\% wszystkich potwierdzonych operacji oraz 15{,}98\% potwierdzonych zapisów skierowanych do slotów mniejszościowych. Dla Redis 7.2 utracono 106\,474 z 1\,969\,922 potwierdzonych zapisów, czyli 5{,}41\% wszystkich potwierdzonych operacji oraz 16{,}22\% potwierdzonych zapisów do slotów mniejszościowych.
+W obu wariantach utrata danych wystąpiła we wszystkich powtórzeniach i dotyczyła wyłącznie slotów należących pierwotnie do izolowanego mastera mniejszościowego. Dla Valkey utracono średnio $21\,321 \pm 689$ z $400\,263 \pm 1\,956$ potwierdzonych zapisów na powtórzenie, co odpowiada $5{,}33 \pm 0{,}16$\% wszystkich potwierdzonych operacji oraz $15{,}98 \pm 0{,}49$\% potwierdzonych zapisów skierowanych do slotów mniejszościowych. Dla Redis 7.2 utracono średnio $21\,295 \pm 1\,911$ z $393\,984 \pm 6\,949$ potwierdzonych zapisów, czyli $5{,}40 \pm 0{,}42$\% wszystkich potwierdzonych operacji oraz $16{,}21 \pm 1{,}26$\% potwierdzonych zapisów do slotów mniejszościowych.
 
 Nie zaobserwowano utraty potwierdzonych zapisów po stronie większościowej. Oznacza to, że po stronie większości klastra mechanizm promocji repliki zachował spójny obraz danych, natomiast zapisy przyjęte przez odizolowanego mastera mniejszościowego przed pełnym wykryciem awarii zostały utracone po jego ponownym dołączeniu jako repliki. Jest to zgodne z modelem asynchronicznej replikacji Redis Cluster i Valkey Cluster, w którym oba systemy priorytetyzują dostępność kosztem spójności zgodnie z kompromisem CAP~\cite{brewer2012}: potwierdzenie zapisu przez mastera nie gwarantuje, że zapis został już utrwalony po stronie repliki, która później może zostać promowana.
 
-Różnica między wariantami była niewielka pod względem utraty potwierdzonych danych. Redis 7.2 zarejestrował dodatkowo 50 zapisów odrzuconych jawnie błędem \texttt{ClusterDownError}, wszystkie dla slotów mniejszościowych. Odpowiada to 0{,}0025\% wszystkich prób zapisu. Z punktu widzenia klienta są to operacje jednoznacznie niezaakceptowane przez klaster, a więc powinny zostać obsłużone przez retry lub logikę degradacji aplikacji. W Valkey w tym zestawie powtórzeń nie wystąpiły jawnie odrzucone zapisy, natomiast pojawiło się 103 żądań dotkniętych awarią przez przekroczenie progu opóźnienia. W Redis 7.2 takich żądań było łącznie 270, wliczając 50 błędów \texttt{CLUSTERDOWN}.
+Różnica między wariantami była niewielka pod względem utraty potwierdzonych danych. Redis 7.2 zarejestrował średnio $10{,}0 \pm 22{,}4$ zapisów odrzuconych jawnie błędem \texttt{ClusterDownError} na powtórzenie (odrzucenia wystąpiły w jednym z pięciu powtórzeń), wszystkie dla slotów mniejszościowych. Z punktu widzenia klienta są to operacje jednoznacznie niezaakceptowane przez klaster, a więc powinny zostać obsłużone przez retry lub logikę degradacji aplikacji. W Valkey w tym zestawie powtórzeń nie wystąpiły jawnie odrzucone zapisy, natomiast pojawiło się 103 żądań dotkniętych awarią przez przekroczenie progu opóźnienia. W Redis 7.2 takich żądań było łącznie 270, wliczając 50 błędów \texttt{CLUSTERDOWN}.
 
 Najważniejszy wniosek z testu jest taki, że oba warianty zachowują się jakościowo podobnie: partycja mniejszościowa może prowadzić do utraty zapisów, które klient uznał za zakończone sukcesem, ale utrata ogranicza się do shardu odciętego od większości. Sam fakt, że część operacji zwraca błąd \texttt{CLUSTERDOWN}, nie jest utratą danych, lecz sygnałem utraty dostępności. Z perspektywy aplikacji bardziej krytyczne są operacje potwierdzone i później utracone, ponieważ klient nie ma bezpośredniego sygnału, że wymagają ponownego zapisu.
 
@@ -302,12 +354,12 @@ W scenariuszu CPU na wybranych podach pełniących rolę mastera wstrzykiwano ob
 \toprule
 Wariant & Masterzy & Baseline ops/sec & Min ops/sec & Spadek [\%] & Baseline p99 [ms] & Szczyt p99 [ms] & Wykryto & Powrót \\
 \midrule
-Valkey & 1 & $113\,734{,}14 \pm 1\,372{,}04$ & $95\,760{,}20 \pm 3\,084{,}43$ & $15{,}78 \pm 3{,}34$ & $6{,}51$ & $11{,}66$ & $1/5$ & $5/5$ \\
-Valkey & 2 & $116\,098{,}80 \pm 1\,187{,}47$ & $47\,002{,}60 \pm 1\,184{,}42$ & $59{,}51 \pm 1{,}36$ & $6{,}55$ & $19{,}02$ & $5/5$ & $5/5$ \\
-Valkey & 3 & $116\,516{,}62 \pm 1\,215{,}75$ & $45\,554{,}60 \pm 1\,864{,}53$ & $60{,}90 \pm 1{,}50$ & $6{,}30$ & $18{,}24$ & $5/5$ & $5/5$ \\
-Redis 7.2 & 1 & $109\,712{,}45 \pm 2\,574{,}40$ & $94\,037{,}60 \pm 3\,059{,}41$ & $14{,}27 \pm 2{,}55$ & $10{,}32$ & $40{,}96$ & $0/5$ & $5/5$ \\
-Redis 7.2 & 2 & $108\,688{,}88 \pm 1\,289{,}76$ & $71\,841{,}40 \pm 2\,880{,}63$ & $33{,}90 \pm 2{,}66$ & $10{,}47$ & $49{,}41$ & $5/5$ & $5/5$ \\
-Redis 7.2 & 3 & $108\,880{,}06 \pm 1\,868{,}37$ & $16\,860{,}00 \pm 1\,178{,}23$ & $84{,}51 \pm 1{,}11$ & $9{,}45$ & $89{,}91$ & $5/5$ & $5/5$ \\
+Valkey & 1 & $113\,734 \pm 1\,372$ & $95\,760 \pm 3\,084$ & $15{,}78 \pm 3{,}34$ & $6{,}49 \pm 0{,}27$ & $11{,}29 \pm 0{,}45$ & $1/5$ & $5/5$ \\
+Valkey & 2 & $116\,099 \pm 1\,187$ & $47\,003 \pm 1\,184$ & $59{,}51 \pm 1{,}36$ & $6{,}55 \pm 0{,}31$ & $19{,}02 \pm 0{,}80$ & $5/5$ & $5/5$ \\
+Valkey & 3 & $116\,517 \pm 1\,216$ & $45\,555 \pm 1\,865$ & $60{,}90 \pm 1{,}50$ & $6{,}32 \pm 0{,}28$ & $18{,}24 \pm 3{,}61$ & $5/5$ & $5/5$ \\
+Redis 7.2 & 1 & $109\,712 \pm 2\,574$ & $94\,038 \pm 3\,059$ & $14{,}27 \pm 2{,}55$ & $10{,}22 \pm 1{,}51$ & $40{,}96 \pm 1{,}12$ & $0/5$ & $5/5$ \\
+Redis 7.2 & 2 & $108\,689 \pm 1\,290$ & $71\,841 \pm 2\,881$ & $33{,}90 \pm 2{,}66$ & $10{,}24 \pm 0{,}45$ & $49{,}41 \pm 2{,}13$ & $5/5$ & $5/5$ \\
+Redis 7.2 & 3 & $108\,880 \pm 1\,868$ & $16\,860 \pm 1\,178$ & $84{,}51 \pm 1{,}11$ & $9{,}74 \pm 1{,}08$ & $89{,}91 \pm 7{,}16$ & $5/5$ & $5/5$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -324,7 +376,7 @@ Redis 7.2 & 3 & $108\,880{,}06 \pm 1\,868{,}37$ & $16\,860{,}00 \pm 1\,178{,}23$
 
 Przy jednym obciążonym masterze spadek przepustowości był zbliżony dla obu wariantów i wyniósł średnio 15{,}78\% dla Valkey oraz 14{,}27\% dla Redis 7.2. W tej konfiguracji spadek poniżej progu 80\% poziomu bazowego został wykryty w jednym powtórzeniu dla Valkey i w żadnym dla Redis 7.2. Przy dwóch obciążonych masterach spadek wyniósł 59{,}51\% dla Valkey oraz 33{,}90\% dla Redis 7.2. Przy trzech obciążonych masterach spadek wyniósł 60{,}90\% dla Valkey oraz 84{,}51\% dla Redis 7.2.
 
-Szczytowe opóźnienie p99 w oknie obciążenia rosło wraz z liczbą obciążonych masterów. Dla Valkey wyniosło ono 11{,}66~ms, 19{,}02~ms i 18{,}24~ms odpowiednio dla jednego, dwóch i trzech masterów, przy bazowym p99 około 6{,}3--6{,}6~ms. Dla Redis 7.2 wyniosło ono 40{,}96~ms, 49{,}41~ms i 89{,}91~ms, przy bazowym p99 około 9{,}5--10{,}5~ms. We wszystkich konfiguracjach i powtórzeniach klient odzyskiwał poziom bazowy po zakończeniu obciążenia (powrót 5/5), a w żadnym powtórzeniu nie wykryto restartu poda.
+Szczytowe opóźnienie p99 w oknie obciążenia rosło wraz z liczbą obciążonych masterów. Dla Valkey wyniosło ono $11{,}29 \pm 0{,}45$~ms, $19{,}02 \pm 0{,}80$~ms i $18{,}24 \pm 3{,}61$~ms odpowiednio dla jednego, dwóch i trzech masterów, przy bazowym p99 w zakresie $6{,}3$--$6{,}6$~ms. Dla Redis 7.2 wyniosło ono $40{,}96 \pm 1{,}12$~ms, $49{,}41 \pm 2{,}13$~ms i $89{,}91 \pm 7{,}16$~ms, przy bazowym p99 w zakresie $9{,}7$--$10{,}2$~ms. We wszystkich konfiguracjach i powtórzeniach klient odzyskiwał poziom bazowy po zakończeniu obciążenia (powrót 5/5), a w żadnym powtórzeniu nie wykryto restartu poda.
 
 \subsection{Presja pamięci}
 
@@ -470,7 +522,7 @@ Weryfikacja liczby kluczy & $36{,}6$ & $0{,}9$ \\
 
 \FloatBarrier
 
-Backup Memorystore trwał średnio 118{,}6~s, czyli krócej niż backup Valkey o około 6\% i krócej niż backup Redis 7.2 o około 13\%. Różnica jest jednak znacznie mniejsza niż w poprzednim wariancie offline, ponieważ aktualna procedura self-hosted nie zatrzymuje całego klastra i snapshotuje tylko PVC replik używanych jako źródło backupu. Odtworzenie Memorystore trwało średnio 496{,}0~s. Jest to najdłuższy wynik w porównaniu, ale obejmuje pełne utworzenie nowego klastra zarządzanego przez usługę.
+Backup Memorystore trwał średnio 118{,}6~s, czyli krócej niż backup Valkey o około 6\% i krócej niż backup Redis 7.2 o około 13\%. Procedura self-hosted nie zatrzymuje całego klastra i snapshotuje tylko PVC replik używanych jako źródło backupu, dzięki czemu czasy są zbliżone do wariantu zarządzanego. Odtworzenie Memorystore trwało średnio 496{,}0~s. Jest to najdłuższy wynik w porównaniu, ale obejmuje pełne utworzenie nowego klastra zarządzanego przez usługę.
 
 \subsection{Porównanie wariantów}
 
@@ -536,7 +588,7 @@ Backup i restore & Memorystore & 6 & 5 \\
 
 \FloatBarrier
 
-Koszt miesięczny policzono dla konfiguracji używanej w testach porównywanych z Memorystore: region \texttt{europe-central2}, dwa węzły GKE \texttt{n2-standard-8}, dyski boot \texttt{pd-balanced} 50~GiB na węzeł, sześć PVC \texttt{pd-ssd} po 8~GiB oraz Memorystore \texttt{redis-standard-small} z trzema shardami i jedną repliką na shard. Przyjęto 730~h miesięcznie, bez rabatów, free tier, kosztów sieci, AOF i składowania backupów. Ceny GKE, dysków i Memorystore odczytano z cenników Google Cloud~\cite{gcpGkePricing,gcpComputeDiskPricing,gcpMemorystorePricing}. Cena \texttt{n2-standard-8} jest pozostawiona w tabeli jako parametr $p$, ponieważ powinna być każdorazowo potwierdzona w aktualnym katalogu Cloud SKUs~\cite{gcpCloudSkus}.
+Koszt miesięczny policzono dla konfiguracji używanej w testach porównywanych z Memorystore: region \texttt{europe-central2}, dwa węzły GKE \texttt{n2-standard-8}, dyski boot \texttt{pd-balanced} 50~GiB na węzeł, sześć PVC \texttt{pd-ssd} po 8~GiB oraz Memorystore \texttt{redis-standard-small} z trzema shardami i jedną repliką na shard. Przyjęto 730~h miesięcznie, bez rabatów, darmowego limitu (ang.~\textit{free tier}), kosztów sieci, AOF i składowania backupów. Ceny GKE, dysków i Memorystore odczytano z cenników Google Cloud~\cite{gcpGkePricing,gcpComputeDiskPricing,gcpMemorystorePricing}. Cena \texttt{n2-standard-8} jest pozostawiona w tabeli jako parametr $p$, ponieważ powinna być każdorazowo potwierdzona w aktualnym katalogu Cloud SKUs~\cite{gcpCloudSkus}.
 
 \begin{table}[htbp]
 \centering

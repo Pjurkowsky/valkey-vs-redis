@@ -83,7 +83,7 @@ Mechanizm migracji slotów umożliwia przenoszenie danych między węzłami (res
 
 \section{Valkey -- geneza i architektura}\label{sec:valkey}
 
-Valkey to otwartoźródłowy system typu in-memory data store, będący forkiem Redis 7.2.4~\cite{valkeyDocumentation}. Projekt został ogłoszony 28 marca 2024 roku pod patronatem Linux Foundation jako bezpośrednia odpowiedź społeczności na zmianę licencji Redis~\cite{linuxFoundationValkey}. Nazwa Valkey nawiązuje do podstawowej funkcji systemu jako magazynu klucz-wartość (key-value, odwrócone).
+Valkey to otwartoźródłowy system typu in-memory data store, będący forkiem Redis 7.2.4~\cite{valkeyDocumentation}. Projekt został ogłoszony 28 marca 2024 roku pod patronatem Linux Foundation jako bezpośrednia odpowiedź społeczności na zmianę licencji Redis~\cite{linuxFoundationValkey}.
 
 \subsection{Geneza projektu}
 
@@ -93,8 +93,8 @@ Pierwsza wersja, Valkey 7.2.5-rc1, została opublikowana 16 kwietnia 2024 roku j
 
 \begin{itemize}
     \item Valkey 8.0 (15 września 2024) -- poprawiona niezawodność migracji slotów, optymalizacje pamięci, repliki zwracające \texttt{ASK} i \texttt{TRYAGAIN} podczas migracji~\cite{valkey80release}.
-    \item Valkey 8.1 (31 marca 2025) -- dalsze usprawnienia wydajności i stabilności.
-    \item Valkey 9.0 (21 października 2025) -- atomowa migracja slotów, znaczące przyspieszenie reshardingu~\cite{valkeyAtomicSlotMigration}.
+    \item Valkey 8.1 (31 marca 2025) -- dalsze usprawnienia wydajności i stabilności~\cite{valkey81release}.
+    \item Valkey 9.0 (21 października 2025) -- atomowa migracja slotów, znaczące przyspieszenie reshardingu~\cite{valkey90release, valkeyAtomicSlotMigration}.
     \item Valkey 9.1 (19 maja 2026) -- poprawki bezpieczeństwa, redukcja skoków opóźnień podczas rehashingu przez inkrementalne zwalnianie stron pamięci, metryka ruchu sieciowego magistrali klastra~\cite{valkey91release}.
 \end{itemize}
 
@@ -206,7 +206,7 @@ Z perspektywy użytkownika Memorystore udostępnia zestaw operacji administracyj
     \item odtwarzanie klastra z kopii przez \texttt{gcloud redis clusters create --import-managed-backup}.
 \end{itemize}
 
-Wewnętrzna implementacja tych operacji nie jest dokumentowana publicznie, co sprawia, że porównanie z rozwiązaniem self-hosted ma częściowo charakter black-box. Użytkownik obserwuje jedynie czas od wywołania operacji do osiągnięcia stanu gotowości, bez wglądu w poszczególne fazy realizacji.
+Wewnętrzna implementacja tych operacji nie jest dokumentowana publicznie, co sprawia, że porównanie z rozwiązaniem self-hosted ma częściowo charakter czarnej skrzynki (ang.~\textit{black-box}). Użytkownik obserwuje jedynie czas od wywołania operacji do osiągnięcia stanu gotowości, bez wglądu w poszczególne fazy realizacji.
 
 \subsection{Porównanie modeli}
 

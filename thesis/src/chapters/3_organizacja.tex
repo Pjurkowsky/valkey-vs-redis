@@ -30,7 +30,7 @@ Dla każdego przebiegu zapisywane są surowe wyniki, logi oraz parametry konfigu
 
 Głównym wariantem badawczym jest \textbf{Valkey Cluster w Kubernetes} --- system self-hosted oceniany pod względem wydajności, zachowania podczas operacji administracyjnych, kosztów oraz złożoności utrzymania. Punktem odniesienia wydajnościowego jest \textbf{Redis 7.2 Cluster w Kubernetes} --- klaster Redis 7.2.5 z obrazu Bitnami, wdrożony self-hosted z identyczną topologią i zasobami co Valkey, jako ostatnia wersja Redis na licencji BSD-3. Trzecim wariantem jest \textbf{Google Cloud Memorystore for Redis Cluster}, wykorzystywany jako punkt odniesienia dla kosztów infrastruktury, nakładu pracy operatora oraz operacji udostępnianych przez dostawcę chmurowego.
 
-W przypadku wariantów self-hosted operator zarządza klastrem Kubernetes, konfiguracją Helm oraz zasobami trwałymi. W przypadku Memorystore użytkownik inicjuje operacje przez API lub narzędzia \texttt{gcloud}, natomiast wewnętrzna realizacja pozostaje ukryta --- wariant ten jest więc traktowany jako porównanie typu black-box. Tam, gdzie jest to możliwe, zachowywane są te same parametry obciążenia i podobny rozmiar danych, jednak nie zakłada się pełnej równoważności infrastruktury. Testy wykorzystujące Chaos Mesh (failover, partycja sieciowa, resilience) mogą być przeprowadzone wyłącznie dla wariantów self-hosted. Tabelę~\ref{tab:testy_warianty} w dalszej części rozdziału zestawia zakres testów dla każdego wariantu.
+W przypadku wariantów self-hosted operator zarządza klastrem Kubernetes, konfiguracją Helm oraz zasobami trwałymi. W przypadku Memorystore użytkownik inicjuje operacje przez API lub narzędzia \texttt{gcloud}, natomiast wewnętrzna realizacja pozostaje ukryta --- wariant ten jest więc traktowany jako porównanie typu black-box. Tam, gdzie jest to możliwe, zachowywane są te same parametry obciążenia i podobny rozmiar danych, jednak nie zakłada się pełnej równoważności infrastruktury. Testy wykorzystujące Chaos Mesh (failover, partycja sieciowa, resilience) mogą być przeprowadzone wyłącznie dla wariantów self-hosted. Tabela~\ref{tab:testy_warianty} w dalszej części rozdziału zestawia zakres testów dla każdego wariantu.
 
 \section{Środowisko testowe}
 
@@ -38,9 +38,11 @@ Ze względu na ograniczony dostęp do zasobów Google Cloud Platform (limity kwo
 
 \subsection{Środowisko chmurowe}
 
-Testy operacyjne i odpornościowe prowadzone są w klastrze Kubernetes utworzonym w Google Kubernetes Engine. Dla każdego scenariusza klaster GKE jest tworzony od początku, aby przebieg testu nie zależał od stanu pozostawionego przez poprzednie eksperymenty. Bazową konfigurację klastra GKE tworzono poleceniem~\ref{lst:gke-cluster-create}.
+Testy operacyjne i odpornościowe prowadzone są w klastrze Kubernetes utworzonym w Google Kubernetes Engine. Dla każdego scenariusza klaster GKE jest tworzony od początku, aby przebieg testu nie zależał od stanu pozostawionego przez poprzednie eksperymenty. Ze względu na ograniczenia budżetowe (dostępne kredyty GCP) stosowano dwie konfiguracje klastra GKE w zależności od tego, czy scenariusz obejmował porównanie z Memorystore.
 
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Utworzenie klastra GKE},label={lst:gke-cluster-create}]
+Testy porównujące wyłącznie warianty self-hosted (failover, spójność danych, resilience) uruchamiano na mniejszym klastrze, którego konfigurację przedstawiono w listingu~\ref{lst:gke-cluster-selfhosted}.
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Klaster GKE dla testów self-hosted},label={lst:gke-cluster-selfhosted}]
 gcloud container clusters create valkey-bench \
   --location europe-central2 \
   --node-locations europe-central2-a \
@@ -50,7 +52,19 @@ gcloud container clusters create valkey-bench \
   --disk-size 50
 \end{lstlisting}
 
-Wariant zarządzany uruchamiany był jako klaster Google Cloud Memorystore for Redis w tym samym regionie. Bazową konfigurację usługi tworzono poleceniem~\ref{lst:memorystore-cluster-create}.
+Testy obejmujące porównanie z Memorystore (resharding, backup i restore) wymagały większych zasobów na pod, aby wyrównać parametry do usługi zarządzanej. Klaster GKE dla tych scenariuszy tworzono według listingu~\ref{lst:gke-cluster-ms}.
+
+\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Klaster GKE dla testów z Memorystore},label={lst:gke-cluster-ms}]
+gcloud container clusters create valkey-bench \
+  --location europe-central2 \
+  --node-locations europe-central2-a \
+  --num-nodes 2 \
+  --machine-type n2-standard-8 \
+  --disk-type pd-balanced \
+  --disk-size 50
+\end{lstlisting}
+
+Wariant zarządzany uruchamiany był jako klaster Google Cloud Memorystore for Redis Cluster w tym samym regionie. Konfigurację usługi tworzono poleceniem~\ref{lst:memorystore-cluster-create}.
 
 \begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Utworzenie klastra Memorystore},label={lst:memorystore-cluster-create}]
 gcloud redis clusters create redis-ms \
@@ -61,27 +75,31 @@ gcloud redis clusters create redis-ms \
   --shard-count=3
 \end{lstlisting}
 
-Monitoring środowiska Kubernetes instalowano za pomocą chartu \texttt{kube-prometheus-stack}, który uruchamia Prometheusa i Grafanę. Polecenia instalacyjne przedstawiono w listingu~\ref{lst:monitoring-install}.
+\subsubsection{Normalizacja zasobów do Memorystore}\label{subsec:normalizacja}
 
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Instalacja Prometheusa i Grafany},label={lst:monitoring-install}]
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo update
-helm install monitoring prometheus-community/kube-prometheus-stack \
-  -n monitoring \
-  --create-namespace
-\end{lstlisting}
+W testach porównujących klastry self-hosted z Memorystore konieczne jest dopasowanie zasobów przydzielonych podom Valkey i Redis 7.2 do parametrów usługi zarządzanej. Typ węzła \texttt{redis-standard-small} zgodnie z dokumentacją~\cite{gcpMemorystoreNodeTypes} oferuje 2~vCPU i około 7~GiB pamięci całkowitej na shard, z czego około 5{,}2~GiB jest dostępne jako pamięć użytkowa po odjęciu narzutu systemowego.
 
-Część testów odporności wykorzystywała również Chaos Mesh do uruchamiania kontrolowanych zakłóceń w klastrze Kubernetes. W środowisku GKE wskazywano runtime \texttt{containerd}. Instalację narzędzia przedstawiono w listingu~\ref{lst:chaos-mesh-install}.
+Aby zapewnić porównywalność, klastry self-hosted w testach z udziałem Memorystore były uruchamiane z limitami i requestami zasobów na 2~vCPU i 7~GiB pamięci RAM na pod oraz z parametrem \texttt{maxmemory} ustawionym na 5200~MB. Zestawienie kluczowych parametrów dla wszystkich trzech wariantów przedstawiono w tabeli~\ref{tab:normalizacja_zasobow}.
 
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Instalacja Chaos Mesh},label={lst:chaos-mesh-install}]
-helm repo add chaos-mesh https://charts.chaos-mesh.org
-helm repo update
-helm install chaos-mesh chaos-mesh/chaos-mesh \
-  --namespace chaos-mesh \
-  --create-namespace \
-  --set chaosDaemon.runtime=containerd \
-  --set chaosDaemon.socketPath=/run/containerd/containerd.sock
-\end{lstlisting}
+\begin{table}[H]
+\centering
+\caption{Parametry zasobów w testach porównujących z Memorystore}
+\label{tab:normalizacja_zasobow}
+\begin{tabularx}{\textwidth}{p{3.8cm}XXX}
+\toprule
+\textbf{Parametr} & \textbf{Valkey} & \textbf{Redis 7.2} & \textbf{Memorystore} \\
+\midrule
+Obraz / typ węzła & Valkey 9.1.0 & Redis 7.2.5 (Bitnami) & redis-standard-small \\
+Shardy $\times$ repliki & 3 $\times$ 1 & 3 $\times$ 1 & 3 $\times$ 1 \\
+vCPU na shard & 2 & 2 & 2 \\
+Pamięć na shard & 7 GiB & 7 GiB & $\approx$7 GiB \\
+\texttt{maxmemory} & 5200 MB & 5200 MB & $\approx$5{,}2 GiB \\
+Polityka eksmisji & allkeys-lru & allkeys-lru & allkeys-lru \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsubsection{Wdrożenie klastrów self-hosted}
 
 Klaster Valkey instalowano z wykorzystaniem chartu \texttt{valkey-helm} w wersji rozwijanej w ramach pull requestu dodającego obsługę trybu klastrowego z shardingiem~\cite{valkeyHelmPr116}. Przygotowanie repozytorium chartu przedstawiono w listingu~\ref{lst:valkey-chart-pr}.
 
@@ -92,78 +110,52 @@ git fetch origin pull/116/head:pr-116
 git checkout pr-116
 \end{lstlisting}
 
-Konfiguracja przekazywana do chartu Helm znajduje się w pliku \texttt{k8s/manifests/values.yaml}. Jej zawartość przedstawiono w listingu~\ref{lst:valkey-values}.
+Instalację klastra Valkey wykonywano poleceniem \texttt{helm install} z plikiem konfiguracyjnym zawierającym topologię (3~shardy, 1~replika), wersję obrazu (9.1.0), parametry \texttt{maxmemory} oraz limity zasobów odpowiednie dla danego scenariusza. Klaster Redis 7.2 instalowano z chartu Bitnami \texttt{redis-cluster} z obrazem \texttt{bitnamilegacy/redis-cluster:7.2.5-debian-12-r4} --- ostatnią wersją Redis na licencji BSD-3-Clause. Chart Bitnami konfiguruje klaster przez parametry \texttt{cluster.nodes} i \texttt{cluster.replicas}, co daje topologię analogiczną do Valkey: 3~shardy z jedną repliką na shard, czyli 6~podów. Oba warianty self-hosted wdrażano w osobnych namespace'ach.
 
-\lstinputlisting[
-basicstyle=\ttfamily\footnotesize,
-columns=fullflexible,
-keepspaces=true,
-breaklines=true,
-breakatwhitespace=true,
-frame=single,
-framerule=0.2pt,
-caption={Plik \texttt{values.yaml} używany do instalacji Valkey},
-label={lst:valkey-values}
-]{../../k8s/manifests/values.yaml}
+\subsubsection{Monitoring i chaos engineering}
 
-Instalację klastra Valkey wykonywano poleceniem~\ref{lst:valkey-install}.
+Monitoring środowiska Kubernetes instalowano za pomocą chartu \texttt{kube-prometheus-stack}, który uruchamia Prometheusa i Grafanę. Testy odporności wykorzystywały Chaos Mesh do uruchamiania kontrolowanych zakłóceń w klastrze Kubernetes (runtime \texttt{containerd}).
 
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Instalacja klastra Valkey z użyciem Helm},label={lst:valkey-install}]
-helm install valkey ../valkey-helm/valkey \
-  -n vk \
-  -f ./k8s/manifests/values.yaml \
-  --create-namespace
-\end{lstlisting}
-
-Klaster Redis 7.2 instalowano z chartu Bitnami \texttt{redis-cluster} w wersji wykorzystującej obraz \texttt{bitnamilegacy/redis-cluster:7.2.5-debian-12-r4}. Jest to ostatnia wersja Redis dystrybuowana na licencji BSD-3-Clause. Chart Bitnami konfiguruje klaster przez parametr \texttt{cluster.nodes} i \texttt{cluster.replicas}, co daje topologię analogiczną do Valkey: 3~shardy z jedną repliką na shard, czyli 6~podów. Konfigurację przekazywaną do chartu przedstawiono w listingu~\ref{lst:redis72-values}.
-
-\lstinputlisting[
-basicstyle=\ttfamily\footnotesize,
-columns=fullflexible,
-keepspaces=true,
-breaklines=true,
-breakatwhitespace=true,
-frame=single,
-framerule=0.2pt,
-caption={Plik \texttt{values-redis72.yaml} używany do instalacji Redis 7.2},
-label={lst:redis72-values}
-]{../../k8s/manifests/values-redis72.yaml}
-
-Instalację klastra Redis 7.2 wykonywano poleceniem~\ref{lst:redis72-install}.
-
-\begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Instalacja klastra Redis 7.2 z użyciem Helm},label={lst:redis72-install}]
-helm install redis72 \
-  oci://registry-1.docker.io/bitnamicharts/redis-cluster \
-  -n redis \
-  -f ./k8s/manifests/values-redis72.yaml \
-  --create-namespace
-\end{lstlisting}
-
-\subsection{Normalizacja zasobów do Memorystore}\label{subsec:normalizacja}
-
-W testach porównujących klastry self-hosted z Memorystore konieczne jest dopasowanie zasobów przydzielonych podom Valkey i Redis 7.2 do parametrów usługi zarządzanej. Klaster Memorystore tworzono z typem węzła \texttt{redis-standard-small}, który zgodnie z dokumentacją~\cite{gcpMemorystoreNodeTypes} oferuje 2~vCPU i około 7~GiB pamięci całkowitej na shard, z czego około 5{,}2~GiB jest dostępne jako pamięć użytkowa po odjęciu narzutu systemowego.
-
-Aby zapewnić porównywalność, klastry self-hosted w testach z udziałem Memorystore były uruchamiane z profilami ustawiającymi limity i requesty zasobów na 2~vCPU i 7~GiB pamięci RAM na pod. Plik \texttt{values-normalized-ms-small.yaml} ustawia dodatkowo parametr \texttt{maxmemory} na wartość 5\,583\,457\,484~B ($\approx$5{,}2~GiB), odpowiadającą faktycznej dostępnej pamięci Memorystore na typie \texttt{redis-standard-small}. Zawartość tego pliku przedstawiono w listingu~\ref{lst:normalized-values}. W pomiarach reshardingu i backupu użyto profilu Valkey \texttt{values-backup-max7gb.yaml} oraz odpowiadającego mu profilu Redis 7.2 \texttt{values-redis72.yaml}; oba warianty ustawiają 2~vCPU, 7~GiB pamięci RAM i \texttt{maxmemory 5200mb}.
-
-\lstinputlisting[
-basicstyle=\ttfamily\footnotesize,
-columns=fullflexible,
-keepspaces=true,
-breaklines=true,
-breakatwhitespace=true,
-frame=single,
-framerule=0.2pt,
-caption={Plik \texttt{values-normalized-ms-small.yaml} --- konfiguracja znormalizowana do Memorystore \texttt{redis-standard-small}},
-label={lst:normalized-values}
-]{../../k8s/manifests/values-normalized-ms-small.yaml}
-
-Bazowa konfiguracja \texttt{values.yaml} (listing~\ref{lst:valkey-values}) jest natomiast używana w testach wydajnościowych z różnymi limitami CPU (1, 2, 4~vCPU), gdzie limity zasobów są zmieniane dynamicznie przez skrypt benchmarkowy, oraz w testach operacyjnych niewymagających porównania z Memorystore.
-
-\subsection{Środowisko lokalne}
+\subsection{Środowisko lokalne}\label{subsec:srodowisko_lokalne}
 
 Testy wydajnościowe przeprowadzono w środowisku lokalnym z wykorzystaniem klastra Kubernetes uruchomionego za pomocą narzędzia minikube. Klaster konfigurowano z trzema węzłami, aby odwzorować topologię używaną w środowisku chmurowym. Wdrożenie klastrów Valkey i Redis 7.2 odbywało się za pomocą tych samych chartów Helm i plików konfiguracyjnych co w środowisku GKE, z dostosowaniem limitów zasobów do możliwości maszyny lokalnej.
 
-% TODO: specyfikacja sprzętowa maszyny lokalnej
+Specyfikację sprzętową maszyny lokalnej przedstawiono w tabeli~\ref{tab:spec_lokalna}, a wersje narzędzi używanych do orkiestracji testów --- w tabeli~\ref{tab:narzedzia_lokalne}.
+
+\begin{table}[H]
+\centering
+\caption{Specyfikacja sprzętowa maszyny lokalnej}
+\label{tab:spec_lokalna}
+\begin{tabularx}{\textwidth}{p{4.0cm}X}
+\toprule
+\textbf{Komponent} & \textbf{Wartość} \\
+\midrule
+Procesor & AMD Ryzen 7 7700X, 8 rdzeni / 16 wątków, do 5{,}6 GHz \\
+Pamięć RAM & 32 GB DDR5 \\
+Dysk & 2$\times$ Lexar NM620 1 TB (NVMe) \\
+System operacyjny & Arch Linux, jądro 7.0.9 \\
+Architektura & x86\_64 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{table}[H]
+\centering
+\caption{Wersje narzędzi w środowisku lokalnym}
+\label{tab:narzedzia_lokalne}
+\begin{tabularx}{\textwidth}{p{4.0cm}X}
+\toprule
+\textbf{Narzędzie} & \textbf{Wersja} \\
+\midrule
+minikube & 1.38.1 \\
+kubectl & 1.35.4 \\
+Helm & 4.1.4 \\
+Docker & 29.2.1 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Ze względu na ograniczenia środowiska lokalnego wariant 4~vCPU na pod nie został zrealizowany. Klaster minikube z trzema węzłami dzieli zasoby jednego procesora 8-rdzeniowego, a klaster Valkey/Redis składa się z 6~podów (3~mastery + 3~repliki) plus pod generatora obciążenia. Przydzielenie 4~vCPU każdemu podowi wymagałoby łącznie co najmniej 28~vCPU wyłącznie dla podów klastra i klienta, przekraczając dostępne 16~wątków sprzętowych. Z tego powodu testy wydajnościowe ograniczono do konfiguracji 1 i 2~vCPU, co daje macierz 2~wartości CPU $\times$ 3~rozmiary payloadu $\times$ 3~proporcje operacji = 18~konfiguracji na wariant.
 
 \section{Narzędzia badawcze}
 
@@ -191,8 +183,8 @@ Parametry testów wydajnościowych przedstawiono w tabeli~\ref{tab:parametry_wyd
 \midrule
 Narzędzie & \texttt{memtier\_benchmark} \\
 Tryb klienta & \texttt{--cluster-mode} \\
-Liczba vCPU na pod & 1, 2, 4 \\
-Rozmiar payloadu & 1 KB, 10 KB, 1 MB \\
+Liczba vCPU na pod & 1, 2 (4 pominięto --- patrz sekcja~\ref{subsec:srodowisko_lokalne}) \\
+Rozmiar payloadu & 1 KB, 10 KB, 1000 KB \\
 Typ operacji & read-only \texttt{0:1}, write-only \texttt{1:0}, mixed \texttt{1:1} \\
 Liczba wątków klienta & 4 \\
 Liczba klientów na wątek & 25 \\
@@ -209,7 +201,7 @@ Percentyle opóźnień & p50, p95, p99, p99.9 \\
 
 Wybór rozmiarów payloadu odzwierciedla rozkład rozmiarów wartości obserwowany w produkcyjnych systemach cache. Yang i współautorzy, analizując 153 klastry cache (Memcached i Redis) w Twitterze, wykazali bimodalny rozkład rozmiarów wartości: zdecydowana większość kluczy mieści się w zakresie setek bajtów do kilku kilobajtów, natomiast niewielka frakcja osiąga rozmiary rzędu setek kilobajtów~\cite{yang2020}. Trzy przyjęte punkty pomiarowe --- 1~KB, 10~KB i 1000~KB --- odpowiadają typowym, średnim i dużym wartościom w tym rozkładzie.
 
-Pełna macierz testów obejmuje 3 wartości CPU, 3 rozmiary payloadu i 3 proporcje operacji, czyli 27 konfiguracji dla wariantu self-hosted. Przy pięciu powtórzeniach daje to 135 przebiegów. Z tego powodu istotne jest automatyczne zapisywanie wyników oraz jednoznaczne nazewnictwo plików wynikowych.
+Planowana macierz testów obejmowała 3 wartości CPU, 3 rozmiary payloadu i 3 proporcje operacji, czyli 27 konfiguracji dla wariantu self-hosted. Ze względu na ograniczenia środowiska lokalnego opisane w sekcji~\ref{subsec:srodowisko_lokalne} zrealizowano warianty 1 i 2~vCPU, co daje 18~konfiguracji i~90~przebiegów (przy pięciu powtórzeniach). Automatyczne zapisywanie wyników oraz jednoznaczne nazewnictwo plików wynikowych pozostaje istotne ze względu na liczbę przebiegów.
 
 \section{Testy niezawodności i odporności}
 
@@ -244,7 +236,7 @@ Liczba powtórzeń & 5 \\
 
 Test failoveru polega na ubiciu jednego poda pełniącego rolę mastera podczas ciągłego obciążenia i obserwacji, jak klaster promuje replikę oraz jak klient odczuwa degradację. Awaria jest wstrzykiwana za pomocą zasobu \texttt{PodChaos} w trybie \texttt{pod-failure} generowanego dynamicznie przez skrypt benchmarkowy.
 
-Klientem obciążeniowym jest dedykowany program \texttt{failover\_client.py} oparty na bibliotece \texttt{redis-py} w trybie klastrowym. W~odróżnieniu od \texttt{memtier\_benchmark}, klient ten kontynuuje wysyłanie operacji do zdrowych shardów nawet po utracie połączenia z jednym masterem, dzięki czemu zarejestrowana przepustowość odzwierciedla faktyczną dostępność klastra, a nie artefakt globalnego refresh topologii klienta. Klient uruchamia 64~współbieżne wątki robocze (\texttt{threads=4}, \texttt{clients=16}), każdy z własnym połączeniem do klastra, przy payloadzie 1~KB i proporcji operacji 1:1. Timeout socketu wynosi 1~s, a po błędzie połączenia wątek tworzy nowe połączenie z~backoffem 10~ms.
+Klientem obciążeniowym jest dedykowany program napisany w Pythonie, oparty na bibliotece \texttt{redis-py} w trybie klastrowym. W~odróżnieniu od \texttt{memtier\_benchmark}, klient ten kontynuuje wysyłanie operacji do zdrowych shardów nawet po utracie połączenia z jednym masterem, dzięki czemu zarejestrowana przepustowość odzwierciedla faktyczną dostępność klastra, a nie artefakt globalnego refresh topologii klienta. Klient uruchamia 64~współbieżne wątki robocze (\texttt{threads=4}, \texttt{clients=16}), każdy z własnym połączeniem do klastra, przy payloadzie 1~KB i proporcji operacji 1:1. Timeout socketu wynosi 1~s, a po błędzie połączenia wątek tworzy nowe połączenie z~backoffem 10~ms.
 
 Procedura każdego powtórzenia przebiega następująco:
 
@@ -259,13 +251,13 @@ Procedura każdego powtórzenia przebiega następująco:
 
 Wariant podstawowy obejmuje awarię jednego mastera z trzech, ponieważ taki scenariusz jest najłatwiejszy do powtórzenia i interpretacji. Dla każdego wariantu wykonano po pięć powtórzeń.
 
-Mierzone metryki obejmują: przepustowość w oknie bazowym (30~s przed chaos), przepustowość w oknie chaos (60~s trwania \texttt{PodChaos}), procentowy spadek przepustowości, czas degradacji poniżej 50\% poziomu bazowego, szacunkową liczbę utraconych operacji, szczytowe opóźnienie p99 podczas failoveru, liczbę błędów połączenia i odpowiedzi \texttt{CLUSTERDOWN}.
+Mierzone metryki obejmują: przepustowość w oknie bazowym (30~s przed chaos), przepustowość w oknie chaos (60~s trwania \texttt{PodChaos}), procentowy spadek przepustowości, czas okna błędów klienta (od pierwszego do ostatniego błędu połączenia), szacunkową liczbę utraconych operacji, szczytowe opóźnienie p99 podczas failoveru, liczbę błędów połączenia i odpowiedzi \texttt{CLUSTERDOWN}.
 
-Powyższa procedura wstrzykuje \emph{nagłą} awarię mastera i może być zastosowana wyłącznie do wariantów self-hosted, ponieważ wymaga dostępu do podów. Dla Memorystore for Redis Cluster wykonano osobną obserwację typu black-box odpowiadającą failoverowi \emph{planowanemu}. Usługa nie udostępnia komendy ręcznego failoveru pojedynczego sharda, natomiast pozwala wymusić skoordynowany failover wszystkich węzłów poprzez symulację zdarzenia konserwacji (\texttt{gcloud redis clusters update INSTANCE\_ID --region REGION --simulate-maintenance-event}). W tym wariancie ten sam klient \texttt{failover\_client.py} z identyczną konfiguracją obciążenia jest uruchamiany wobec punktu wykrywania (discovery endpoint) instancji, a po fazie stabilizacji skrypt wywołuje symulację konserwacji i rejestruje widoczny czas operacji zarządzanej oraz czas oczekiwania na powrót instancji do stanu gotowości. Należy podkreślić dwie różnice względem testu self-hosted: failover Memorystore jest planowany i bezstratny (replika jest w pełni dosynchronizowana przed promocją), a operacja obejmuje wszystkie shardy, a nie jeden z trzech. Z tego powodu wynik Memorystore jest traktowany jako managed baseline, a nie jako pomiar równoważny nagłej awarii.
+Kluczową metryką dla hipotezy H3 jest \textit{czas okna błędów} (\textit{error window}), definiowany jako liczba sekund od pierwszego do ostatniego błędu połączenia zarejestrowanego przez klienta. Metryka ta izoluje rzeczywisty czas od utraty dostępności mastera do momentu, w którym klient uzyskuje połączenie z wypromowaną repliką. Jest niezależna od czasu trwania zasobu \texttt{PodChaos} (60~s) oraz od ewentualnego opóźnienia terminacji poda w Kubernetes, ponieważ obejmuje wyłącznie okres, w którym klient obserwuje błędy po stronie dotkniętego sharda.
 
 \subsection{Spójność danych podczas partycji sieciowej}\label{subsec:split_brain}
 
-Test spójności danych (split-brain) bada zachowanie klastra podczas partycji sieciowej wprowadzonej za pomocą zasobu \texttt{NetworkChaos} z Chaos Mesh.
+Test spójności danych bada zachowanie klastra podczas partycji sieciowej (ang.~\textit{split-brain}) wprowadzonej za pomocą zasobu \texttt{NetworkChaos} z Chaos Mesh.
 
 Procedura każdego powtórzenia przebiega następująco:
 
@@ -281,9 +273,9 @@ Procedura każdego powtórzenia przebiega następująco:
 
 Mierzone metryki obejmują: liczbę utraconych potwierdzonych kluczy z podziałem na klucze ze slotów mniejszościowych (\texttt{keys\_missing\_minority}) i większościowych (\texttt{keys\_missing\_majority}), wskaźnik utraty danych (\texttt{loss\_rate}), wskaźnik utraty na stronie mniejszościowej (\texttt{minority\_loss\_rate}), liczbę nieudanych żądań zapisu oraz odsetek żądań dotkniętych awarią. Oczekiwany wynik to utrata kluczy wyłącznie ze strony mniejszościowej, co potwierdza znane właściwości modelu spójności Redis/Valkey Cluster.
 
-\subsection{Resilience przy niedoborze zasobów}\label{subsec:resilience}
+\subsection{Odporność na niedobór zasobów (resilience)}\label{subsec:resilience}
 
-Testy resilience badają zachowanie klastra podczas niedoboru zasobów systemowych. Zbadano dwa scenariusze: obciążenie CPU masterów oraz presję pamięci z polityką eksmisji. Oba scenariusze są ograniczone do wariantów self-hosted, ponieważ wymagają wstrzykiwania awarii na poziomie podów Kubernetes. Dla każdej konfiguracji wykonano po pięć powtórzeń.
+Testy odporności (ang.~\textit{resilience}) badają zachowanie klastra podczas niedoboru zasobów systemowych. Zbadano dwa scenariusze: obciążenie CPU masterów oraz presję pamięci z polityką eksmisji. Oba scenariusze są ograniczone do wariantów self-hosted, ponieważ wymagają wstrzykiwania awarii na poziomie podów Kubernetes. Dla każdej konfiguracji wykonano po pięć powtórzeń.
 
 \subsubsection{Obciążenie CPU}
 
@@ -309,7 +301,7 @@ Scenariusz presji pamięci bada zachowanie klastra po wypełnieniu pamięci do l
 \begin{enumerate}
     \item konfiguracja polityki eksmisji na wszystkich węzłach klastra poleceniem \texttt{CONFIG SET maxmemory-policy allkeys-lru};
     \item zapisanie stanu klastra przed wypełnieniem (zużycie pamięci, liczba kluczy, liczba eksmisji);
-    \item wypełnienie klastra za pomocą narzędzia \texttt{backup\_restore\_seed.py} liczbą kluczy wystarczającą do osiągnięcia 100\% limitu \texttt{maxmemory} (3\,145\,728 kluczy o rozmiarze 1~KB przy limicie 3072~MB na shard);
+    \item wypełnienie klastra za pomocą dedykowanego skryptu seedującego liczbą kluczy wystarczającą do osiągnięcia 100\% limitu \texttt{maxmemory} (3\,145\,728 kluczy o rozmiarze 1~KB przy limicie 3072~MB na shard);
     \item zapisanie stanu klastra po wypełnieniu (zużycie pamięci, liczba kluczy, liczba eksmisji, błędy OOM);
     \item uruchomienie poda z \texttt{memtier\_benchmark} na 30~s z obciążeniem mieszanym zgodnym z profilem z tabeli~\ref{tab:profil_operacyjny};
     \item zapisanie stanu klastra po zakończeniu obserwacji;
@@ -334,7 +326,7 @@ Po stabilizacji obciążenia wykonywany jest rzeczywisty \texttt{helm upgrade}, 
 
 \subsection{Skalowanie horyzontalne i resharding}\label{subsec:resharding}
 
-Test reshardingu obejmuje zmianę liczby shardów z trzech do czterech oraz powrót z czterech do trzech shardów. Dla klastra Valkey porównywane są dwa warianty migracji slotów: klasyczny tryb \texttt{valkey-cli --cluster rebalance} oraz tryb atomowy uruchamiany flagą \texttt{--cluster-use-atomic-slot-migration}. Dla klastra Redis 7.2 wykonywana jest klasyczna migracja slotów w tej samej topologii Kubernetes. Mechanizm atomowej migracji slotów jest dostępny w Valkey od wersji 9.0; w badaniu wykorzystano obraz Valkey 9.1, ponieważ używane narzędzie \texttt{valkey-cli} udostępnia w tej wersji odpowiednią flagę. Na potrzeby benchmarku chart Helm został rozszerzony o możliwość wyłączenia automatycznego równoważenia slotów oraz przekazania flagi atomowej migracji slotów do operacji reshardingu~\cite{valkeyHelmPr116}.
+Test reshardingu obejmuje zmianę liczby shardów z trzech do czterech oraz powrót z czterech do trzech shardów. Dla klastra Valkey porównywane są dwa warianty migracji slotów: klasyczny tryb \texttt{valkey-cli --cluster rebalance} oraz tryb atomowy uruchamiany flagą \texttt{--cluster-use-atomic-slot-migration}. Dla klastra Redis 7.2 wykonywana jest klasyczna migracja slotów w tej samej topologii Kubernetes. Mechanizm atomowej migracji slotów jest dostępny w Valkey od wersji 9.0~\cite{valkey90release}; w badaniu wykorzystano obraz Valkey 9.1~\cite{valkey91release}, ponieważ używane narzędzie \texttt{valkey-cli} udostępnia w tej wersji odpowiednią flagę. Na potrzeby benchmarku chart Helm został rozszerzony o możliwość wyłączenia automatycznego równoważenia slotów oraz przekazania flagi atomowej migracji slotów do operacji reshardingu~\cite{valkeyHelmPr116}.
 
 Przed rozpoczęciem pomiaru skrypt sprawdza, czy klaster ma trzy mastery, pełne pokrycie 16384 slotów i stan \texttt{cluster\_state:ok}. Następnie uruchamiany jest pod z \texttt{memtier\_benchmark}; po stabilizacji obciążenia rozpoczyna się operacja. Dla skalowania w górę w wariantach self-hosted wykonywany jest \texttt{helm upgrade} zwiększający liczbę shardów do czterech. Automatyczne równoważenie chartu jest wyłączone, aby migracja slotów była wykonywana jawnie przez skrypt benchmarkowy. Istniejące pody są zabezpieczane przed rolling restartem przez ustawienie partycji aktualizacji StatefulSetu.
 
@@ -369,10 +361,10 @@ Zestaw metryk dobrano tak, aby umożliwić ocenę zarówno wydajności, jak i ni
 Wydajność & Ops/sec, średnia z powtórzeń, odchylenie standardowe, stosunek przepustowości wariantów. \\
 Opóźnienia & p50, p95, p99, p99.9. \\
 Zasoby & Średnie zużycie CPU, zużycie CPU per pod, zużycie pamięci, restarty podów (z Prometheusa). \\
-Failover & Czas degradacji, wykrycia degradacji, utracone operacje, nieudane żądania, odpowiedzi \texttt{CLUSTERDOWN}. \\
-Spójność danych & Utracone potwierdzone zapisy, loss rate, minority/majority loss rate, zapisy odrzucone przez klaster. \\
-Resilience & Spadek przepustowości [\%], min ops/sec, szczytowe p99, eksmisje, błędy OOM, powrót do baseline. \\
-Utrzymywalność & Liczba kroków procedury, liczba komend operatora, czas procedury, error rate klienta kontrolnego. \\
+Failover & Czas okna błędów klienta (error window), utracone operacje, spadek przepustowości w oknie chaos, nieudane żądania, odpowiedzi \texttt{CLUSTERDOWN}. \\
+Spójność danych & Utracone potwierdzone zapisy, wskaźnik utraty (loss rate), minority/majority loss rate, zapisy odrzucone przez klaster. \\
+Resilience & Spadek przepustowości [\%], min ops/sec, szczytowe p99, eksmisje, błędy OOM, powrót do poziomu bazowego (baseline). \\
+Utrzymywalność & Liczba kroków procedury, liczba komend operatora, czas procedury, odsetek błędów klienta kontrolnego (error rate). \\
 Backup i restore & Czas faz (BGSAVE, snapshot PVC, kopiowanie RDB, odzyskanie klastra), zgodność liczby kluczy. \\
 Koszty & Koszt miesięczny infrastruktury, koszt na 100 tys. ops/sec, próg opłacalności self-hosted vs~managed. \\
 \bottomrule
@@ -381,7 +373,7 @@ Koszty & Koszt miesięczny infrastruktury, koszt na 100 tys. ops/sec, próg opł
 
 Dla każdej konfiguracji liczbowej wykonywanych jest co najmniej pięć powtórzeń. Następnie obliczana jest średnia arytmetyczna oraz odchylenie standardowe. W scenariuszach porównujących warianty obliczana jest również różnica procentowa między nimi --- w zależności od testu dotyczy to porównania Valkey z Redis 7.2, Valkey z Memorystore lub wszystkich trzech wariantów jednocześnie. Jeżeli rozkład wyników i liczba obserwacji na to pozwolą, można zastosować test statystyczny dla dwóch prób, na przykład test t-Studenta albo test Manna-Whitneya. Ze względu na ograniczoną liczbę powtórzeń wyniki należy jednak interpretować ostrożnie i traktować je jako eksperymentalne porównanie w określonym środowisku, a nie jako uniwersalną charakterystykę wszystkich możliwych wdrożeń.
 
-Wyniki prezentowane są w formie tabel i wykresów. Dla testów wydajnościowych stosowane są wykresy słupkowe ops/sec, wykresy percentyli opóźnień oraz heatmapy zależności throughputu od CPU i rozmiaru payloadu. Dla testów failover, resilience, upgrade i resharding stosowane są wykresy czasowe, na których oznaczone jest okno wprowadzenia zakłócenia lub operacji administracyjnej.
+Wyniki prezentowane są w formie tabel i wykresów. Dla testów wydajnościowych stosowane są wykresy słupkowe ops/sec, wykresy percentyli opóźnień oraz heatmapy zależności przepustowości (ang.~\textit{throughput}) od CPU i rozmiaru payloadu. Dla testów failover, resilience, upgrade i resharding stosowane są wykresy czasowe, na których oznaczone jest okno wprowadzenia zakłócenia lub operacji administracyjnej.
 
 \section{Zakres testów dla poszczególnych wariantów}
 
@@ -399,19 +391,19 @@ Wydajność          & \cmark & \cmark & \xmark \\
 Resharding         & \cmark & \cmark & \cmark \\
 Rolling upgrade    & \cmark & \xmark & \xmark \\
 Backup i restore   & \cmark & \cmark & \cmark \\
-Failover mastera   & \cmark & \cmark & \pmark \\
+Failover mastera   & \cmark & \cmark & \xmark \\
 Spójność danych    & \cmark & \cmark & \xmark \\
 Resilience         & \cmark & \cmark & \xmark \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Symbole \cmark{} oraz \xmark{} oznaczają odpowiednio przeprowadzenie testu i jego brak. Symbol \pmark{} w wierszu failoveru dla Memorystore oznacza pomiar ograniczony: w usłudze zarządzanej nie można wstrzyknąć nagłej awarii mastera za pomocą Chaos Mesh, ponieważ dostawca nie udostępnia dostępu do węzłów. Memorystore pozwala natomiast wywołać planowany, skoordynowany failover poprzez symulację zdarzenia konserwacji (\texttt{gcloud redis clusters update --simulate-maintenance-event}). Jest to obserwacja typu black-box odpowiadająca failoverowi planowanemu, a nie nagłej awarii, dlatego nie jest bezpośrednio równoważna testowi \texttt{pod-failure} wykonanemu dla wariantów self-hosted i interpretowana jest jako odrębny punkt odniesienia.
+Testy wykorzystujące Chaos Mesh (failover mastera, spójność danych, resilience) wymagają dostępu do podów i mogą być przeprowadzone wyłącznie dla wariantów self-hosted. W przypadku Memorystore dostawca nie udostępnia bezpośredniego dostępu do węzłów, co uniemożliwia wstrzyknięcie nagłej awarii mastera porównywalnej z testem \texttt{pod-failure}. Memorystore for Redis Cluster nie udostępnia również komendy ręcznego failoveru pojedynczego sharda~\cite{gcpMemorystoreHA} --- jedyną dostępną operacją jest symulacja planowanego zdarzenia konserwacji~\cite{gcpMemorystoreSimulateMaintenance}, która wywołuje skoordynowany, bezstratny failover na wszystkich węzłach i nie jest równoważna nagłej awarii. Z tego powodu druga część hipotezy H3, dotycząca porównywalności z mechanizmami Memorystore, nie może zostać zweryfikowana eksperymentalnie w~ramach niniejszej pracy.
 
 \section{Kryteria interpretacji wyników}
 
 Ocena wariantu Valkey jest przeprowadzana osobno dla każdego scenariusza. W scenariuszach wydajnościowych korzystniejszy wynik oznacza wyższą przepustowość lub niższe opóźnienia bez pogorszenia stabilności i zużycia zasobów. Pojedynczy lepszy wynik ops/sec nie jest wystarczający, jeżeli towarzyszy mu istotny wzrost p99 lub p99.9 latency. W scenariuszach operacyjnych równie ważne są czas procedury, liczba wymaganych kroków oraz ryzyko błędu operatora.
 
-W przypadku hipotezy kosztowej porównanie obejmuje nie tylko koszt infrastruktury, ale także koszt pracy operacyjnej. Klaster self-hosted może być tańszy pod względem zasobów obliczeniowych, ale wymaga samodzielnego monitorowania, aktualizacji, reagowania na awarie oraz utrzymywania procedur backup/restore. Z tego względu wariant Valkey self-hosted zostanie uznany za korzystniejszy kosztowo tylko wtedy, gdy oszczędność infrastrukturalna nie zostanie zniwelowana przez maintenance overhead oraz ryzyko operacyjne.
+W przypadku hipotezy kosztowej porównanie obejmuje nie tylko koszt infrastruktury, ale także koszt pracy operacyjnej. Klaster self-hosted może być tańszy pod względem zasobów obliczeniowych, ale wymaga samodzielnego monitorowania, aktualizacji, reagowania na awarie oraz utrzymywania procedur backup/restore. Z tego względu wariant Valkey self-hosted zostanie uznany za korzystniejszy kosztowo tylko wtedy, gdy oszczędność infrastrukturalna nie zostanie zniwelowana przez nakład pracy utrzymaniowej (ang.~\textit{maintenance overhead}) oraz ryzyko operacyjne.
 
 Ostateczna ocena zostanie przeprowadzona osobno dla każdej hipotezy H1--H4 w rozdziale~\ref{ch:podsumowanie}. Pozwoli to oddzielić wnioski dotyczące wydajności od wniosków dotyczących kosztów i utrzymywalności.

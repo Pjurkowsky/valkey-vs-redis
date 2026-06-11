@@ -438,6 +438,156 @@ warmup_cluster_data() {
   validate_single_run_result "${seed_file}"
 }
 
+verify_cluster_dbsize() {
+  local expected_keys="$1"
+  local label="$2"
+
+  python3 - "${expected_keys}" "${label}" <<'PY'
+import os
+import socket
+import ssl
+import sys
+
+expected_keys = int(sys.argv[1])
+label = sys.argv[2]
+
+host = os.environ.get("HOST", "valkey.vk.svc.cluster.local")
+port = int(os.environ.get("PORT", "6379"))
+timeout = float(os.environ.get("RESET_COMMAND_TIMEOUT", "10"))
+tls = os.environ.get("MEMTIER_TLS", "false").lower() in ("1", "true", "yes", "on")
+skip_verify = os.environ.get("MEMTIER_TLS_SKIP_VERIFY", "true").lower() in ("1", "true", "yes", "on")
+tls_sni = os.environ.get("MEMTIER_TLS_SNI")
+
+
+class RespError(Exception):
+    pass
+
+
+def connect(target_host, target_port):
+    raw = socket.create_connection((target_host, int(target_port)), timeout=timeout)
+    raw.settimeout(timeout)
+    if not tls:
+        return raw
+    if skip_verify:
+        ctx = ssl._create_unverified_context()
+    else:
+        ctx = ssl.create_default_context(cafile=os.environ.get("MEMTIER_TLS_CACERT") or None)
+    return ctx.wrap_socket(raw, server_hostname=tls_sni or target_host)
+
+
+def encode_command(*parts):
+    chunks = [f"*{len(parts)}\r\n".encode()]
+    for part in parts:
+        if isinstance(part, str):
+            part = part.encode()
+        chunks.append(f"${len(part)}\r\n".encode())
+        chunks.append(part)
+        chunks.append(b"\r\n")
+    return b"".join(chunks)
+
+
+def read_line(sock):
+    chunks = []
+    while True:
+        char = sock.recv(1)
+        if not char:
+            raise EOFError("connection closed while reading RESP line")
+        chunks.append(char)
+        if len(chunks) >= 2 and chunks[-2:] == [b"\r", b"\n"]:
+            return b"".join(chunks[:-2])
+
+
+def read_resp(sock):
+    prefix = sock.recv(1)
+    if not prefix:
+        raise EOFError("connection closed while reading RESP prefix")
+    if prefix == b"+":
+        return read_line(sock).decode()
+    if prefix == b"-":
+        raise RespError(read_line(sock).decode())
+    if prefix == b":":
+        return int(read_line(sock))
+    if prefix == b"$":
+        size = int(read_line(sock))
+        if size == -1:
+            return None
+        data = b""
+        while len(data) < size:
+            chunk = sock.recv(size - len(data))
+            if not chunk:
+                raise EOFError("connection closed while reading bulk string")
+            data += chunk
+        if sock.recv(2) != b"\r\n":
+            raise ValueError("invalid RESP bulk terminator")
+        return data.decode()
+    if prefix == b"*":
+        count = int(read_line(sock))
+        if count == -1:
+            return None
+        return [read_resp(sock) for _ in range(count)]
+    raise ValueError(f"unknown RESP prefix: {prefix!r}")
+
+
+def command(target_host, target_port, *parts):
+    with connect(target_host, target_port) as sock:
+        sock.sendall(encode_command(*parts))
+        return read_resp(sock)
+
+
+def metadata_value(node, key):
+    for idx, value in enumerate(node):
+        if value == key and idx + 1 < len(node):
+            return node[idx + 1]
+        if isinstance(value, list):
+            found = metadata_value(value, key)
+            if found:
+                return found
+    return None
+
+
+def endpoint_host(node):
+    advertised = node[0] if node else None
+    if advertised:
+        return advertised
+    return metadata_value(node, "hostname") or metadata_value(node, "ip")
+
+
+slots = command(host, port, "CLUSTER", "SLOTS")
+masters = []
+seen = set()
+for slot in slots:
+    if len(slot) < 3:
+        continue
+    master = slot[2]
+    master_host = endpoint_host(master)
+    master_port = master[1] if len(master) > 1 else port
+    if not master_host:
+        continue
+    key = (master_host, int(master_port))
+    if key not in seen:
+        seen.add(key)
+        masters.append(key)
+
+total_keys = 0
+details = []
+for master_host, master_port in masters:
+    dbsize = int(command(master_host, master_port, "DBSIZE"))
+    total_keys += dbsize
+    details.append(f"{master_host}:{master_port}={dbsize}")
+
+ratio = total_keys / expected_keys if expected_keys > 0 else 0.0
+print(f"  DBSIZE check ({label}): total={total_keys} expected={expected_keys} "
+      f"ratio={ratio:.2f} [{', '.join(details)}]")
+
+if expected_keys > 0 and ratio < 0.90:
+    raise SystemExit(
+        f"ERROR: cluster retained only {total_keys}/{expected_keys} keys "
+        f"({ratio:.0%}). Eviction invalidates this benchmark point. "
+        f"Raise pod memory limits or reduce target dataset size."
+    )
+PY
+}
+
 validate_single_run_result() {
   local file="$1"
 
@@ -527,6 +677,7 @@ run_memtier_case() {
 
     reset_cluster_data "${cpu}" "${payload}" "${ratio}" "${run_id}"
     warmup_cluster_data "${cpu}" "${payload}" "${ratio}" "${run_id}" "${key_maximum}" "${data_size_bytes}" "${seed_file}"
+    verify_cluster_dbsize "${key_maximum}" "pre-run ${run_id} cpu=${cpu} payload=${payload}KB ratio=${ratio}"
 
     echo "cpu=${cpu} payload=${payload}KB ratio=${ratio} run=${run_id}/${N}"
     memtier_benchmark \
