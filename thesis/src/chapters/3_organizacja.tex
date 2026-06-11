@@ -242,22 +242,26 @@ Liczba powtórzeń & 5 \\
 
 \subsection{Failover mastera}\label{subsec:failover}
 
-Test failoveru polega na ubiciu jednego poda pełniącego rolę mastera podczas ciągłego obciążenia. Awaria jest wstrzykiwana za pomocą zasobu \texttt{PodChaos} w trybie \texttt{pod-failure} generowanego dynamicznie przez skrypt benchmarkowy.
+Test failoveru polega na ubiciu jednego poda pełniącego rolę mastera podczas ciągłego obciążenia i obserwacji, jak klaster promuje replikę oraz jak klient odczuwa degradację. Awaria jest wstrzykiwana za pomocą zasobu \texttt{PodChaos} w trybie \texttt{pod-failure} generowanego dynamicznie przez skrypt benchmarkowy.
+
+Klientem obciążeniowym jest dedykowany program \texttt{failover\_client.py} oparty na bibliotece \texttt{redis-py} w trybie klastrowym. W~odróżnieniu od \texttt{memtier\_benchmark}, klient ten kontynuuje wysyłanie operacji do zdrowych shardów nawet po utracie połączenia z jednym masterem, dzięki czemu zarejestrowana przepustowość odzwierciedla faktyczną dostępność klastra, a nie artefakt globalnego refresh topologii klienta. Klient uruchamia 64~współbieżne wątki robocze (\texttt{threads=4}, \texttt{clients=16}), każdy z własnym połączeniem do klastra, przy payloadzie 1~KB i proporcji operacji 1:1. Timeout socketu wynosi 1~s, a po błędzie połączenia wątek tworzy nowe połączenie z~backoffem 10~ms.
 
 Procedura każdego powtórzenia przebiega następująco:
 
 \begin{enumerate}
-    \item uruchomienie poda z \texttt{memtier\_benchmark} zgodnie z profilem z tabeli~\ref{tab:profil_operacyjny};
-    \item stabilizacja obciążenia;
+    \item uruchomienie poda z klientem obciążeniowym na 120~s;
+    \item stabilizacja obciążenia przez 30~s;
     \item identyfikacja aktualnych masterów w klastrze poleceniem \texttt{CLUSTER NODES};
-    \item wygenerowanie i zastosowanie manifestu \texttt{PodChaos} ubijającego wybranego mastera z parametrem \texttt{gracePeriod: 1};
-    \item kontynuacja pomiaru przez \texttt{memtier\_benchmark} do zakończenia okna 120~s;
-    \item zapis wyników JSON, logów oraz podsumowania failoveru.
+    \item wygenerowanie i zastosowanie manifestu \texttt{PodChaos} ubijającego wybranego mastera z parametrem \texttt{gracePeriod: 1} na czas 60~s;
+    \item kontynuacja pomiaru do zakończenia okna 120~s;
+    \item zapis raportu JSON z per-sekundowymi statystykami sukcesu, błędów i opóźnień.
 \end{enumerate}
 
-Wariant podstawowy obejmuje awarię jednego mastera, ponieważ taki scenariusz jest najłatwiejszy do powtórzenia i interpretacji. Wariant rozszerzony może obejmować awarię wielu masterów lub awarię obejmującą większą część klastra, jednak wyniki takich testów są interpretowane oddzielnie.
+Wariant podstawowy obejmuje awarię jednego mastera z trzech, ponieważ taki scenariusz jest najłatwiejszy do powtórzenia i interpretacji. Dla każdego wariantu wykonano po pięć powtórzeń.
 
-Mierzone metryki obejmują: czas degradacji failoveru (czas, przez który ops/sec spada poniżej 50\% poziomu bazowego), szacunkową liczbę utraconych operacji w oknie failoveru, liczbę odpowiedzi \texttt{CLUSTERDOWN} od klastra, maksymalne opóźnienie p99 podczas failoveru oraz bazowy poziom ops/sec przed wprowadzeniem awarii.
+Mierzone metryki obejmują: przepustowość w oknie bazowym (30~s przed chaos), przepustowość w oknie chaos (60~s trwania \texttt{PodChaos}), procentowy spadek przepustowości, czas degradacji poniżej 50\% poziomu bazowego, szacunkową liczbę utraconych operacji, szczytowe opóźnienie p99 podczas failoveru, liczbę błędów połączenia i odpowiedzi \texttt{CLUSTERDOWN}.
+
+Powyższa procedura wstrzykuje \emph{nagłą} awarię mastera i może być zastosowana wyłącznie do wariantów self-hosted, ponieważ wymaga dostępu do podów. Dla Memorystore for Redis Cluster wykonano osobną obserwację typu black-box odpowiadającą failoverowi \emph{planowanemu}. Usługa nie udostępnia komendy ręcznego failoveru pojedynczego sharda, natomiast pozwala wymusić skoordynowany failover wszystkich węzłów poprzez symulację zdarzenia konserwacji (\texttt{gcloud redis clusters update INSTANCE\_ID --region REGION --simulate-maintenance-event}). W tym wariancie ten sam klient \texttt{failover\_client.py} z identyczną konfiguracją obciążenia jest uruchamiany wobec punktu wykrywania (discovery endpoint) instancji, a po fazie stabilizacji skrypt wywołuje symulację konserwacji i rejestruje widoczny czas operacji zarządzanej oraz czas oczekiwania na powrót instancji do stanu gotowości. Należy podkreślić dwie różnice względem testu self-hosted: failover Memorystore jest planowany i bezstratny (replika jest w pełni dosynchronizowana przed promocją), a operacja obejmuje wszystkie shardy, a nie jeden z trzech. Z tego powodu wynik Memorystore jest traktowany jako managed baseline, a nie jako pomiar równoważny nagłej awarii.
 
 \subsection{Spójność danych podczas partycji sieciowej}\label{subsec:split_brain}
 
@@ -387,20 +391,22 @@ Nie wszystkie testy mogą być przeprowadzone dla każdego z trzech wariantów b
 \centering
 \caption{Zakres testów dla poszczególnych wariantów badawczych}
 \label{tab:testy_warianty}
-\begin{tabularx}{\textwidth}{Xccc}
+\begin{tabular}{lccc}
 \toprule
 \textbf{Test} & \textbf{Valkey} & \textbf{Redis 7.2} & \textbf{Memorystore} \\
 \midrule
-Wydajność (memtier, 27 konfiguracji) & tak & tak & tak \\
-Resharding (3 $\leftrightarrow$ 4 shardy) & tak (legacy + atomic) & tak (legacy) & tak (API \texttt{gcloud}) \\
-Rolling upgrade & tak & --- & --- \\
-Backup i restore & tak (online PVC) & tak (online PVC) & tak (managed backup) \\
-Failover mastera & tak & tak & --- \\
-Spójność danych (split-brain) & tak & tak & --- \\
-CPU/memory stress (resilience) & tak & tak & --- \\
+Wydajność          & \cmark & \cmark & \xmark \\
+Resharding         & \cmark & \cmark & \cmark \\
+Rolling upgrade    & \cmark & \xmark & \xmark \\
+Backup i restore   & \cmark & \cmark & \cmark \\
+Failover mastera   & \cmark & \cmark & \pmark \\
+Spójność danych    & \cmark & \cmark & \xmark \\
+Resilience         & \cmark & \cmark & \xmark \\
 \bottomrule
-\end{tabularx}
+\end{tabular}
 \end{table}
+
+Symbole \cmark{} oraz \xmark{} oznaczają odpowiednio przeprowadzenie testu i jego brak. Symbol \pmark{} w wierszu failoveru dla Memorystore oznacza pomiar ograniczony: w usłudze zarządzanej nie można wstrzyknąć nagłej awarii mastera za pomocą Chaos Mesh, ponieważ dostawca nie udostępnia dostępu do węzłów. Memorystore pozwala natomiast wywołać planowany, skoordynowany failover poprzez symulację zdarzenia konserwacji (\texttt{gcloud redis clusters update --simulate-maintenance-event}). Jest to obserwacja typu black-box odpowiadająca failoverowi planowanemu, a nie nagłej awarii, dlatego nie jest bezpośrednio równoważna testowi \texttt{pod-failure} wykonanemu dla wariantów self-hosted i interpretowana jest jako odrębny punkt odniesienia.
 
 \section{Kryteria interpretacji wyników}
 
