@@ -47,3 +47,44 @@
 | Minority/majority loss rate | Split-brain |
 | Fazy czasowe (BGSAVE, snapshot PVC, kopiowanie RDB...) | Backup/restore |
 | Zgodność liczby kluczy po restore | Backup/restore |
+
+## 4. Realizacja po audycie
+
+Metryki dopisane do analizy benchmarku wydajnosciowego:
+
+| Metryka | Status | Artefakt |
+|---|---|---|
+| Srednie zuzycie CPU | Dodane z Prometheusa dla benchmarkow memtier | `plots/benchmark/*/summary.csv`, kolumny `cpu_util_mean`, `cpu_util_std` |
+| Zuzycie CPU per pod | Dodane z Prometheusa | `plots/benchmark/*/cpu_util_per_pod.csv` |
+| Zuzycie pamieci | Dodane z Prometheusa | `plots/benchmark/*/summary.csv`, kolumny `memory_usage_mean`, `memory_usage_std` |
+| Zuzycie pamieci per pod | Dodane z Prometheusa | `plots/benchmark/*/memory_usage_per_pod.csv` |
+| Restarty podow | Dodane z Prometheusa, jezeli dostepna jest metryka `kube_pod_container_status_restarts_total` | `plots/benchmark/*/summary.csv`, kolumny `pod_restarts_mean`, `pod_restarts_std` |
+
+Metryki, ktorych nie da sie wiarygodnie odzyskac z samych istniejacych wynikow memtier:
+
+| Metryka | Dlaczego wymaga ponownego testu albo dodatkowej instrumentacji |
+|---|---|
+| Czas odtworzenia mastera | Wymaga timestampu zdarzenia awarii/promocji repliki z Kubernetes/Redis/Valkey albo monitoringu cluster topology w trakcie testu. Sam wynik memtier ma tylko okno workloadu. |
+| Czas powrotu do stabilnego throughputu | Wymaga jawnej definicji stabilnosci i per-second throughput/baseline w scenariuszu awarii; w benchmarku wydajnosciowym nie ma zdarzenia awarii. |
+| Liczba krokow | Metryka proceduralna; trzeba policzyc z opisanej procedury/operator runbooka, a nie z JSON memtier. |
+| Liczba komend | Metryka proceduralna; wymaga instrumentacji skryptu lub audytu komend w scenariuszu operacyjnym. |
+| Liczba decyzji operatora | Metryka proceduralna/subiektywna; wymaga zdefiniowania modelu decyzyjnego. |
+| Mozliwosc rollbacku | Wymaga oceny procedury i narzedzi, nie wynika automatycznie z wynikow wydajnosci. |
+| Koszt miesieczny | Wymaga aktualnych cennikow i zalozen infrastrukturalnych. |
+| Koszt na 100 tys. ops/sec | Wymaga kosztu miesiecznego oraz wybranego throughputu referencyjnego. |
+| Koszt pracy operacyjnej | Wymaga zalozenia stawki godzinowej i czasu pracy operatora. |
+| Koszt zasobow infrastruktury | Wymaga aktualnych cen VM/dyskow/sieci/managed service oraz regionu. |
+
+## 5. Przygotowane metryki proceduralne i kosztowe
+
+Uzupelniajace artefakty zostaly przygotowane jako osobne pliki:
+
+| Metryka | Artefakt | Uwagi |
+|---|---|---|
+| Liczba krokow | `thesis/src/images/procedural_metrics.csv` | Policzona z procedur opisanych w rozdziale 3. |
+| Liczba komend | `thesis/src/images/procedural_metrics.csv` | Liczone sa operator-visible command sites, bez iteracji petli, retry i powtorzen `N`. |
+| Koszt miesieczny | `thesis/src/images/cost_metrics.csv` | Dla self-hosted jako formula z parametrem ceny `n2-standard-4`; dla Memorystore policzony z cennika. |
+| Koszt na 100 tys. ops/sec | `thesis/src/images/cost_metrics.csv` | Osobno dla bazowego testu Valkey/Redis i dla scenariusza reshardingu obejmujacego Memorystore. |
+| Koszt zasobow infrastruktury | `thesis/src/images/cost_assumptions.csv`, `thesis/src/images/cost_metrics.csv` | Obejmuje GKE fee, VM, boot disks, PVC albo wezly Memorystore; nie obejmuje rabatow, sieci, backup storage i AOF. |
+
+Opis metodologii znajduje sie w `thesis/metryki_operacyjne_koszty.md`.

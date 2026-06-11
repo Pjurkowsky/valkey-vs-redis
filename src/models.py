@@ -6,23 +6,16 @@ RATIO_LABELS = {
     "1-1": "mixed 50/50",
 }
 
-MEM_QUERY = """
-sum by (pod)(
-  container_memory_working_set_bytes{
-    pod=~"valkey-[0-5]"
-  }
-)
-"""
-
-CPU_QUERY = """
-sum by (pod)(
-  rate(container_cpu_usage_seconds_total{
-    pod=~"valkey-[0-5]"
-  }[30s])
-)
-"""
-
-METRIC_COLS = ["ops_sec", "p50", "p95", "p99", "p999", "cpu_util", "memory_usage"]
+METRIC_COLS = [
+    "ops_sec",
+    "p50",
+    "p95",
+    "p99",
+    "p999",
+    "cpu_util",
+    "memory_usage",
+    "pod_restarts",
+]
 
 
 @dataclass
@@ -34,6 +27,7 @@ class Metric:
     p999: float
     cpu_util: float
     memory_usage: float
+    pod_restarts: float
 
 
 @dataclass

@@ -15,7 +15,9 @@ PLOTS_DIR = "./plots"
 def cmd_benchmark(args: argparse.Namespace) -> None:
     from src.metrics import (
         build_prom,
+        build_monitoring_queries,
         extract_cpu_util_by_pod,
+        extract_memory_usage_by_pod,
         extract_metric,
         iter_run_results,
         parse_filename,
@@ -46,6 +48,7 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
     directory = Path(args.input)
     rows = []
     pod_cpu_rows = []
+    pod_memory_rows = []
     for file in sorted(directory.glob("*.json")):
         config = parse_filename(file)
         print(f"Processing {file.name}  (cpu={config.cpu}, payload={config.payload}KB, ratio={config.ratio})")
@@ -53,23 +56,46 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
         with file.open("r") as f:
             doc = json.load(f)
 
+        queries = build_monitoring_queries(doc)
+        provider = doc.get("provider", "")
+        variant = doc.get("variant", "")
+        benchmarked_system = doc.get("benchmarked_system", "")
         for run_id, run_result in iter_run_results(doc):
-            metric = extract_metric(run_result, prom=prom)
+            metric = extract_metric(run_result, prom=prom, queries=queries)
             rows.append({
+                "file": file.name,
                 "id": run_id,
+                "provider": provider,
+                "variant": variant,
+                "benchmarked_system": benchmarked_system,
                 **asdict(config),
                 **asdict(metric),
             })
-            for pod, cpu_util in extract_cpu_util_by_pod(run_result, prom=prom).items():
+            for pod, cpu_util in extract_cpu_util_by_pod(run_result, prom=prom, queries=queries).items():
                 pod_cpu_rows.append({
+                    "file": file.name,
                     "id": run_id,
+                    "provider": provider,
+                    "variant": variant,
                     **asdict(config),
                     "pod": pod,
                     "cpu_util": cpu_util,
                 })
+            for pod, memory_usage in extract_memory_usage_by_pod(run_result, prom=prom, queries=queries).items():
+                pod_memory_rows.append({
+                    "file": file.name,
+                    "id": run_id,
+                    "provider": provider,
+                    "variant": variant,
+                    **asdict(config),
+                    "pod": pod,
+                    "memory_usage": memory_usage,
+                })
 
     df = pd.DataFrame(rows)
     pod_cpu_df = pd.DataFrame(pod_cpu_rows)
+    pod_memory_df = pd.DataFrame(pod_memory_rows)
+    df.to_csv(out_dir / "runs.csv", index=False)
     agg = (
         df.groupby(["cpu", "payload", "ratio"], as_index=False)
         .agg(
@@ -86,6 +112,8 @@ def cmd_benchmark(args: argparse.Namespace) -> None:
     if not pod_cpu_df.empty:
         pod_cpu_df.to_csv(out_dir / "cpu_util_per_pod.csv", index=False)
         plot_cpu_util_per_pod(pod_cpu_df, out_dir)
+    if not pod_memory_df.empty:
+        pod_memory_df.to_csv(out_dir / "memory_usage_per_pod.csv", index=False)
     plot_heatmap(agg, out_dir)
     print(f"\nAll plots saved to {out_dir}/")
 

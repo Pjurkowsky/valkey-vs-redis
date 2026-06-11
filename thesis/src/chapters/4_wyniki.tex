@@ -437,3 +437,85 @@ Zgodna liczba kluczy & $5/5$ & $5/5$ & $5/5$ \\
 \FloatBarrier
 
 Najkrótszy backup uzyskał Memorystore, ale przewaga nad procedurą online dla Valkey była niewielka. Najkrótszy restore uzyskał Valkey self-hosted, a Redis 7.2 był od niego wolniejszy o około 9\%. Memorystore miał najdłuższy czas odtworzenia, około 1{,}68$\times$ dłuższy niż Valkey i 1{,}54$\times$ dłuższy niż Redis 7.2. Interpretując te wyniki należy uwzględnić różnicę operacyjną: wariant self-hosted wymaga własnej orkiestracji snapshotów, tymczasowych PVC i uruchamiania klastra docelowego, natomiast Memorystore ukrywa te kroki za API usługi zarządzanej.
+
+\section{Metryki proceduralne i kosztowe}
+
+Oprócz metryk technicznych policzono metryki proceduralne wymagane do oceny nakładu pracy operatora. Liczba kroków oznacza liczbę logicznych faz procedury opisanej w rozdziale~\ref{ch:organizacja}, natomiast liczba komend oznacza liczbę widocznych dla operatora miejsc wywołania komend w runbooku lub procedurze. Nie liczono każdej iteracji pętli oczekiwania, ponowień retry ani powtórzeń wynikających z parametru $N=5$, ponieważ zawyżałoby to metrykę implementacyjnymi szczegółami skryptu.
+
+Tabela~\ref{tab:procedural-metrics} pokazuje wartości dla głównych scenariuszy operacyjnych. Pełna tabela źródłowa znajduje się w pliku \texttt{thesis/src/images/procedural\_metrics.csv}.
+
+\begin{table}[htbp]
+\centering
+\caption{Liczba kroków i komend w scenariuszach operacyjnych.}
+\label{tab:procedural-metrics}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llrr}
+\toprule
+Scenariusz & Wariant & Kroki & Komendy \\
+\midrule
+Przygotowanie środowiska & Valkey self-hosted & 7 & 11 \\
+Przygotowanie środowiska & Redis 7.2 self-hosted & 5 & 8 \\
+Przygotowanie środowiska & Memorystore & 1 & 1 \\
+Failover mastera & Valkey/Redis self-hosted & 6 & 4 \\
+Partycja sieciowa & Valkey/Redis self-hosted & 7 & 5 \\
+Rolling upgrade & Valkey self-hosted & 7 & 5 \\
+Resharding 3 $\rightarrow$ 4 & Valkey/Redis self-hosted & 7 & 5 \\
+Resharding 4 $\rightarrow$ 3 & Valkey/Redis self-hosted & 8 & 6 \\
+Resharding & Memorystore & 4 & 2 \\
+Backup i restore & Valkey/Redis self-hosted & 11 & 12 \\
+Backup i restore & Memorystore & 6 & 5 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\FloatBarrier
+
+Wyniki pokazują, że różnica między modelem self-hosted i zarządzanym nie ogranicza się do czasu wykonania operacji. Memorystore często ma dłuższy czas operacji black-box, na przykład podczas odtwarzania klastra, ale wymaga mniejszej liczby jawnych kroków i komend operatora. Wariant self-hosted daje większą kontrolę nad fazami operacji, lecz wymaga samodzielnego zarządzania stanem klastra, slotami, snapshotami PVC i gotowością podów.
+
+Koszt miesięczny policzono dla konfiguracji z rozdziału~\ref{ch:organizacja}: region \texttt{europe-central2}, trzy węzły GKE \texttt{n2-standard-4}, dyski boot \texttt{pd-balanced} 50~GiB na węzeł, sześć PVC \texttt{pd-ssd} po 8~GiB oraz Memorystore \texttt{redis-standard-small} z trzema shardami i jedną repliką na shard. Przyjęto 730~h miesięcznie, bez rabatów, free tier, kosztów sieci, AOF i składowania backupów. Ceny GKE, dysków i Memorystore odczytano z cenników Google Cloud~\cite{gcpGkePricing,gcpComputeDiskPricing,gcpMemorystorePricing}. Cena \texttt{n2-standard-4} jest pozostawiona w tabeli jako parametr $p$, ponieważ powinna być każdorazowo potwierdzona w aktualnym katalogu Cloud SKUs~\cite{gcpCloudSkus}.
+
+\begin{table}[htbp]
+\centering
+\caption{Koszt miesięczny zasobów infrastruktury.}
+\label{tab:cost-monthly}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llr}
+\toprule
+Wariant & Składniki & Koszt miesięczny [USD] \\
+\midrule
+Valkey self-hosted & GKE fee, 3 węzły, boot disks, PVC & $96{,}16 + 2190p$ \\
+Redis 7.2 self-hosted & GKE fee, 3 węzły, boot disks, PVC & $96{,}16 + 2190p$ \\
+Memorystore & 6 węzłów \texttt{redis-standard-small} & $624{,}15$ \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\FloatBarrier
+
+Stała część kosztu self-hosted wynosi 96{,}16~USD miesięcznie: 73{,}00~USD za opłatę klastra GKE, 15{,}00~USD za dyski boot \texttt{pd-balanced} oraz 8{,}16~USD za PVC \texttt{pd-ssd}. Zmienna $p$ oznacza aktualną cenę jednej maszyny \texttt{n2-standard-4} za godzinę w regionie \texttt{europe-central2}. Dla Memorystore koszt wynosi $6 \times 0{,}1425 \times 730 = 624{,}15$~USD miesięcznie.
+
+Punkt, w którym koszt infrastruktury self-hosted zrówna się z Memorystore, wynosi:
+
+\[
+p = \frac{624{,}15 - 96{,}16}{2190} = 0{,}2411 \text{ USD/h}.
+\]
+
+Oznacza to, że przy cenie \texttt{n2-standard-4} niższej niż 0{,}2411~USD/h model self-hosted jest tańszy infrastrukturalnie od Memorystore, natomiast przy cenie wyższej ta przewaga znika jeszcze przed doliczeniem kosztu pracy operatora.
+
+Koszt na 100~tys. ops/sec policzono według wzoru:
+
+\[
+\frac{\text{koszt miesięczny}}{\text{ops/sec}/100000}.
+\]
+
+Dla bazowego testu wydajnościowego 1~KB, mixed 50/50, 2~vCPU otrzymujemy:
+
+\[
+\text{Valkey: } \frac{96{,}16 + 2190p}{14{,}44051},
+\qquad
+\text{Redis 7.2: } \frac{96{,}16 + 2190p}{12{,}51901}.
+\]
+
+Wartości te są porównywalne między Valkey i Redis 7.2, ale nie powinny być używane do bezpośredniego porównania z Memorystore, ponieważ test wydajnościowy był wykonany lokalnie. Dla porównania obejmującego wszystkie trzy warianty można użyć throughputu z testu reshardingu w GCP. Wtedy dla Memorystore w fazie 3~$\rightarrow$~4 koszt wynosi $624{,}15 / 1{,}4132799 = 441{,}63$~USD na 100~tys. ops/sec. Jest to jednak koszt w scenariuszu operacyjnym pod obciążeniem, a nie koszt bazowej przepustowości saturacyjnej.
