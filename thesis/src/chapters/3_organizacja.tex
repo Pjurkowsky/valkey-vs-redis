@@ -207,6 +207,8 @@ Percentyle opóźnień & p50, p95, p99, p99.9 \\
 \end{tabularx}
 \end{table}
 
+Wybór rozmiarów payloadu odzwierciedla rozkład rozmiarów wartości obserwowany w produkcyjnych systemach cache. Yang i współautorzy, analizując 153 klastry cache (Memcached i Redis) w Twitterze, wykazali bimodalny rozkład rozmiarów wartości: zdecydowana większość kluczy mieści się w zakresie setek bajtów do kilku kilobajtów, natomiast niewielka frakcja osiąga rozmiary rzędu setek kilobajtów~\cite{yang2020}. Trzy przyjęte punkty pomiarowe --- 1~KB, 10~KB i 1000~KB --- odpowiadają typowym, średnim i dużym wartościom w tym rozkładzie.
+
 Pełna macierz testów obejmuje 3 wartości CPU, 3 rozmiary payloadu i 3 proporcje operacji, czyli 27 konfiguracji dla wariantu self-hosted. Przy pięciu powtórzeniach daje to 135 przebiegów. Z tego powodu istotne jest automatyczne zapisywanie wyników oraz jednoznaczne nazewnictwo plików wynikowych.
 
 \section{Testy niezawodności i odporności}

@@ -25,7 +25,7 @@ Systemy cache wykorzystywane w środowiskach produkcyjnych muszą spełniać jed
 
 \subsection{Metryki oceny systemów cache}
 
-Do oceny wydajności systemów cache stosuje się przede wszystkim liczbę operacji na sekundę (ops/sec) oraz rozkład opóźnień. Wartość średnia opóźnienia jest niewystarczająca, ponieważ może ukrywać problemy widoczne dopiero w ogonie rozkładu. Z tego powodu standardem branżowym jest raportowanie percentyli: p50 (mediana), p95, p99 oraz p99.9. Percentyl p99 oznacza, że 99\% żądań otrzymało odpowiedź w czasie nie dłuższym niż podana wartość, natomiast pozostały 1\% żądań doświadczył wyższych opóźnień. W systemach obsługujących miliony żądań dziennie nawet 0{,}1\% wolnych odpowiedzi może dotyczyć tysięcy użytkowników.
+Do oceny wydajności systemów cache stosuje się przede wszystkim liczbę operacji na sekundę (ops/sec) oraz rozkład opóźnień. Wartość średnia opóźnienia jest niewystarczająca, ponieważ może ukrywać problemy widoczne dopiero w ogonie rozkładu. Z tego powodu standardem branżowym jest raportowanie percentyli: p50 (mediana), p95, p99 oraz p99.9. Percentyl p99 oznacza, że 99\% żądań otrzymało odpowiedź w czasie nie dłuższym niż podana wartość, natomiast pozostały 1\% żądań doświadczył wyższych opóźnień. W systemach obsługujących miliony żądań dziennie nawet 0{,}1\% wolnych odpowiedzi może dotyczyć tysięcy użytkowników. Problem ten pogłębia się w architekturach, w których pojedyncze żądanie użytkownika generuje zapytania do wielu komponentów backendu. Dean i Barroso wykazali, że jeśli żądanie wymaga odpowiedzi od $n$ równoległych backendów, prawdopodobieństwo trafienia na odpowiedź powyżej poziomu p99 rośnie jako $1 - 0{,}99^n$ --- przy $n = 100$ wynosi ono około 63\%, co sprawia, że nawet umiarkowane różnice w ogonie rozkładu opóźnień między systemami cache mają istotne znaczenie praktyczne~\cite{dean2013}.
 
 \section{Architektura Redis}
 
@@ -58,7 +58,7 @@ Dostępne polityki dzielą się na dwie grupy: \texttt{allkeys-*} (obejmujące w
 
 \subsection{Replikacja i wysoka dostępność}
 
-Redis wspiera asynchroniczną replikację master-replica, w której jeden węzeł master obsługuje operacje zapisu i odczytu, a węzły repliki utrzymują kopie danych i mogą obsługiwać operacje odczytu. Replikacja jest asynchroniczna, co oznacza, że potwierdzenie zapisu jest zwracane klientowi przed propagacją do replik. W przypadku awarii mastera dane, które nie zostały jeszcze zreplikowane, mogą zostać utracone.
+Redis wspiera asynchroniczną replikację master-replica, w której jeden węzeł master obsługuje operacje zapisu i odczytu, a węzły repliki utrzymują kopie danych i mogą obsługiwać operacje odczytu. Replikacja jest asynchroniczna, co oznacza, że potwierdzenie zapisu jest zwracane klientowi przed propagacją do replik. W przypadku awarii mastera dane, które nie zostały jeszcze zreplikowane, mogą zostać utracone. Jest to konsekwencja kompromisu opisanego twierdzeniem CAP --- Redis Cluster priorytetyzuje dostępność i niskie opóźnienia kosztem gwarancji spójności w warunkach awarii~\cite{brewer2012}.
 
 Mechanizm Redis Sentinel zapewnia automatyczne wykrywanie awarii mastera i promocję repliki do roli mastera (failover)~\cite{redisSentinel}. Sentinel monitoruje instancje Redis, powiadamia administratorów o problemach i przeprowadza automatyczną rekonfigurację topologii. W konfiguracji klastrowej Redis Cluster mechanizm failover jest wbudowany bezpośrednio w protokół klastra i nie wymaga osobnych instancji Sentinel~\cite{redisClusterSpec}.
 
@@ -95,6 +95,7 @@ Pierwsza wersja, Valkey 7.2.5-rc1, została opublikowana 16 kwietnia 2024 roku j
     \item Valkey 8.0 (15 września 2024) -- poprawiona niezawodność migracji slotów, optymalizacje pamięci, repliki zwracające \texttt{ASK} i \texttt{TRYAGAIN} podczas migracji~\cite{valkey80release}.
     \item Valkey 8.1 (31 marca 2025) -- dalsze usprawnienia wydajności i stabilności.
     \item Valkey 9.0 (21 października 2025) -- atomowa migracja slotów, znaczące przyspieszenie reshardingu~\cite{valkeyAtomicSlotMigration}.
+    \item Valkey 9.1 (19 maja 2026) -- poprawki bezpieczeństwa, redukcja skoków opóźnień podczas rehashingu przez inkrementalne zwalnianie stron pamięci, metryka ruchu sieciowego magistrali klastra~\cite{valkey91release}.
 \end{itemize}
 
 \subsection{Zgodność z Redis}
@@ -220,6 +221,8 @@ Kaptosv analizuje wykorzystanie Redis jako warstwy cache w aplikacjach o dużym 
 Han i współautorzy przeprowadzają eksploracyjne studium konsekwencji zmiany licencji Redis, analizując reakcję społeczności open-source, dostawców chmurowych oraz użytkowników końcowych. Ich praca identyfikuje napięcie między modelem biznesowym firm utrzymujących projekty open-source a oczekiwaniami ekosystemu dotyczącymi swobody wykorzystania kodu~\cite{han2026}. Kontekst ten stanowi motywację organizacyjną do poszukiwania alternatyw dla Redis.
 
 Awaysheh i Awad prezentują przegląd nowej generacji chmurowo-natywnych magazynów danych in-memory, umieszczając Valkey w kontekście szerszego trendu rozwoju systemów optymalizowanych pod kątem środowisk kontenerowych i orkiestratorów~\cite{awaysheh2025}. Ich praca ma charakter przeglądowy i nie zawiera szczegółowych pomiarów wydajnościowych ani porównań operacyjnych.
+
+Nishtala i współautorzy opisują architekturę warstwy cache opartej na Memcached w Facebooku, obsługującej ponad miliard żądań na sekundę~\cite{nishtala2013}. Ich praca dokumentuje problemy widoczne dopiero w dużej skali: kaskadowe awarie po utracie fragmentu warstwy cache, efekt thundering herd po unieważnieniu popularnych kluczy oraz wyzwania związane ze spójnością cache między datacenter. Choć praca dotyczy Memcached, a nie Redis, opisane wzorce obciążeń i mechanizmy awaryjne są reprezentatywne dla systemów in-memory cache i stanowią punkt odniesienia dla scenariuszy failover i presji pamięci badanych w niniejszej pracy.
 
 \subsection{Luka badawcza}
 
