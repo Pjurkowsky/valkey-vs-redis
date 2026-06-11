@@ -1,11 +1,16 @@
 {
-  "memtier_started_epoch_s": 1780686134,
-  "chaos_epoch_s": 1780686166,
+  "client_engine": "python",
+  "workload_started_epoch_s": 1781156136,
+  "memtier_started_epoch_s": 1781156136,
+  "chaos_epoch_s": 1781156168,
   "steady_state_wait_s": 30,
   "provider": "redis72",
   "system": "Redis 7.2",
   "action": "pod-failure",
   "duration": "60s",
-  "target": "pod-failure for 1 master pod(s): redis72-redis-cluster-2",
-  "grace_period_s": 1
+  "target": "pod-failure for 1 master pod(s): redis72-redis-cluster-1",
+  "grace_period_s": 1,
+  "threads": 4,
+  "clients": 16,
+  "pipeline": 1
 }

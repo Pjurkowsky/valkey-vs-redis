@@ -20,6 +20,7 @@ ERROR_RESPONSE_RE = re.compile(r"handle error response:\s*(-[A-Z0-9_]+)")
 TIMESTAMPED_LOG_RE = re.compile(r"^(\d{10,})(?:\.\d+)?\t(.*)$")
 CONNECTION_DROPPED_RE = re.compile(r"\bconnection dropped\.", re.IGNORECASE)
 CONNECTION_ERROR_RE = re.compile(r"\bConnection error:\s*(.+)$")
+CHAOS_DURATION_RE = re.compile(r"^([0-9]+(?:\.[0-9]+)?)(ms|s|m|h)?$")
 MEMTIER_PROGRESS_RE = re.compile(
     r"\[RUN #\d+\s+\d+%,\s*(\d+)\s+secs\].*?:\s*"
     r"(\d+)\s+ops,\s*([-0-9.]+)\s+\(avg:.*?\)\s+ops/sec,"
@@ -60,6 +61,69 @@ def parse_time_series(run_result: Dict[str, Any]) -> pd.DataFrame:
         })
 
     return pd.DataFrame(rows, columns=TS_COLUMNS)
+
+
+def parse_failover_client_time_series(run_result: Dict[str, Any]) -> pd.DataFrame:
+    """Extract per-second success throughput from failover_client output."""
+    rows = []
+    for entry in run_result.get("per_second", []):
+        latency = entry.get("latency_ms") or {}
+        rows.append({
+            "second": int(entry.get("second", 0)),
+            "count": entry.get("success_ops_sec", entry.get("succeeded", 0)),
+            "avg_latency": _none_to_nan(latency.get("avg")),
+            "min_latency": _none_to_nan(latency.get("min")),
+            "max_latency": _none_to_nan(latency.get("max")),
+            "p50": _none_to_nan(latency.get("p50")),
+            "p95": _none_to_nan(latency.get("p95")),
+            "p99": _none_to_nan(latency.get("p99")),
+            "p999": _none_to_nan(latency.get("p999")),
+        })
+
+    return pd.DataFrame(rows, columns=TS_COLUMNS)
+
+
+def parse_failover_client_errors(run_result: Dict[str, Any]) -> Tuple[Dict[str, Any], pd.DataFrame]:
+    """Extract client-visible failed operations from failover_client output."""
+    totals = run_result.get("totals", {})
+    error_types = Counter(totals.get("error_types") or {})
+    error_rows = []
+    error_seconds = []
+
+    for entry in run_result.get("per_second", []):
+        second = int(entry.get("second", 0))
+        failed = int(entry.get("failed", entry.get("failed_ops_sec", 0)) or 0)
+        per_second_errors = Counter(entry.get("error_types") or {})
+        clusterdown = int(per_second_errors.get("ClusterDownError", 0))
+        if failed:
+            error_seconds.append(second)
+        error_rows.append({
+            "second": second,
+            "failed_request_count": failed,
+            "clusterdown_errors": clusterdown,
+        })
+
+    error_ts = pd.DataFrame(error_rows)
+    total_failed = int(totals.get("failed", sum(error_types.values()) if error_types else 0) or 0)
+    total_clusterdown = int(error_types.get("ClusterDownError", 0))
+    total_connection = int(
+        error_types.get("ConnectionError", 0)
+        + error_types.get("TimeoutError", 0)
+        + error_types.get("ConnectionResetError", 0)
+    )
+
+    return {
+        "log_file": None,
+        "failed_request_count": total_failed,
+        "clusterdown_errors": total_clusterdown,
+        "connection_errors": total_connection,
+        "connection_dropped": 0,
+        "error_response_types": ", ".join(
+            f"{error_type}:{count}" for error_type, count in sorted(error_types.items())
+        ),
+        "first_error_second": min(error_seconds) if error_seconds else None,
+        "last_error_second": max(error_seconds) if error_seconds else None,
+    }, error_ts
 
 
 def parse_log_time_series(log_path: Path) -> pd.DataFrame:
@@ -115,6 +179,16 @@ def parse_log_time_series(log_path: Path) -> pd.DataFrame:
 
 
 def _safe_float(value: str) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return float("nan")
+    return parsed if np.isfinite(parsed) else float("nan")
+
+
+def _none_to_nan(value: Any) -> float:
+    if value is None:
+        return float("nan")
     try:
         parsed = float(value)
     except (TypeError, ValueError):
@@ -288,6 +362,7 @@ def parse_failover_timing(timing_path: Path, run_start_ms: Optional[float]) -> D
             "timing_file": None,
             "memtier_detected_start_second": None,
             "chaos_second": None,
+            "chaos_duration_s": None,
             "steady_state_wait_s": None,
             "chaos_target": None,
         }
@@ -296,28 +371,159 @@ def parse_failover_timing(timing_path: Path, run_start_ms: Optional[float]) -> D
         timing = json.load(fh)
 
     chaos_epoch_s = timing.get("chaos_epoch_s")
+    workload_started_epoch_s = timing.get("workload_started_epoch_s")
     memtier_started_epoch_s = timing.get("memtier_started_epoch_s")
     chaos_second = None
     memtier_detected_start_second = None
     relative_start_s = (
-        float(memtier_started_epoch_s)
-        if memtier_started_epoch_s is not None
+        float(workload_started_epoch_s or memtier_started_epoch_s)
+        if (workload_started_epoch_s is not None or memtier_started_epoch_s is not None)
         else (run_start_ms / 1000.0 if run_start_ms is not None else None)
     )
     if chaos_epoch_s is not None and relative_start_s is not None:
         chaos_second = max(0, int(float(chaos_epoch_s) - relative_start_s))
-    if memtier_started_epoch_s is not None and run_start_ms is not None:
-        memtier_detected_start_second = int(float(memtier_started_epoch_s) - (run_start_ms / 1000.0))
+    if (workload_started_epoch_s is not None or memtier_started_epoch_s is not None) and run_start_ms is not None:
+        memtier_detected_start_second = int(
+            float(workload_started_epoch_s or memtier_started_epoch_s) - (run_start_ms / 1000.0)
+        )
 
     return {
         "timing_file": timing_path.name,
+        "client_engine": timing.get("client_engine"),
         "memtier_detected_start_second": memtier_detected_start_second,
         "chaos_second": chaos_second,
+        "chaos_duration_s": _duration_to_seconds(timing.get("duration")),
         "steady_state_wait_s": timing.get("steady_state_wait_s"),
         "chaos_target": timing.get("target"),
         "grace_period_s": timing.get("grace_period_s"),
         "relative_start_ms": relative_start_s * 1000.0 if relative_start_s is not None else None,
     }
+
+
+def _duration_to_seconds(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+
+    match = CHAOS_DURATION_RE.match(str(value).strip())
+    if not match:
+        return None
+
+    amount = float(match.group(1))
+    unit = match.group(2) or "s"
+    if unit == "ms":
+        return amount / 1000.0
+    if unit == "m":
+        return amount * 60.0
+    if unit == "h":
+        return amount * 3600.0
+    return amount
+
+
+def compare_baseline_to_chaos_window(
+    ts: pd.DataFrame,
+    timing_metrics: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Compare the steady-state window before chaos with the chaos duration.
+
+    The failover detector looks for the worst degraded window. For the thesis
+    comparison we also want a simpler, fixed-window view: average ops/sec in
+    the configured steady-state period before chaos and average ops/sec while
+    Chaos Mesh keeps the master unavailable.
+    """
+    chaos_second = timing_metrics.get("chaos_second")
+    if ts.empty or chaos_second is None:
+        return _empty_window_comparison()
+
+    steady_state_wait = timing_metrics.get("steady_state_wait_s") or BASELINE_SECONDS
+    chaos_duration = timing_metrics.get("chaos_duration_s")
+
+    baseline_start = max(0, int(float(chaos_second) - float(steady_state_wait)))
+    baseline_end = int(float(chaos_second)) - 1
+    baseline_ts = ts[(ts["second"] >= baseline_start) & (ts["second"] <= baseline_end)]
+
+    if chaos_duration is None or chaos_duration <= 0:
+        chaos_duration = max(0, int(ts["second"].max()) - int(float(chaos_second)) + 1)
+
+    chaos_start = int(float(chaos_second))
+    chaos_expected_s = max(0, int(round(float(chaos_duration))))
+    chaos_end = chaos_start + chaos_expected_s - 1
+    chaos_ts = ts[(ts["second"] >= chaos_start) & (ts["second"] <= chaos_end)]
+
+    baseline_ops = _mean_or_none(baseline_ts["count"])
+    chaos_observed_ops = _mean_or_none(chaos_ts["count"])
+    chaos_expected_ops = _window_mean_with_missing_as_zero(
+        chaos_ts,
+        chaos_start,
+        chaos_expected_s,
+    )
+
+    return {
+        "baseline_window_start_s": baseline_start,
+        "baseline_window_end_s": baseline_end,
+        "baseline_window_expected_s": max(0, baseline_end - baseline_start + 1),
+        "baseline_window_observed_s": int(len(baseline_ts)),
+        "baseline_window_ops_sec": baseline_ops,
+        "chaos_window_start_s": chaos_start,
+        "chaos_window_end_s": chaos_end,
+        "chaos_window_expected_s": chaos_expected_s,
+        "chaos_window_observed_s": int(len(chaos_ts)),
+        "chaos_window_ops_sec_observed": chaos_observed_ops,
+        "chaos_window_ops_sec_missing_as_zero": chaos_expected_ops,
+        "chaos_window_coverage_pct": (
+            len(chaos_ts) / chaos_expected_s * 100.0
+            if chaos_expected_s > 0 else None
+        ),
+        "chaos_window_drop_pct_observed": _drop_pct(baseline_ops, chaos_observed_ops),
+        "chaos_window_drop_pct_missing_as_zero": _drop_pct(baseline_ops, chaos_expected_ops),
+    }
+
+
+def _empty_window_comparison() -> Dict[str, Any]:
+    return {
+        "baseline_window_start_s": None,
+        "baseline_window_end_s": None,
+        "baseline_window_expected_s": None,
+        "baseline_window_observed_s": None,
+        "baseline_window_ops_sec": None,
+        "chaos_window_start_s": None,
+        "chaos_window_end_s": None,
+        "chaos_window_expected_s": None,
+        "chaos_window_observed_s": None,
+        "chaos_window_ops_sec_observed": None,
+        "chaos_window_ops_sec_missing_as_zero": None,
+        "chaos_window_coverage_pct": None,
+        "chaos_window_drop_pct_observed": None,
+        "chaos_window_drop_pct_missing_as_zero": None,
+    }
+
+
+def _mean_or_none(series: pd.Series) -> Optional[float]:
+    if series.empty:
+        return None
+    return float(series.mean())
+
+
+def _window_mean_with_missing_as_zero(
+    ts: pd.DataFrame,
+    start_second: int,
+    expected_seconds: int,
+) -> Optional[float]:
+    if expected_seconds <= 0:
+        return None
+    if ts.empty:
+        return 0.0
+
+    counts = ts.set_index("second")["count"]
+    window_index = range(start_second, start_second + expected_seconds)
+    return float(counts.reindex(window_index, fill_value=0).mean())
+
+
+def _drop_pct(baseline: Optional[float], measured: Optional[float]) -> Optional[float]:
+    if baseline is None or measured is None or baseline == 0:
+        return None
+    return max(0.0, (baseline - measured) / baseline * 100.0)
 
 
 def _trim_terminal_partial_bucket(ts: pd.DataFrame, baseline_ops: float) -> pd.DataFrame:
@@ -363,28 +569,38 @@ def analyse_failover_runs(json_dir: Path) -> Tuple[pd.DataFrame, List[pd.DataFra
         with f.open() as fh:
             doc = json.load(fh)
 
-        run_result = doc.get("RUN #1 RESULTS") or doc.get("ALL STATS")
-        if run_result is None:
-            for key in doc:
-                if key.startswith("RUN #") and key.endswith("RESULTS"):
-                    run_result = doc[key]
-                    break
+        if doc.get("benchmark") == "failover_client":
+            run_result = doc
+            started_epoch_s = doc.get("run", {}).get("started_epoch_s")
+            run_start_ms = float(started_epoch_s) * 1000.0 if started_epoch_s is not None else None
+            timing_metrics = parse_failover_timing(_timing_path_for_run(f), run_start_ms)
+            ts = parse_failover_client_time_series(run_result)
+            error_metrics, error_ts = parse_failover_client_errors(run_result)
+        else:
+            run_result = doc.get("RUN #1 RESULTS") or doc.get("ALL STATS")
+            if run_result is None:
+                for key in doc:
+                    if key.startswith("RUN #") and key.endswith("RESULTS"):
+                        run_result = doc[key]
+                        break
 
-        if run_result is None:
-            print(f"  [warn] No run results found in {f.name}, skipping")
-            continue
+            if run_result is None:
+                print(f"  [warn] No run results found in {f.name}, skipping")
+                continue
 
-        run_start_ms = _run_start_ms(run_result)
-        timing_metrics = parse_failover_timing(_timing_path_for_run(f), run_start_ms)
+            run_start_ms = _run_start_ms(run_result)
+            timing_metrics = parse_failover_timing(_timing_path_for_run(f), run_start_ms)
 
-        ts = parse_time_series(run_result)
-        if ts.empty:
-            ts = parse_log_time_series(f.with_suffix(".log"))
+            ts = parse_time_series(run_result)
+            if ts.empty:
+                ts = parse_log_time_series(f.with_suffix(".log"))
+
+            relative_start_ms = timing_metrics.get("relative_start_ms") or run_start_ms
+            error_metrics, error_ts = parse_memtier_error_log(f.with_suffix(".log"), relative_start_ms)
+
         metrics = detect_failover(ts, timing_metrics.get("chaos_second"))
         metrics.update(timing_metrics)
-
-        relative_start_ms = timing_metrics.get("relative_start_ms") or run_start_ms
-        error_metrics, error_ts = parse_memtier_error_log(f.with_suffix(".log"), relative_start_ms)
+        metrics.update(compare_baseline_to_chaos_window(ts, timing_metrics))
         metrics.update(error_metrics)
         metrics["file"] = f.name
 
@@ -419,27 +635,47 @@ def print_failover_summary(df: pd.DataFrame) -> None:
     print(f"\nFailover runs analysed: {len(df)}")
     print(f"Failover detected in:  {len(detected)}/{len(df)} runs")
 
-    if detected.empty:
-        print("No failover events detected.")
-        _print_memtier_error_summary(df)
-        return
-
-    metrics = [
+    detection_metrics = [
         ("Failover duration (ms)", "failover_duration_ms"),
         ("Ops lost", "ops_lost"),
-        ("Baseline ops/sec", "baseline_ops"),
+        ("Detected baseline ops/sec", "baseline_ops"),
         ("Peak p99 during failover (ms)", "peak_p99_during"),
-        ("Baseline p99 (ms)", "baseline_p99"),
+        ("Detected baseline p99 (ms)", "baseline_p99"),
+    ]
+    window_metrics = [
+        ("Baseline window ops/sec", "baseline_window_ops_sec"),
+        ("Chaos window ops/sec (observed)", "chaos_window_ops_sec_observed"),
+        ("Chaos window ops/sec (missing=0)", "chaos_window_ops_sec_missing_as_zero"),
+        ("Chaos window drop % (observed)", "chaos_window_drop_pct_observed"),
+        ("Chaos window drop % (missing=0)", "chaos_window_drop_pct_missing_as_zero"),
+        ("Chaos window coverage (%)", "chaos_window_coverage_pct"),
     ]
 
+    if detected.empty:
+        print("No degraded failover window detected by threshold.")
+    else:
+        _print_metric_table("Detected failover window", detected, detection_metrics)
+
+    _print_metric_table("Configured baseline vs chaos window", df, window_metrics)
+    _print_memtier_error_summary(df)
+
+
+def _print_metric_table(
+    title: str,
+    df: pd.DataFrame,
+    metrics: List[Tuple[str, str]],
+) -> None:
+    available = [(label, col) for label, col in metrics if col in df and df[col].notna().any()]
+    if not available:
+        return
+
+    print(f"\n{title}:")
     print(f"\n{'Metric':<40} {'Mean':>12} {'Std':>12}")
     print("-" * 66)
-    for label, col in metrics:
-        mean = detected[col].mean()
-        std = detected[col].std()
+    for label, col in available:
+        mean = df[col].mean()
+        std = df[col].std()
         print(f"{label:<40} {mean:>12.2f} {std:>12.2f}")
-
-    _print_memtier_error_summary(df)
 
 
 def _print_memtier_error_summary(df: pd.DataFrame) -> None:
@@ -450,7 +686,7 @@ def _print_memtier_error_summary(df: pd.DataFrame) -> None:
         total_clusterdown = int(error_df["clusterdown_errors"].sum())
         total_connection_errors = int(error_df.get("connection_errors", pd.Series(dtype=int)).sum())
         total_connection_dropped = int(error_df.get("connection_dropped", pd.Series(dtype=int)).sum())
-        print("\nMemtier client-visible errors from logs:")
+        print("\nClient-visible errors:")
         print(f"  Runs with errors:       {runs_with_errors}/{len(error_df)}")
         print(f"  Error events total:     {total_failed}")
         print(f"  CLUSTERDOWN responses:  {total_clusterdown}")

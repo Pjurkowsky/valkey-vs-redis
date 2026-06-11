@@ -1,214 +1,3771 @@
 {
-	"configuration":{
-		"server": "valkey.vk.svc.cluster.local"
-		,"port": 6379
-		,"uri": ""
-		,"unix socket": null
-		,"address family": "Unspecified"
-		,"protocol": "redis"
-		,"out_file": null
-		,"tls": "false"
-		,"cert": null
-		,"key": null
-		,"cacert": null
-		,"tls_skip_verify": "false"
-		,"sni": null
-		,"client_stats": null
-		,"run_count": 1
-		,"debug": 0
-		,"requests": 0
-		,"rate_limit": 0
-		,"clients": 1
-		,"threads": 4
-		,"test_time": 120
-		,"ratio": "1:1"
-		,"pipeline": 1
-		,"data_size": 1024
-		,"data_offset": 0
-		,"random_data": "false"
-		,"data_size_range": "0:0"
-		,"data_size_list": ""
-		,"data_size_pattern": "R"
-		,"expiry_range": "0:0"
-		,"data_import": null
-		,"data_verify": "false"
-		,"verify_only": "false"
-		,"generate_keys": "false"
-		,"key_prefix": "memtier-"
-		,"key_minimum":           0
-		,"key_maximum":      100000
-		,"key_pattern": "R:R"
-		,"key_stddev": 0.000000
-		,"key_median": 0.000000
-		,"key_zipf_exp": 0.000000
-		,"reconnect_interval": 0
-		,"connection_timeout": 0
-		,"thread_conn_start_min_jitter_micros": 0
-		,"thread_conn_start_max_jitter_micros": 0
-		,"multi_key_get": 0
-		,"authenticate": ""
-		,"select-db": 0
-		,"no-expiry": "false"
-		,"wait-ratio": "0:0"
-		,"num-slaves": "0:0"
-		,"wait-timeout": "0-0"
-		,"print-all-runs": "false"
-		}
-	,"run information":{
-		"Threads": 4
-		,"Connections per thread": 1
-		,"Seconds": 120
-		,"Format version": 2
-		}
-	,"ALL STATS":{
-		"Runtime":{
-			"Start time": 1780687607459
-			,"Finish time": 0
-			,"Total duration": -1780687607459
-			,"Time unit": "MILLISECONDS"
-			,"Interrupted": "false"
-			}
-		,"Sets":{
-			"Count": 0
-			,"Ops/sec": 0.00
-			,"Hits/sec": 0.00
-			,"Misses/sec": 0.00
-			,"MOVED/sec": 0.00
-			,"ASK/sec": 0.00
-			,"Connection Errors/sec": 0.00
-			,"Connection Errors": 0
-			,"Latency": 0.000
-			,"Average Latency": 0.000
-			,"Accumulated Latency": 0
-			,"Min Latency": 0.000
-			,"Max Latency": 0.000
-			,"KB/sec": 0.00
-			,"KB/sec RX/TX": 0.00
-			,"KB/sec RX": 0.00
-			,"KB/sec TX": 0.00
-			,"Time-Serie":{
-			}
-			,"Percentile Latencies":{
-				"p50.00": 0.007
-				,"p95.00": 0.007
-				,"p99.00": 0.007
-				,"p99.90": 0.007
-				,"Histogram log format":{
-					"Compressed Histogram": "HISTFAAAACF4nJNpmSzMwMDAyAABTFCaC0QoH3ZjsP8AEWAEAEsrA7A="
-					}
-				}
-			}
-		,"Gets":{
-			"Count": 0
-			,"Ops/sec": 0.00
-			,"Hits/sec": 0.00
-			,"Misses/sec": 0.00
-			,"MOVED/sec": 0.00
-			,"ASK/sec": 0.00
-			,"Connection Errors/sec": 0.00
-			,"Connection Errors": 0
-			,"Latency": 0.000
-			,"Average Latency": 0.000
-			,"Accumulated Latency": 0
-			,"Min Latency": 0.104
-			,"Max Latency": 0.111
-			,"KB/sec": 0.00
-			,"KB/sec RX/TX": 0.00
-			,"KB/sec RX": 0.00
-			,"KB/sec TX": 0.00
-			,"Time-Serie":{
-			}
-			,"Percentile Latencies":{
-				"p50.00": 0.111
-				,"p95.00": 0.111
-				,"p99.00": 0.111
-				,"p99.90": 0.111
-				,"Histogram log format":{
-					"Compressed Histogram": "HISTFAAAACF4nJNpmSzMwMDAxAABMJoLRCgfdmOw/wARkGQCAE8wA8s="
-					}
-				}
-			}
-		,"Waits":{
-			"Count": 0
-			,"Ops/sec": 0.00
-			,"Hits/sec": 0.00
-			,"Misses/sec": 0.00
-			,"MOVED/sec": 0.00
-			,"ASK/sec": 0.00
-			,"Connection Errors/sec": 0.00
-			,"Connection Errors": 0
-			,"Latency": 0.000
-			,"Average Latency": 0.000
-			,"Accumulated Latency": 0
-			,"Min Latency": 0.000
-			,"Max Latency": 0.000
-			,"KB/sec": 0.00
-			,"KB/sec RX/TX": 0.00
-			,"KB/sec RX": 0.00
-			,"KB/sec TX": 0.00
-			,"Time-Serie":{
-			}
-			,"Percentile Latencies":{
-				"p50.00": 0.007
-				,"p95.00": 0.007
-				,"p99.00": 0.007
-				,"p99.90": 0.007
-				,"Histogram log format":{
-					"Compressed Histogram": "HISTFAAAACF4nJNpmSzMwMDAyAABTFCaC0QoH3ZjsP8AEWAEAEsrA7A="
-					}
-				}
-			}
-		,"Totals":{
-			"Count": 1
-			,"Ops/sec": 0.00
-			,"Hits/sec": 0.00
-			,"Misses/sec": 0.00
-			,"MOVED/sec": 0.00
-			,"ASK/sec": 0.00
-			,"Connection Errors/sec": 0.00
-			,"Connection Errors": 4
-			,"Latency": 109.000
-			,"Average Latency": 109.000
-			,"Accumulated Latency": 0
-			,"Min Latency": 0.104
-			,"Max Latency": 0.111
-			,"KB/sec": 0.00
-			,"KB/sec RX/TX": 0.00
-			,"KB/sec RX": 0.00
-			,"KB/sec TX": 0.00
-			,"Time-Serie":{
-			}
-			,"Percentile Latencies":{
-				"p50.00": 0.111
-				,"p95.00": 0.111
-				,"p99.00": 0.111
-				,"p99.90": 0.111
-				,"Histogram log format":{
-					"Compressed Histogram": "HISTFAAAACF4nJNpmSzMwMDAxAABMJoLRCgfdmOw/wARkGQCAE8wA8s="
-					}
-				}
-			}
-		,"SET":[
-			{
-				"<=msec": 0.000
-				,"percent": 100.000
-				}
-			]
-		,"GET":[
-			{
-				"<=msec": 0.111
-				,"percent": 0.000
-				}
-			,{
-				"<=msec": 0.111
-				,"percent": 100.000
-				}
-			]
-		,"WAIT":[
-			{
-				"<=msec": 0.000
-				,"percent": 100.000
-				}
-			]
-		}
-	}
+  "benchmark": "failover_client",
+  "configuration": {
+    "clients": 16,
+    "connect_timeout_s": 1.0,
+    "data_size": 1024,
+    "duration_s": 120,
+    "host": "valkey.vk.svc.cluster.local",
+    "key_prefix": "failover.valkey.1.",
+    "keys": 100000,
+    "port": 6379,
+    "ratio": "1:1",
+    "reconnect_backoff_s": 0.01,
+    "retry_on_timeout": false,
+    "seed": 2,
+    "socket_timeout_s": 1.0,
+    "threads": 4,
+    "tls": false,
+    "tls_skip_verify": false,
+    "workers": 64
+  },
+  "error_samples": [
+    {
+      "latency_ms": 3944.288,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 3
+    },
+    {
+      "latency_ms": 3203.783,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 3
+    },
+    {
+      "latency_ms": 5662.83,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 72,
+      "type": "ConnectionError",
+      "worker": 3
+    },
+    {
+      "latency_ms": 5648.264,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 77,
+      "type": "ConnectionError",
+      "worker": 3
+    },
+    {
+      "latency_ms": 3576.259,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 60
+    },
+    {
+      "latency_ms": 5262.497,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 66,
+      "type": "ConnectionError",
+      "worker": 60
+    },
+    {
+      "latency_ms": 3567.476,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 74,
+      "type": "ConnectionError",
+      "worker": 60
+    },
+    {
+      "latency_ms": 4768.394,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 79,
+      "type": "ConnectionError",
+      "worker": 60
+    },
+    {
+      "latency_ms": 3733.911,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 33
+    },
+    {
+      "latency_ms": 3499.889,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 33
+    },
+    {
+      "latency_ms": 4072.54,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 74,
+      "type": "ConnectionError",
+      "worker": 33
+    },
+    {
+      "latency_ms": 4004.772,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 80,
+      "type": "ConnectionError",
+      "worker": 33
+    },
+    {
+      "latency_ms": 3064.171,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 50
+    },
+    {
+      "latency_ms": 3364.907,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 50
+    },
+    {
+      "latency_ms": 3491.36,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 74,
+      "type": "ConnectionError",
+      "worker": 50
+    },
+    {
+      "latency_ms": 3057.185,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 80,
+      "type": "ConnectionError",
+      "worker": 50
+    },
+    {
+      "latency_ms": 4069.132,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 28
+    },
+    {
+      "latency_ms": 4862.216,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 67,
+      "type": "ConnectionError",
+      "worker": 28
+    },
+    {
+      "latency_ms": 3223.016,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 73,
+      "type": "ConnectionError",
+      "worker": 28
+    },
+    {
+      "latency_ms": 3442.618,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 79,
+      "type": "ConnectionError",
+      "worker": 28
+    },
+    {
+      "latency_ms": 3762.393,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 41
+    },
+    {
+      "latency_ms": 3197.938,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 41
+    },
+    {
+      "latency_ms": 5988.63,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 71,
+      "type": "ConnectionError",
+      "worker": 41
+    },
+    {
+      "latency_ms": 3923.951,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 79,
+      "type": "ConnectionError",
+      "worker": 41
+    },
+    {
+      "latency_ms": 3327.919,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 11
+    },
+    {
+      "latency_ms": 2865.357,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 11
+    },
+    {
+      "latency_ms": 3607.091,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 73,
+      "type": "ConnectionError",
+      "worker": 11
+    },
+    {
+      "latency_ms": 3725.344,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 79,
+      "type": "ConnectionError",
+      "worker": 11
+    },
+    {
+      "latency_ms": 3626.778,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 42
+    },
+    {
+      "latency_ms": 3470.039,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 42
+    },
+    {
+      "latency_ms": 3731.721,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 74,
+      "type": "ConnectionError",
+      "worker": 42
+    },
+    {
+      "latency_ms": 4175.11,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 80,
+      "type": "ConnectionError",
+      "worker": 42
+    },
+    {
+      "latency_ms": 4150.043,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 47
+    },
+    {
+      "latency_ms": 3419.015,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 47
+    },
+    {
+      "latency_ms": 5381.395,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 72,
+      "type": "ConnectionError",
+      "worker": 47
+    },
+    {
+      "latency_ms": 5083.576,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 77,
+      "type": "ConnectionError",
+      "worker": 47
+    },
+    {
+      "latency_ms": 3391.778,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 61
+    },
+    {
+      "latency_ms": 4564.302,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 66,
+      "type": "ConnectionError",
+      "worker": 61
+    },
+    {
+      "latency_ms": 3250.557,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 73,
+      "type": "ConnectionError",
+      "worker": 61
+    },
+    {
+      "latency_ms": 3689.569,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 78,
+      "type": "ConnectionError",
+      "worker": 61
+    },
+    {
+      "latency_ms": 3673.401,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 21
+    },
+    {
+      "latency_ms": 2942.029,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 21
+    },
+    {
+      "latency_ms": 3328.648,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 73,
+      "type": "ConnectionError",
+      "worker": 21
+    },
+    {
+      "latency_ms": 5256.834,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 76,
+      "type": "ConnectionError",
+      "worker": 21
+    },
+    {
+      "latency_ms": 3801.091,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 54
+    },
+    {
+      "latency_ms": 6200.777,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 67,
+      "type": "ConnectionError",
+      "worker": 54
+    },
+    {
+      "latency_ms": 4989.453,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 73,
+      "type": "ConnectionError",
+      "worker": 54
+    },
+    {
+      "latency_ms": 3975.88,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 80,
+      "type": "ConnectionError",
+      "worker": 54
+    },
+    {
+      "latency_ms": 3653.76,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 19
+    },
+    {
+      "latency_ms": 4859.603,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 66,
+      "type": "ConnectionError",
+      "worker": 19
+    },
+    {
+      "latency_ms": 3829.64,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 74,
+      "type": "ConnectionError",
+      "worker": 19
+    },
+    {
+      "latency_ms": 3849.915,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 80,
+      "type": "ConnectionError",
+      "worker": 19
+    },
+    {
+      "latency_ms": 3368.494,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 2
+    },
+    {
+      "latency_ms": 3548.95,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 2
+    },
+    {
+      "latency_ms": 3338.845,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 74,
+      "type": "ConnectionError",
+      "worker": 2
+    },
+    {
+      "latency_ms": 5370.021,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 77,
+      "type": "ConnectionError",
+      "worker": 2
+    },
+    {
+      "latency_ms": 3535.148,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 53
+    },
+    {
+      "latency_ms": 5338.81,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 66,
+      "type": "ConnectionError",
+      "worker": 53
+    },
+    {
+      "latency_ms": 3197.698,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 74,
+      "type": "ConnectionError",
+      "worker": 53
+    },
+    {
+      "latency_ms": 3392.685,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 79,
+      "type": "ConnectionError",
+      "worker": 53
+    },
+    {
+      "latency_ms": 3274.438,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 49
+    },
+    {
+      "latency_ms": 4977.115,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 66,
+      "type": "ConnectionError",
+      "worker": 49
+    },
+    {
+      "latency_ms": 5671.796,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 71,
+      "type": "ConnectionError",
+      "worker": 49
+    },
+    {
+      "latency_ms": 3456.013,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 79,
+      "type": "ConnectionError",
+      "worker": 49
+    },
+    {
+      "latency_ms": 3414.894,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 45
+    },
+    {
+      "latency_ms": 3503.81,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 45
+    },
+    {
+      "latency_ms": 3698.689,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 73,
+      "type": "ConnectionError",
+      "worker": 45
+    },
+    {
+      "latency_ms": 5479.314,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 77,
+      "type": "ConnectionError",
+      "worker": 45
+    },
+    {
+      "latency_ms": 3358.355,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 29
+    },
+    {
+      "latency_ms": 5206.748,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 66,
+      "type": "ConnectionError",
+      "worker": 29
+    },
+    {
+      "latency_ms": 5153.294,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 71,
+      "type": "ConnectionError",
+      "worker": 29
+    },
+    {
+      "latency_ms": 6025.35,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 77,
+      "type": "ConnectionError",
+      "worker": 29
+    },
+    {
+      "latency_ms": 3440.012,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 38
+    },
+    {
+      "latency_ms": 5456.227,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 66,
+      "type": "ConnectionError",
+      "worker": 38
+    },
+    {
+      "latency_ms": 5697.614,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 72,
+      "type": "ConnectionError",
+      "worker": 38
+    },
+    {
+      "latency_ms": 5130.033,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 77,
+      "type": "ConnectionError",
+      "worker": 38
+    },
+    {
+      "latency_ms": 3616.497,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 34
+    },
+    {
+      "latency_ms": 3366.532,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 34
+    },
+    {
+      "latency_ms": 3717.692,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 73,
+      "type": "ConnectionError",
+      "worker": 34
+    },
+    {
+      "latency_ms": 3799.497,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 78,
+      "type": "ConnectionError",
+      "worker": 34
+    },
+    {
+      "latency_ms": 3770.097,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 39
+    },
+    {
+      "latency_ms": 2967.29,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 69,
+      "type": "ConnectionError",
+      "worker": 39
+    },
+    {
+      "latency_ms": 3636.594,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 74,
+      "type": "ConnectionError",
+      "worker": 39
+    },
+    {
+      "latency_ms": 5671.268,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 77,
+      "type": "ConnectionError",
+      "worker": 39
+    },
+    {
+      "latency_ms": 3429.89,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 18
+    },
+    {
+      "latency_ms": 3363.376,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 18
+    },
+    {
+      "latency_ms": 3174.468,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 73,
+      "type": "ConnectionError",
+      "worker": 18
+    },
+    {
+      "latency_ms": 5780.271,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 76,
+      "type": "ConnectionError",
+      "worker": 18
+    },
+    {
+      "latency_ms": 3526.682,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 46
+    },
+    {
+      "latency_ms": 4594.358,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 66,
+      "type": "ConnectionError",
+      "worker": 46
+    },
+    {
+      "latency_ms": 5465.877,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 71,
+      "type": "ConnectionError",
+      "worker": 46
+    },
+    {
+      "latency_ms": 5893.139,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 77,
+      "type": "ConnectionError",
+      "worker": 46
+    },
+    {
+      "latency_ms": 3785.539,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 12
+    },
+    {
+      "latency_ms": 3103.972,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 68,
+      "type": "ConnectionError",
+      "worker": 12
+    },
+    {
+      "latency_ms": 3413.09,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 74,
+      "type": "ConnectionError",
+      "worker": 12
+    },
+    {
+      "latency_ms": 3533.338,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 79,
+      "type": "ConnectionError",
+      "worker": 12
+    },
+    {
+      "latency_ms": 3674.484,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 63,
+      "type": "ConnectionError",
+      "worker": 44
+    },
+    {
+      "latency_ms": 4922.026,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 66,
+      "type": "ConnectionError",
+      "worker": 44
+    },
+    {
+      "latency_ms": 3654.072,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "get",
+      "second": 73,
+      "type": "ConnectionError",
+      "worker": 44
+    },
+    {
+      "latency_ms": 3221.035,
+      "message": "Error 111 connecting to valkey-5.valkey-headless.vk.svc.cluster.local:6379. Connection refused.",
+      "operation": "set",
+      "second": 79,
+      "type": "ConnectionError",
+      "worker": 44
+    }
+  ],
+  "per_second": [
+    {
+      "attempted": 103,
+      "attempted_ops_sec": 103,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 46,
+      "get_succeeded": 46,
+      "latency_ms": {
+        "avg": 678.3965891553131,
+        "max": 1339.632542999425,
+        "min": 4.377172999738832,
+        "p50": 850.7902020000984,
+        "p95": 1239.301642600185,
+        "p99": 1305.4300945601972,
+        "p999": 1336.1788460515058,
+        "samples": 103
+      },
+      "second": 0,
+      "set_attempted": 57,
+      "set_succeeded": 57,
+      "succeeded": 103,
+      "success_ops_sec": 103
+    },
+    {
+      "attempted": 1595,
+      "attempted_ops_sec": 1595,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 803,
+      "get_succeeded": 803,
+      "latency_ms": {
+        "avg": 25.473477080875305,
+        "max": 300.56208499991044,
+        "min": 0.21553599981416482,
+        "p50": 14.251278999836359,
+        "p95": 106.6702947997328,
+        "p99": 208.00218263981105,
+        "p999": 287.40190714794517,
+        "samples": 1595
+      },
+      "second": 1,
+      "set_attempted": 792,
+      "set_succeeded": 792,
+      "succeeded": 1595,
+      "success_ops_sec": 1595
+    },
+    {
+      "attempted": 4465,
+      "attempted_ops_sec": 4465,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2208,
+      "get_succeeded": 2208,
+      "latency_ms": {
+        "avg": 14.240480906665763,
+        "max": 137.87160700030654,
+        "min": 0.21203799951763358,
+        "p50": 11.948514000323485,
+        "p95": 31.051629800094805,
+        "p99": 44.0534783198018,
+        "p999": 58.26697692013851,
+        "samples": 4457
+      },
+      "second": 2,
+      "set_attempted": 2257,
+      "set_succeeded": 2257,
+      "succeeded": 4465,
+      "success_ops_sec": 4465
+    },
+    {
+      "attempted": 4521,
+      "attempted_ops_sec": 4521,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2242,
+      "get_succeeded": 2242,
+      "latency_ms": {
+        "avg": 14.1567132441787,
+        "max": 64.07448600020871,
+        "min": 0.21944499985693255,
+        "p50": 12.049564000335522,
+        "p95": 30.490763800298733,
+        "p99": 43.08266188021662,
+        "p999": 57.307353163538565,
+        "samples": 4509
+      },
+      "second": 3,
+      "set_attempted": 2279,
+      "set_succeeded": 2279,
+      "succeeded": 4521,
+      "success_ops_sec": 4521
+    },
+    {
+      "attempted": 4459,
+      "attempted_ops_sec": 4459,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2256,
+      "get_succeeded": 2256,
+      "latency_ms": {
+        "avg": 14.331753879241344,
+        "max": 64.7372550001819,
+        "min": 0.25064100009331014,
+        "p50": 11.915058999875328,
+        "p95": 31.907647099978924,
+        "p99": 44.62072862008424,
+        "p999": 60.05633996375949,
+        "samples": 4447
+      },
+      "second": 4,
+      "set_attempted": 2203,
+      "set_succeeded": 2203,
+      "succeeded": 4459,
+      "success_ops_sec": 4459
+    },
+    {
+      "attempted": 4551,
+      "attempted_ops_sec": 4551,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2269,
+      "get_succeeded": 2269,
+      "latency_ms": {
+        "avg": 14.093468823060347,
+        "max": 67.00963200000842,
+        "min": 0.19962399983342038,
+        "p50": 11.806980000073963,
+        "p95": 30.546156649916142,
+        "p99": 40.884016940226445,
+        "p999": 57.037106394461276,
+        "samples": 4544
+      },
+      "second": 5,
+      "set_attempted": 2282,
+      "set_succeeded": 2282,
+      "succeeded": 4551,
+      "success_ops_sec": 4551
+    },
+    {
+      "attempted": 4523,
+      "attempted_ops_sec": 4523,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2271,
+      "get_succeeded": 2271,
+      "latency_ms": {
+        "avg": 14.105843434343994,
+        "max": 60.78967199937324,
+        "min": 0.2312299993718625,
+        "p50": 11.851812000713835,
+        "p95": 30.125373000373656,
+        "p99": 43.01253599987831,
+        "p999": 55.05225250044748,
+        "samples": 4501
+      },
+      "second": 6,
+      "set_attempted": 2252,
+      "set_succeeded": 2252,
+      "succeeded": 4523,
+      "success_ops_sec": 4523
+    },
+    {
+      "attempted": 4549,
+      "attempted_ops_sec": 4549,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2246,
+      "get_succeeded": 2246,
+      "latency_ms": {
+        "avg": 14.063549792086768,
+        "max": 88.09298500000295,
+        "min": 0.24430499979644082,
+        "p50": 11.903858000550827,
+        "p95": 30.4431160002423,
+        "p99": 42.15106739975457,
+        "p999": 52.733150959647965,
+        "samples": 4521
+      },
+      "second": 7,
+      "set_attempted": 2303,
+      "set_succeeded": 2303,
+      "succeeded": 4549,
+      "success_ops_sec": 4549
+    },
+    {
+      "attempted": 4540,
+      "attempted_ops_sec": 4540,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2271,
+      "get_succeeded": 2271,
+      "latency_ms": {
+        "avg": 14.103361290417098,
+        "max": 73.17334000072151,
+        "min": 0.23969599988049595,
+        "p50": 11.844723499962129,
+        "p95": 30.87236930027754,
+        "p99": 41.49693684965314,
+        "p999": 56.67629403415502,
+        "samples": 4528
+      },
+      "second": 8,
+      "set_attempted": 2269,
+      "set_succeeded": 2269,
+      "succeeded": 4540,
+      "success_ops_sec": 4540
+    },
+    {
+      "attempted": 4577,
+      "attempted_ops_sec": 4577,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2319,
+      "get_succeeded": 2319,
+      "latency_ms": {
+        "avg": 13.974044402503829,
+        "max": 64.47172699972725,
+        "min": 0.22807599998486694,
+        "p50": 11.765516499508522,
+        "p95": 30.334755249987204,
+        "p99": 41.38139538969881,
+        "p999": 56.35913732914751,
+        "samples": 4564
+      },
+      "second": 9,
+      "set_attempted": 2258,
+      "set_succeeded": 2258,
+      "succeeded": 4577,
+      "success_ops_sec": 4577
+    },
+    {
+      "attempted": 4556,
+      "attempted_ops_sec": 4556,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2278,
+      "get_succeeded": 2278,
+      "latency_ms": {
+        "avg": 14.026216180973272,
+        "max": 65.85537099999783,
+        "min": 0.23131199941417435,
+        "p50": 11.835968000013963,
+        "p95": 29.815483800121,
+        "p99": 42.334160919963225,
+        "p999": 56.53113554414536,
+        "samples": 4553
+      },
+      "second": 10,
+      "set_attempted": 2278,
+      "set_succeeded": 2278,
+      "succeeded": 4556,
+      "success_ops_sec": 4556
+    },
+    {
+      "attempted": 4467,
+      "attempted_ops_sec": 4467,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2251,
+      "get_succeeded": 2251,
+      "latency_ms": {
+        "avg": 14.309386077804708,
+        "max": 68.38907200017275,
+        "min": 0.2000600006795139,
+        "p50": 12.210607000270102,
+        "p95": 30.67758069996672,
+        "p99": 43.306290150230694,
+        "p999": 63.605831177449474,
+        "samples": 4460
+      },
+      "second": 11,
+      "set_attempted": 2216,
+      "set_succeeded": 2216,
+      "succeeded": 4467,
+      "success_ops_sec": 4467
+    },
+    {
+      "attempted": 4348,
+      "attempted_ops_sec": 4348,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2146,
+      "get_succeeded": 2146,
+      "latency_ms": {
+        "avg": 14.72226081937828,
+        "max": 128.59714699970937,
+        "min": 0.21459999970829813,
+        "p50": 11.952961000133655,
+        "p95": 33.656511799472355,
+        "p99": 54.76728064013514,
+        "p999": 91.06909462009094,
+        "samples": 4335
+      },
+      "second": 12,
+      "set_attempted": 2202,
+      "set_succeeded": 2202,
+      "succeeded": 4348,
+      "success_ops_sec": 4348
+    },
+    {
+      "attempted": 4466,
+      "attempted_ops_sec": 4466,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2224,
+      "get_succeeded": 2224,
+      "latency_ms": {
+        "avg": 14.325986755553524,
+        "max": 63.0343120001271,
+        "min": 0.2409190001344541,
+        "p50": 12.010138999357878,
+        "p95": 31.117374399582346,
+        "p99": 42.33960042003673,
+        "p999": 55.51942416990278,
+        "samples": 4455
+      },
+      "second": 13,
+      "set_attempted": 2242,
+      "set_succeeded": 2242,
+      "succeeded": 4466,
+      "success_ops_sec": 4466
+    },
+    {
+      "attempted": 4406,
+      "attempted_ops_sec": 4406,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2206,
+      "get_succeeded": 2206,
+      "latency_ms": {
+        "avg": 14.502928107294952,
+        "max": 83.32709800015436,
+        "min": 0.21381900023698108,
+        "p50": 12.421696000274096,
+        "p95": 31.60651619955387,
+        "p99": 43.11915928079532,
+        "p999": 60.98252236784931,
+        "samples": 4399
+      },
+      "second": 14,
+      "set_attempted": 2200,
+      "set_succeeded": 2200,
+      "succeeded": 4406,
+      "success_ops_sec": 4406
+    },
+    {
+      "attempted": 4372,
+      "attempted_ops_sec": 4372,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2230,
+      "get_succeeded": 2230,
+      "latency_ms": {
+        "avg": 14.607490939748587,
+        "max": 67.12367699947208,
+        "min": 0.2120730005117366,
+        "p50": 12.168422999820905,
+        "p95": 31.942339999659463,
+        "p99": 45.030880919948586,
+        "p999": 58.720381571809696,
+        "samples": 4365
+      },
+      "second": 15,
+      "set_attempted": 2142,
+      "set_succeeded": 2142,
+      "succeeded": 4372,
+      "success_ops_sec": 4372
+    },
+    {
+      "attempted": 4569,
+      "attempted_ops_sec": 4569,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2296,
+      "get_succeeded": 2296,
+      "latency_ms": {
+        "avg": 14.007705025315227,
+        "max": 71.90424100008386,
+        "min": 0.22172599983605323,
+        "p50": 11.691073000292818,
+        "p95": 30.31840999997257,
+        "p99": 41.062893430043914,
+        "p999": 55.2304021878214,
+        "samples": 4542
+      },
+      "second": 16,
+      "set_attempted": 2273,
+      "set_succeeded": 2273,
+      "succeeded": 4569,
+      "success_ops_sec": 4569
+    },
+    {
+      "attempted": 4519,
+      "attempted_ops_sec": 4519,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2272,
+      "get_succeeded": 2272,
+      "latency_ms": {
+        "avg": 14.142586894172569,
+        "max": 59.747977000370156,
+        "min": 0.1939329995366279,
+        "p50": 11.937438000131806,
+        "p95": 30.43248060021142,
+        "p99": 42.02402339946278,
+        "p999": 54.984377063560636,
+        "samples": 4517
+      },
+      "second": 17,
+      "set_attempted": 2247,
+      "set_succeeded": 2247,
+      "succeeded": 4519,
+      "success_ops_sec": 4519
+    },
+    {
+      "attempted": 4532,
+      "attempted_ops_sec": 4532,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2276,
+      "get_succeeded": 2276,
+      "latency_ms": {
+        "avg": 14.11333670153268,
+        "max": 64.56679999973858,
+        "min": 0.19149299987475388,
+        "p50": 11.86112300001696,
+        "p95": 31.33023060017876,
+        "p99": 41.58109060019343,
+        "p999": 55.271119288088855,
+        "samples": 4513
+      },
+      "second": 18,
+      "set_attempted": 2256,
+      "set_succeeded": 2256,
+      "succeeded": 4532,
+      "success_ops_sec": 4532
+    },
+    {
+      "attempted": 4547,
+      "attempted_ops_sec": 4547,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2260,
+      "get_succeeded": 2260,
+      "latency_ms": {
+        "avg": 14.088947235264236,
+        "max": 65.35251900004369,
+        "min": 0.23270600013347575,
+        "p50": 11.769801499667665,
+        "p95": 30.557226349401354,
+        "p99": 42.09714867003636,
+        "p999": 58.74843635868265,
+        "samples": 4544
+      },
+      "second": 19,
+      "set_attempted": 2287,
+      "set_succeeded": 2287,
+      "succeeded": 4547,
+      "success_ops_sec": 4547
+    },
+    {
+      "attempted": 4503,
+      "attempted_ops_sec": 4503,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2236,
+      "get_succeeded": 2236,
+      "latency_ms": {
+        "avg": 14.192950607569172,
+        "max": 62.820272999488225,
+        "min": 0.2539429997341358,
+        "p50": 11.74696500038408,
+        "p95": 30.702250699869182,
+        "p99": 40.92759089955514,
+        "p999": 56.11001155581508,
+        "samples": 4495
+      },
+      "second": 20,
+      "set_attempted": 2267,
+      "set_succeeded": 2267,
+      "succeeded": 4503,
+      "success_ops_sec": 4503
+    },
+    {
+      "attempted": 4428,
+      "attempted_ops_sec": 4428,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2269,
+      "get_succeeded": 2269,
+      "latency_ms": {
+        "avg": 14.448176477976554,
+        "max": 66.4229690000866,
+        "min": 0.2111489993694704,
+        "p50": 12.067466999724275,
+        "p95": 31.951982200371283,
+        "p99": 43.33963640001463,
+        "p999": 59.228010895705935,
+        "samples": 4425
+      },
+      "second": 21,
+      "set_attempted": 2159,
+      "set_succeeded": 2159,
+      "succeeded": 4428,
+      "success_ops_sec": 4428
+    },
+    {
+      "attempted": 4524,
+      "attempted_ops_sec": 4524,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2282,
+      "get_succeeded": 2282,
+      "latency_ms": {
+        "avg": 14.149318100093002,
+        "max": 79.23873500021728,
+        "min": 0.24370799928874476,
+        "p50": 11.767383000005793,
+        "p95": 30.634573999577697,
+        "p99": 42.53272979990477,
+        "p999": 56.516556529732156,
+        "samples": 4516
+      },
+      "second": 22,
+      "set_attempted": 2242,
+      "set_succeeded": 2242,
+      "succeeded": 4524,
+      "success_ops_sec": 4524
+    },
+    {
+      "attempted": 4536,
+      "attempted_ops_sec": 4536,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2282,
+      "get_succeeded": 2282,
+      "latency_ms": {
+        "avg": 14.099753423437088,
+        "max": 75.55645299999014,
+        "min": 0.21307499991962686,
+        "p50": 11.985976999767445,
+        "p95": 30.25763900018319,
+        "p99": 43.21397935000272,
+        "p999": 59.76591729544147,
+        "samples": 4506
+      },
+      "second": 23,
+      "set_attempted": 2254,
+      "set_succeeded": 2254,
+      "succeeded": 4536,
+      "success_ops_sec": 4536
+    },
+    {
+      "attempted": 4419,
+      "attempted_ops_sec": 4419,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2219,
+      "get_succeeded": 2219,
+      "latency_ms": {
+        "avg": 14.4583831397192,
+        "max": 67.12977699953626,
+        "min": 0.23682899973209715,
+        "p50": 12.417150999226578,
+        "p95": 32.281968499546565,
+        "p99": 42.36914500015711,
+        "p999": 55.64792379024766,
+        "samples": 4416
+      },
+      "second": 24,
+      "set_attempted": 2200,
+      "set_succeeded": 2200,
+      "succeeded": 4419,
+      "success_ops_sec": 4419
+    },
+    {
+      "attempted": 4548,
+      "attempted_ops_sec": 4548,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2227,
+      "get_succeeded": 2227,
+      "latency_ms": {
+        "avg": 14.071195895222292,
+        "max": 61.79019200044422,
+        "min": 0.21870199998375028,
+        "p50": 11.761899999783054,
+        "p95": 30.774889799749847,
+        "p99": 43.02669062000859,
+        "p999": 55.59672539462301,
+        "samples": 4524
+      },
+      "second": 25,
+      "set_attempted": 2321,
+      "set_succeeded": 2321,
+      "succeeded": 4548,
+      "success_ops_sec": 4548
+    },
+    {
+      "attempted": 4627,
+      "attempted_ops_sec": 4627,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2276,
+      "get_succeeded": 2276,
+      "latency_ms": {
+        "avg": 13.83341754541525,
+        "max": 61.18107099973713,
+        "min": 0.2261059999000281,
+        "p50": 11.560079999981099,
+        "p95": 30.157974199937584,
+        "p99": 40.53497667995544,
+        "p999": 54.456770368157095,
+        "samples": 4613
+      },
+      "second": 26,
+      "set_attempted": 2351,
+      "set_succeeded": 2351,
+      "succeeded": 4627,
+      "success_ops_sec": 4627
+    },
+    {
+      "attempted": 4547,
+      "attempted_ops_sec": 4547,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2275,
+      "get_succeeded": 2275,
+      "latency_ms": {
+        "avg": 14.047620691375652,
+        "max": 54.633882000416634,
+        "min": 0.19909399998141453,
+        "p50": 11.926909000067099,
+        "p95": 30.14305699998658,
+        "p99": 40.881418399767426,
+        "p999": 50.79711564024552,
+        "samples": 4517
+      },
+      "second": 27,
+      "set_attempted": 2272,
+      "set_succeeded": 2272,
+      "succeeded": 4547,
+      "success_ops_sec": 4547
+    },
+    {
+      "attempted": 4574,
+      "attempted_ops_sec": 4574,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2325,
+      "get_succeeded": 2325,
+      "latency_ms": {
+        "avg": 14.020788380900184,
+        "max": 78.34967599956144,
+        "min": 0.21382900013122708,
+        "p50": 11.730200000783952,
+        "p95": 30.65696859994205,
+        "p99": 41.62953996054057,
+        "p999": 55.45629706616035,
+        "samples": 4555
+      },
+      "second": 28,
+      "set_attempted": 2249,
+      "set_succeeded": 2249,
+      "succeeded": 4574,
+      "success_ops_sec": 4574
+    },
+    {
+      "attempted": 4417,
+      "attempted_ops_sec": 4417,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2238,
+      "get_succeeded": 2238,
+      "latency_ms": {
+        "avg": 14.451703890278855,
+        "max": 86.62224999989121,
+        "min": 0.20662299994000932,
+        "p50": 12.00289000007615,
+        "p95": 31.52375615036362,
+        "p99": 44.941389089917706,
+        "p999": 64.93912207496993,
+        "samples": 4402
+      },
+      "second": 29,
+      "set_attempted": 2179,
+      "set_succeeded": 2179,
+      "succeeded": 4417,
+      "success_ops_sec": 4417
+    },
+    {
+      "attempted": 4359,
+      "attempted_ops_sec": 4359,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2197,
+      "get_succeeded": 2197,
+      "latency_ms": {
+        "avg": 14.66573917026144,
+        "max": 78.0146050001349,
+        "min": 0.22954700034460984,
+        "p50": 12.784003500200924,
+        "p95": 31.942403599805377,
+        "p99": 42.6317186193228,
+        "p999": 55.73483353201755,
+        "samples": 4358
+      },
+      "second": 30,
+      "set_attempted": 2162,
+      "set_succeeded": 2162,
+      "succeeded": 4359,
+      "success_ops_sec": 4359
+    },
+    {
+      "attempted": 4334,
+      "attempted_ops_sec": 4334,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2196,
+      "get_succeeded": 2196,
+      "latency_ms": {
+        "avg": 14.75355601107315,
+        "max": 79.17194200035738,
+        "min": 0.2033340006164508,
+        "p50": 12.36999350021506,
+        "p95": 32.647435199942265,
+        "p99": 44.00633157982159,
+        "p999": 66.66037945711672,
+        "samples": 4334
+      },
+      "second": 31,
+      "set_attempted": 2138,
+      "set_succeeded": 2138,
+      "succeeded": 4334,
+      "success_ops_sec": 4334
+    },
+    {
+      "attempted": 4018,
+      "attempted_ops_sec": 4018,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2055,
+      "get_succeeded": 2055,
+      "latency_ms": {
+        "avg": 15.921680076672935,
+        "max": 117.81541900018055,
+        "min": 0.23424600021826336,
+        "p50": 13.13515399942844,
+        "p95": 37.82279920014843,
+        "p99": 58.119806119830194,
+        "p999": 83.96964193574273,
+        "samples": 4017
+      },
+      "second": 32,
+      "set_attempted": 1963,
+      "set_succeeded": 1963,
+      "succeeded": 4018,
+      "success_ops_sec": 4018
+    },
+    {
+      "attempted": 4453,
+      "attempted_ops_sec": 4453,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2209,
+      "get_succeeded": 2209,
+      "latency_ms": {
+        "avg": 14.348682843429467,
+        "max": 76.08456100024341,
+        "min": 0.23423099992214702,
+        "p50": 11.972179000622418,
+        "p95": 32.28537219983991,
+        "p99": 42.56491051994105,
+        "p999": 54.610921648272935,
+        "samples": 4445
+      },
+      "second": 33,
+      "set_attempted": 2244,
+      "set_succeeded": 2244,
+      "succeeded": 4453,
+      "success_ops_sec": 4453
+    },
+    {
+      "attempted": 4442,
+      "attempted_ops_sec": 4442,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2174,
+      "get_succeeded": 2174,
+      "latency_ms": {
+        "avg": 14.41724072646651,
+        "max": 92.10072000041691,
+        "min": 0.21357700006774394,
+        "p50": 11.948659499921632,
+        "p95": 32.252179599527146,
+        "p99": 44.923212179974215,
+        "p999": 59.961261978170285,
+        "samples": 4442
+      },
+      "second": 34,
+      "set_attempted": 2268,
+      "set_succeeded": 2268,
+      "succeeded": 4442,
+      "success_ops_sec": 4442
+    },
+    {
+      "attempted": 4507,
+      "attempted_ops_sec": 4507,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2231,
+      "get_succeeded": 2231,
+      "latency_ms": {
+        "avg": 14.230842117846661,
+        "max": 89.59304800009704,
+        "min": 0.21706600000470644,
+        "p50": 11.749866000172915,
+        "p95": 31.42049899997799,
+        "p99": 43.00200495981696,
+        "p999": 62.746163383876834,
+        "samples": 4489
+      },
+      "second": 35,
+      "set_attempted": 2276,
+      "set_succeeded": 2276,
+      "succeeded": 4507,
+      "success_ops_sec": 4507
+    },
+    {
+      "attempted": 4440,
+      "attempted_ops_sec": 4440,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2156,
+      "get_succeeded": 2156,
+      "latency_ms": {
+        "avg": 14.358714999552133,
+        "max": 79.3583069998931,
+        "min": 0.24150199988071108,
+        "p50": 12.44641799985402,
+        "p95": 30.414369200479978,
+        "p99": 42.79401020001388,
+        "p999": 55.342220027956834,
+        "samples": 4437
+      },
+      "second": 36,
+      "set_attempted": 2284,
+      "set_succeeded": 2284,
+      "succeeded": 4440,
+      "success_ops_sec": 4440
+    },
+    {
+      "attempted": 4563,
+      "attempted_ops_sec": 4563,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2280,
+      "get_succeeded": 2280,
+      "latency_ms": {
+        "avg": 14.044815787693041,
+        "max": 68.2866910001394,
+        "min": 0.2232530005130684,
+        "p50": 11.827199500203278,
+        "p95": 30.154212000297775,
+        "p99": 42.49538433977261,
+        "p999": 54.18962983076655,
+        "samples": 4550
+      },
+      "second": 37,
+      "set_attempted": 2283,
+      "set_succeeded": 2283,
+      "succeeded": 4563,
+      "success_ops_sec": 4563
+    },
+    {
+      "attempted": 4420,
+      "attempted_ops_sec": 4420,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2135,
+      "get_succeeded": 2135,
+      "latency_ms": {
+        "avg": 14.424554052687522,
+        "max": 63.21083099919633,
+        "min": 0.2122370005963603,
+        "p50": 12.180748999526259,
+        "p95": 31.61431939961403,
+        "p99": 43.187722579987124,
+        "p999": 54.70329507017978,
+        "samples": 4403
+      },
+      "second": 38,
+      "set_attempted": 2285,
+      "set_succeeded": 2285,
+      "succeeded": 4420,
+      "success_ops_sec": 4420
+    },
+    {
+      "attempted": 4466,
+      "attempted_ops_sec": 4466,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2269,
+      "get_succeeded": 2269,
+      "latency_ms": {
+        "avg": 14.337114656691984,
+        "max": 71.79319499937264,
+        "min": 0.194938000277034,
+        "p50": 12.001786999462638,
+        "p95": 31.795203200454125,
+        "p99": 42.17171416035853,
+        "p999": 57.2537178516434,
+        "samples": 4445
+      },
+      "second": 39,
+      "set_attempted": 2197,
+      "set_succeeded": 2197,
+      "succeeded": 4466,
+      "success_ops_sec": 4466
+    },
+    {
+      "attempted": 4402,
+      "attempted_ops_sec": 4402,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2241,
+      "get_succeeded": 2241,
+      "latency_ms": {
+        "avg": 14.518003605417107,
+        "max": 75.08921399949031,
+        "min": 0.23971500013431069,
+        "p50": 12.395473499964282,
+        "p95": 31.48395729949698,
+        "p99": 43.280341809613695,
+        "p999": 58.352138026238315,
+        "samples": 4392
+      },
+      "second": 40,
+      "set_attempted": 2161,
+      "set_succeeded": 2161,
+      "succeeded": 4402,
+      "success_ops_sec": 4402
+    },
+    {
+      "attempted": 4424,
+      "attempted_ops_sec": 4424,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2181,
+      "get_succeeded": 2181,
+      "latency_ms": {
+        "avg": 14.465853631891685,
+        "max": 71.42880599985801,
+        "min": 0.22060799983592005,
+        "p50": 12.122461499984638,
+        "p95": 31.6045255998688,
+        "p99": 42.87408555035655,
+        "p999": 57.9912349976076,
+        "samples": 4420
+      },
+      "second": 41,
+      "set_attempted": 2243,
+      "set_succeeded": 2243,
+      "succeeded": 4424,
+      "success_ops_sec": 4424
+    },
+    {
+      "attempted": 4400,
+      "attempted_ops_sec": 4400,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2274,
+      "get_succeeded": 2274,
+      "latency_ms": {
+        "avg": 14.527036980000842,
+        "max": 75.093346000358,
+        "min": 0.2307660006408696,
+        "p50": 12.45021100021404,
+        "p95": 31.53684460066869,
+        "p99": 43.97860056053102,
+        "p999": 56.85905372587564,
+        "samples": 4399
+      },
+      "second": 42,
+      "set_attempted": 2126,
+      "set_succeeded": 2126,
+      "succeeded": 4400,
+      "success_ops_sec": 4400
+    },
+    {
+      "attempted": 4416,
+      "attempted_ops_sec": 4416,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2180,
+      "get_succeeded": 2180,
+      "latency_ms": {
+        "avg": 14.477440390093108,
+        "max": 76.71081900025456,
+        "min": 0.21614199977193493,
+        "p50": 12.334243000168499,
+        "p95": 31.113630849540638,
+        "p99": 42.71162704917518,
+        "p999": 54.056316169178444,
+        "samples": 4404
+      },
+      "second": 43,
+      "set_attempted": 2236,
+      "set_succeeded": 2236,
+      "succeeded": 4416,
+      "success_ops_sec": 4416
+    },
+    {
+      "attempted": 4327,
+      "attempted_ops_sec": 4327,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2111,
+      "get_succeeded": 2111,
+      "latency_ms": {
+        "avg": 14.786324451595952,
+        "max": 71.2146780006151,
+        "min": 0.2623630007292377,
+        "p50": 12.442620000001625,
+        "p95": 32.84603509991938,
+        "p99": 44.919860060163025,
+        "p999": 57.35620141966503,
+        "samples": 4327
+      },
+      "second": 44,
+      "set_attempted": 2216,
+      "set_succeeded": 2216,
+      "succeeded": 4327,
+      "success_ops_sec": 4327
+    },
+    {
+      "attempted": 4476,
+      "attempted_ops_sec": 4476,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2224,
+      "get_succeeded": 2224,
+      "latency_ms": {
+        "avg": 14.287060837803079,
+        "max": 70.64712700048403,
+        "min": 0.21201500021561515,
+        "p50": 11.893336499724683,
+        "p95": 31.537517399738185,
+        "p99": 41.6434543901143,
+        "p999": 63.7354590918332,
+        "samples": 4470
+      },
+      "second": 45,
+      "set_attempted": 2252,
+      "set_succeeded": 2252,
+      "succeeded": 4476,
+      "success_ops_sec": 4476
+    },
+    {
+      "attempted": 4568,
+      "attempted_ops_sec": 4568,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2335,
+      "get_succeeded": 2335,
+      "latency_ms": {
+        "avg": 13.99647570745617,
+        "max": 74.2261569994298,
+        "min": 0.23407299977407092,
+        "p50": 11.698452000018733,
+        "p95": 30.415880000509766,
+        "p99": 41.84483791977969,
+        "p999": 55.265077935815604,
+        "samples": 4553
+      },
+      "second": 46,
+      "set_attempted": 2233,
+      "set_succeeded": 2233,
+      "succeeded": 4568,
+      "success_ops_sec": 4568
+    },
+    {
+      "attempted": 4494,
+      "attempted_ops_sec": 4494,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2238,
+      "get_succeeded": 2238,
+      "latency_ms": {
+        "avg": 14.233286758357478,
+        "max": 70.68819100004475,
+        "min": 0.2369719995840569,
+        "p50": 11.972617499850458,
+        "p95": 30.703186750088207,
+        "p99": 41.29498700067413,
+        "p999": 54.182637794711184,
+        "samples": 4486
+      },
+      "second": 47,
+      "set_attempted": 2256,
+      "set_succeeded": 2256,
+      "succeeded": 4494,
+      "success_ops_sec": 4494
+    },
+    {
+      "attempted": 4487,
+      "attempted_ops_sec": 4487,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2221,
+      "get_succeeded": 2221,
+      "latency_ms": {
+        "avg": 14.260102207824666,
+        "max": 74.19161799953145,
+        "min": 0.2033830005530035,
+        "p50": 11.995848999504233,
+        "p95": 30.98081439975431,
+        "p99": 43.05620564011409,
+        "p999": 62.59955674178255,
+        "samples": 4475
+      },
+      "second": 48,
+      "set_attempted": 2266,
+      "set_succeeded": 2266,
+      "succeeded": 4487,
+      "success_ops_sec": 4487
+    },
+    {
+      "attempted": 4529,
+      "attempted_ops_sec": 4529,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2233,
+      "get_succeeded": 2233,
+      "latency_ms": {
+        "avg": 14.123439025435662,
+        "max": 80.63754300019355,
+        "min": 0.22625500059803016,
+        "p50": 11.940663999666867,
+        "p95": 30.068514000049618,
+        "p99": 42.20459019979899,
+        "p999": 56.45732108001602,
+        "samples": 4521
+      },
+      "second": 49,
+      "set_attempted": 2296,
+      "set_succeeded": 2296,
+      "succeeded": 4529,
+      "success_ops_sec": 4529
+    },
+    {
+      "attempted": 4497,
+      "attempted_ops_sec": 4497,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2256,
+      "get_succeeded": 2256,
+      "latency_ms": {
+        "avg": 14.204187079273936,
+        "max": 71.75084899972717,
+        "min": 0.214546999814047,
+        "p50": 12.335267999333155,
+        "p95": 31.32210949979708,
+        "p99": 42.49847539958871,
+        "p999": 56.45942610993189,
+        "samples": 4491
+      },
+      "second": 50,
+      "set_attempted": 2241,
+      "set_succeeded": 2241,
+      "succeeded": 4497,
+      "success_ops_sec": 4497
+    },
+    {
+      "attempted": 4506,
+      "attempted_ops_sec": 4506,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2289,
+      "get_succeeded": 2289,
+      "latency_ms": {
+        "avg": 14.209154109874092,
+        "max": 71.1324899993997,
+        "min": 0.2206740000474383,
+        "p50": 12.110342000596575,
+        "p95": 30.717677399661625,
+        "p99": 43.082566119846895,
+        "p999": 57.58144026362428,
+        "samples": 4505
+      },
+      "second": 51,
+      "set_attempted": 2217,
+      "set_succeeded": 2217,
+      "succeeded": 4506,
+      "success_ops_sec": 4506
+    },
+    {
+      "attempted": 4377,
+      "attempted_ops_sec": 4377,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2187,
+      "get_succeeded": 2187,
+      "latency_ms": {
+        "avg": 14.6082770603546,
+        "max": 86.88858400000754,
+        "min": 0.24255500011349795,
+        "p50": 12.338326499957475,
+        "p95": 32.160675500063,
+        "p99": 44.172350360058736,
+        "p999": 57.10164977206757,
+        "samples": 4374
+      },
+      "second": 52,
+      "set_attempted": 2190,
+      "set_succeeded": 2190,
+      "succeeded": 4377,
+      "success_ops_sec": 4377
+    },
+    {
+      "attempted": 4621,
+      "attempted_ops_sec": 4621,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2315,
+      "get_succeeded": 2315,
+      "latency_ms": {
+        "avg": 13.81786122401528,
+        "max": 61.832600999878196,
+        "min": 0.21835700044903206,
+        "p50": 11.487976999887906,
+        "p95": 30.15326104978156,
+        "p99": 41.03676514947437,
+        "p999": 52.62835582912267,
+        "samples": 4598
+      },
+      "second": 53,
+      "set_attempted": 2306,
+      "set_succeeded": 2306,
+      "succeeded": 4621,
+      "success_ops_sec": 4621
+    },
+    {
+      "attempted": 4458,
+      "attempted_ops_sec": 4458,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2216,
+      "get_succeeded": 2216,
+      "latency_ms": {
+        "avg": 14.361220518863817,
+        "max": 74.02232899949013,
+        "min": 0.21660499987774529,
+        "p50": 11.842631499803247,
+        "p95": 32.56197534988132,
+        "p99": 44.30710421966977,
+        "p999": 61.633065957752535,
+        "samples": 4452
+      },
+      "second": 54,
+      "set_attempted": 2242,
+      "set_succeeded": 2242,
+      "succeeded": 4458,
+      "success_ops_sec": 4458
+    },
+    {
+      "attempted": 4473,
+      "attempted_ops_sec": 4473,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2207,
+      "get_succeeded": 2207,
+      "latency_ms": {
+        "avg": 14.300071137106576,
+        "max": 66.04538200008392,
+        "min": 0.21151599958102452,
+        "p50": 12.059605000104057,
+        "p95": 31.098412000119424,
+        "p99": 43.02504730003423,
+        "p999": 61.26888164954837,
+        "samples": 4471
+      },
+      "second": 55,
+      "set_attempted": 2266,
+      "set_succeeded": 2266,
+      "succeeded": 4473,
+      "success_ops_sec": 4473
+    },
+    {
+      "attempted": 4552,
+      "attempted_ops_sec": 4552,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2276,
+      "get_succeeded": 2276,
+      "latency_ms": {
+        "avg": 14.031171624893604,
+        "max": 68.16735900065396,
+        "min": 0.21928299975115806,
+        "p50": 11.796888499702618,
+        "p95": 30.541082899526373,
+        "p99": 41.13639763032546,
+        "p999": 51.25388877613298,
+        "samples": 4540
+      },
+      "second": 56,
+      "set_attempted": 2276,
+      "set_succeeded": 2276,
+      "succeeded": 4552,
+      "success_ops_sec": 4552
+    },
+    {
+      "attempted": 4579,
+      "attempted_ops_sec": 4579,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2252,
+      "get_succeeded": 2252,
+      "latency_ms": {
+        "avg": 13.959936848454685,
+        "max": 66.19896600022912,
+        "min": 0.22710000030201627,
+        "p50": 11.714252000274428,
+        "p95": 30.407115600064564,
+        "p99": 39.60546540045461,
+        "p999": 57.43162050384947,
+        "samples": 4553
+      },
+      "second": 57,
+      "set_attempted": 2327,
+      "set_succeeded": 2327,
+      "succeeded": 4579,
+      "success_ops_sec": 4579
+    },
+    {
+      "attempted": 4448,
+      "attempted_ops_sec": 4448,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2227,
+      "get_succeeded": 2227,
+      "latency_ms": {
+        "avg": 14.376223347453532,
+        "max": 81.2885550003557,
+        "min": 0.2213299994764384,
+        "p50": 12.072970000190253,
+        "p95": 31.35163884990103,
+        "p99": 43.53129443993568,
+        "p999": 59.99212874713803,
+        "samples": 4438
+      },
+      "second": 58,
+      "set_attempted": 2221,
+      "set_succeeded": 2221,
+      "succeeded": 4448,
+      "success_ops_sec": 4448
+    },
+    {
+      "attempted": 4457,
+      "attempted_ops_sec": 4457,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2273,
+      "get_succeeded": 2273,
+      "latency_ms": {
+        "avg": 14.356457577161429,
+        "max": 74.13536999956705,
+        "min": 0.24336999922525138,
+        "p50": 12.547010999696795,
+        "p95": 31.049574999997276,
+        "p99": 43.37824649974209,
+        "p999": 57.21929100054754,
+        "samples": 4451
+      },
+      "second": 59,
+      "set_attempted": 2184,
+      "set_succeeded": 2184,
+      "succeeded": 4457,
+      "success_ops_sec": 4457
+    },
+    {
+      "attempted": 4473,
+      "attempted_ops_sec": 4473,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2192,
+      "get_succeeded": 2192,
+      "latency_ms": {
+        "avg": 14.307599937829472,
+        "max": 84.80824500111339,
+        "min": 0.2562669997132616,
+        "p50": 12.087985000107437,
+        "p95": 30.771696199008144,
+        "p99": 44.73467507952587,
+        "p999": 59.11725372002,
+        "samples": 4457
+      },
+      "second": 60,
+      "set_attempted": 2281,
+      "set_succeeded": 2281,
+      "succeeded": 4473,
+      "success_ops_sec": 4473
+    },
+    {
+      "attempted": 4490,
+      "attempted_ops_sec": 4490,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2285,
+      "get_succeeded": 2285,
+      "latency_ms": {
+        "avg": 14.217305745368751,
+        "max": 68.08781799918506,
+        "min": 0.2333899992663646,
+        "p50": 11.971899999480229,
+        "p95": 31.2085236000712,
+        "p99": 42.25766256153292,
+        "p999": 57.93847709490416,
+        "samples": 4477
+      },
+      "second": 61,
+      "set_attempted": 2205,
+      "set_succeeded": 2205,
+      "succeeded": 4490,
+      "success_ops_sec": 4490
+    },
+    {
+      "attempted": 4324,
+      "attempted_ops_sec": 4324,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2180,
+      "get_succeeded": 2180,
+      "latency_ms": {
+        "avg": 14.79919739426142,
+        "max": 65.1322239991714,
+        "min": 0.21778200061817188,
+        "p50": 12.639730499358848,
+        "p95": 32.642960200428185,
+        "p99": 43.95088000917893,
+        "p999": 59.18723354198855,
+        "samples": 4322
+      },
+      "second": 62,
+      "set_attempted": 2144,
+      "set_succeeded": 2144,
+      "succeeded": 4324,
+      "success_ops_sec": 4324
+    },
+    {
+      "attempted": 418,
+      "attempted_ops_sec": 418,
+      "error_types": {
+        "ConnectionError": 64
+      },
+      "failed": 64,
+      "failed_ops_sec": 64,
+      "get_attempted": 215,
+      "get_succeeded": 182,
+      "latency_ms": {
+        "avg": 563.9774290167098,
+        "max": 4150.042641000255,
+        "min": 0.27173499984201044,
+        "p50": 17.07191499917826,
+        "p95": 3673.563917249885,
+        "p99": 3902.6039412100354,
+        "p999": 4116.302738154418,
+        "samples": 418
+      },
+      "second": 63,
+      "set_attempted": 203,
+      "set_succeeded": 172,
+      "succeeded": 354,
+      "success_ops_sec": 354
+    },
+    {
+      "attempted": 0,
+      "attempted_ops_sec": 0,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 0,
+      "get_succeeded": 0,
+      "latency_ms": {
+        "avg": null,
+        "max": null,
+        "min": null,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "p999": null,
+        "samples": 0
+      },
+      "second": 64,
+      "set_attempted": 0,
+      "set_succeeded": 0,
+      "succeeded": 0,
+      "success_ops_sec": 0
+    },
+    {
+      "attempted": 0,
+      "attempted_ops_sec": 0,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 0,
+      "get_succeeded": 0,
+      "latency_ms": {
+        "avg": null,
+        "max": null,
+        "min": null,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "p999": null,
+        "samples": 0
+      },
+      "second": 65,
+      "set_attempted": 0,
+      "set_succeeded": 0,
+      "succeeded": 0,
+      "success_ops_sec": 0
+    },
+    {
+      "attempted": 49,
+      "attempted_ops_sec": 49,
+      "error_types": {
+        "ConnectionError": 21
+      },
+      "failed": 21,
+      "failed_ops_sec": 21,
+      "get_attempted": 29,
+      "get_succeeded": 16,
+      "latency_ms": {
+        "avg": 3209.3297734488947,
+        "max": 5638.101468000968,
+        "min": 1185.027022000213,
+        "p50": 2011.7514049998135,
+        "p95": 5398.682447799001,
+        "p99": 5550.801546720904,
+        "p999": 5629.371475872963,
+        "samples": 49
+      },
+      "second": 66,
+      "set_attempted": 20,
+      "set_succeeded": 12,
+      "succeeded": 28,
+      "success_ops_sec": 28
+    },
+    {
+      "attempted": 20,
+      "attempted_ops_sec": 20,
+      "error_types": {
+        "ConnectionError": 6
+      },
+      "failed": 6,
+      "failed_ops_sec": 6,
+      "get_attempted": 10,
+      "get_succeeded": 8,
+      "latency_ms": {
+        "avg": 2572.7894290500444,
+        "max": 6206.75620899965,
+        "min": 166.42322199913906,
+        "p50": 1774.1642205000971,
+        "p95": 6201.0755956504,
+        "p99": 6205.6200863298,
+        "p999": 6206.642596732665,
+        "samples": 20
+      },
+      "second": 67,
+      "set_attempted": 10,
+      "set_succeeded": 6,
+      "succeeded": 14,
+      "success_ops_sec": 14
+    },
+    {
+      "attempted": 64,
+      "attempted_ops_sec": 64,
+      "error_types": {
+        "ConnectionError": 31
+      },
+      "failed": 31,
+      "failed_ops_sec": 31,
+      "get_attempted": 36,
+      "get_succeeded": 17,
+      "latency_ms": {
+        "avg": 1688.0488542499563,
+        "max": 3746.1559919993306,
+        "min": 0.3688300002977485,
+        "p50": 306.8664889997308,
+        "p95": 3551.6048046991273,
+        "p99": 3722.4000987893123,
+        "p999": 3743.7804026783288,
+        "samples": 64
+      },
+      "second": 68,
+      "set_attempted": 28,
+      "set_succeeded": 16,
+      "succeeded": 33,
+      "success_ops_sec": 33
+    },
+    {
+      "attempted": 25,
+      "attempted_ops_sec": 25,
+      "error_types": {
+        "ConnectionError": 6
+      },
+      "failed": 6,
+      "failed_ops_sec": 6,
+      "get_attempted": 13,
+      "get_succeeded": 10,
+      "latency_ms": {
+        "avg": 844.8444742798893,
+        "max": 3950.925773999188,
+        "min": 2.4233660005847923,
+        "p50": 32.64692199991259,
+        "p95": 3729.5537737994878,
+        "p99": 3920.990118719201,
+        "p999": 3947.93220847119,
+        "samples": 25
+      },
+      "second": 69,
+      "set_attempted": 12,
+      "set_succeeded": 9,
+      "succeeded": 19,
+      "success_ops_sec": 19
+    },
+    {
+      "attempted": 0,
+      "attempted_ops_sec": 0,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 0,
+      "get_succeeded": 0,
+      "latency_ms": {
+        "avg": null,
+        "max": null,
+        "min": null,
+        "p50": null,
+        "p95": null,
+        "p99": null,
+        "p999": null,
+        "samples": 0
+      },
+      "second": 70,
+      "set_attempted": 0,
+      "set_succeeded": 0,
+      "succeeded": 0,
+      "success_ops_sec": 0
+    },
+    {
+      "attempted": 29,
+      "attempted_ops_sec": 29,
+      "error_types": {
+        "ConnectionError": 10
+      },
+      "failed": 10,
+      "failed_ops_sec": 10,
+      "get_attempted": 12,
+      "get_succeeded": 8,
+      "latency_ms": {
+        "avg": 3048.1416432415026,
+        "max": 5988.63040499964,
+        "min": 1233.9394930004346,
+        "p50": 1953.404132000287,
+        "p95": 5665.081503200781,
+        "p99": 5899.91670664007,
+        "p999": 5979.759035163684,
+        "samples": 29
+      },
+      "second": 71,
+      "set_attempted": 17,
+      "set_succeeded": 11,
+      "succeeded": 19,
+      "success_ops_sec": 19
+    },
+    {
+      "attempted": 37,
+      "attempted_ops_sec": 37,
+      "error_types": {
+        "ConnectionError": 13
+      },
+      "failed": 13,
+      "failed_ops_sec": 13,
+      "get_attempted": 18,
+      "get_succeeded": 12,
+      "latency_ms": {
+        "avg": 2812.5554657837856,
+        "max": 6251.284746998863,
+        "min": 103.34054699887929,
+        "p50": 1829.9257329999818,
+        "p95": 5669.786916000521,
+        "p99": 6051.963334238899,
+        "p999": 6231.352605722869,
+        "samples": 37
+      },
+      "second": 72,
+      "set_attempted": 19,
+      "set_succeeded": 12,
+      "succeeded": 24,
+      "success_ops_sec": 24
+    },
+    {
+      "attempted": 50,
+      "attempted_ops_sec": 50,
+      "error_types": {
+        "ConnectionError": 19
+      },
+      "failed": 19,
+      "failed_ops_sec": 19,
+      "get_attempted": 28,
+      "get_succeeded": 15,
+      "latency_ms": {
+        "avg": 1559.8889911600054,
+        "max": 4989.452702999188,
+        "min": 4.413622000356554,
+        "p50": 325.71561700024176,
+        "p95": 4017.9647412500344,
+        "p99": 4677.704157219339,
+        "p999": 4958.277848421209,
+        "samples": 50
+      },
+      "second": 73,
+      "set_attempted": 22,
+      "set_succeeded": 16,
+      "succeeded": 31,
+      "success_ops_sec": 31
+    },
+    {
+      "attempted": 57,
+      "attempted_ops_sec": 57,
+      "error_types": {
+        "ConnectionError": 21
+      },
+      "failed": 21,
+      "failed_ops_sec": 21,
+      "get_attempted": 23,
+      "get_succeeded": 10,
+      "latency_ms": {
+        "avg": 1416.184799315855,
+        "max": 4341.9653799992375,
+        "min": 2.6353190005465876,
+        "p50": 88.81460200063884,
+        "p95": 4088.3687842007926,
+        "p99": 4241.0089204804535,
+        "p999": 4331.869734047359,
+        "samples": 57
+      },
+      "second": 74,
+      "set_attempted": 34,
+      "set_succeeded": 26,
+      "succeeded": 36,
+      "success_ops_sec": 36
+    },
+    {
+      "attempted": 1,
+      "attempted_ops_sec": 1,
+      "error_types": {
+        "ConnectionError": 1
+      },
+      "failed": 1,
+      "failed_ops_sec": 1,
+      "get_attempted": 0,
+      "get_succeeded": 0,
+      "latency_ms": {
+        "avg": 3856.8763519997447,
+        "max": 3856.8763519997447,
+        "min": 3856.8763519997447,
+        "p50": 3856.8763519997447,
+        "p95": 3856.8763519997447,
+        "p99": 3856.8763519997447,
+        "p999": 3856.8763519997447,
+        "samples": 1
+      },
+      "second": 75,
+      "set_attempted": 1,
+      "set_succeeded": 0,
+      "succeeded": 0,
+      "success_ops_sec": 0
+    },
+    {
+      "attempted": 7,
+      "attempted_ops_sec": 7,
+      "error_types": {
+        "ConnectionError": 5
+      },
+      "failed": 5,
+      "failed_ops_sec": 5,
+      "get_attempted": 3,
+      "get_succeeded": 0,
+      "latency_ms": {
+        "avg": 4381.8616802857705,
+        "max": 6140.855009000006,
+        "min": 1265.5418619997363,
+        "p50": 5256.833970001026,
+        "p95": 6032.679706699855,
+        "p99": 6119.219948539976,
+        "p999": 6138.691502954003,
+        "samples": 7
+      },
+      "second": 76,
+      "set_attempted": 4,
+      "set_succeeded": 2,
+      "succeeded": 2,
+      "success_ops_sec": 2
+    },
+    {
+      "attempted": 43,
+      "attempted_ops_sec": 43,
+      "error_types": {
+        "ConnectionError": 15
+      },
+      "failed": 15,
+      "failed_ops_sec": 15,
+      "get_attempted": 17,
+      "get_succeeded": 12,
+      "latency_ms": {
+        "avg": 2936.149943046604,
+        "max": 6025.350378000439,
+        "min": 31.981975000235252,
+        "p50": 1915.4329010016227,
+        "p95": 5877.482710199183,
+        "p99": 6002.560159080567,
+        "p999": 6023.071356108453,
+        "samples": 43
+      },
+      "second": 77,
+      "set_attempted": 26,
+      "set_succeeded": 16,
+      "succeeded": 28,
+      "success_ops_sec": 28
+    },
+    {
+      "attempted": 29,
+      "attempted_ops_sec": 29,
+      "error_types": {
+        "ConnectionError": 10
+      },
+      "failed": 10,
+      "failed_ops_sec": 10,
+      "get_attempted": 17,
+      "get_succeeded": 10,
+      "latency_ms": {
+        "avg": 2214.177289551775,
+        "max": 6020.911888001137,
+        "min": 9.350743001050432,
+        "p50": 1820.8379349998722,
+        "p95": 5756.4195293995,
+        "p99": 5956.959381480773,
+        "p999": 6014.516637349102,
+        "samples": 29
+      },
+      "second": 78,
+      "set_attempted": 12,
+      "set_succeeded": 9,
+      "succeeded": 19,
+      "success_ops_sec": 19
+    },
+    {
+      "attempted": 69,
+      "attempted_ops_sec": 69,
+      "error_types": {
+        "ConnectionError": 20
+      },
+      "failed": 20,
+      "failed_ops_sec": 20,
+      "get_attempted": 37,
+      "get_succeeded": 23,
+      "latency_ms": {
+        "avg": 1191.5454206086577,
+        "max": 4768.394273000013,
+        "min": 3.618362999986857,
+        "p50": 153.33751500111248,
+        "p95": 3883.534345000225,
+        "p99": 4315.143384000253,
+        "p999": 4723.069184100038,
+        "samples": 69
+      },
+      "second": 79,
+      "set_attempted": 32,
+      "set_succeeded": 26,
+      "succeeded": 49,
+      "success_ops_sec": 49
+    },
+    {
+      "attempted": 31,
+      "attempted_ops_sec": 31,
+      "error_types": {
+        "ConnectionError": 13
+      },
+      "failed": 13,
+      "failed_ops_sec": 13,
+      "get_attempted": 18,
+      "get_succeeded": 9,
+      "latency_ms": {
+        "avg": 1651.3702451934919,
+        "max": 4253.466354000921,
+        "min": 2.294421999977203,
+        "p50": 281.6041719997884,
+        "p95": 4196.430650499678,
+        "p99": 4242.751971900361,
+        "p999": 4252.394915790865,
+        "samples": 31
+      },
+      "second": 80,
+      "set_attempted": 13,
+      "set_succeeded": 9,
+      "succeeded": 18,
+      "success_ops_sec": 18
+    },
+    {
+      "attempted": 9,
+      "attempted_ops_sec": 9,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 5,
+      "get_succeeded": 5,
+      "latency_ms": {
+        "avg": 1334.6225296665782,
+        "max": 3595.5062249995535,
+        "min": 4.430524999406771,
+        "p50": 115.01643200062972,
+        "p95": 3587.214199799928,
+        "p99": 3593.8478199596284,
+        "p999": 3595.340384495561,
+        "samples": 9
+      },
+      "second": 81,
+      "set_attempted": 4,
+      "set_succeeded": 4,
+      "succeeded": 9,
+      "success_ops_sec": 9
+    },
+    {
+      "attempted": 17,
+      "attempted_ops_sec": 17,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 10,
+      "get_succeeded": 10,
+      "latency_ms": {
+        "avg": 1769.9177141764856,
+        "max": 2542.4714960008714,
+        "min": 1202.2179270006745,
+        "p50": 1707.3221509999712,
+        "p95": 2525.8790807998594,
+        "p99": 2539.153012960669,
+        "p999": 2542.139647696851,
+        "samples": 17
+      },
+      "second": 82,
+      "set_attempted": 7,
+      "set_succeeded": 7,
+      "succeeded": 17,
+      "success_ops_sec": 17
+    },
+    {
+      "attempted": 38,
+      "attempted_ops_sec": 38,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 16,
+      "get_succeeded": 16,
+      "latency_ms": {
+        "avg": 1523.2229703421438,
+        "max": 2299.6105669990357,
+        "min": 27.30119900115824,
+        "p50": 1722.8759179997724,
+        "p95": 2189.4323878495015,
+        "p99": 2292.6314571693547,
+        "p999": 2298.9126560160676,
+        "samples": 38
+      },
+      "second": 83,
+      "set_attempted": 22,
+      "set_succeeded": 22,
+      "succeeded": 38,
+      "success_ops_sec": 38
+    },
+    {
+      "attempted": 74,
+      "attempted_ops_sec": 74,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 35,
+      "get_succeeded": 35,
+      "latency_ms": {
+        "avg": 463.22680921639403,
+        "max": 1596.6328540016548,
+        "min": 3.342775999044534,
+        "p50": 305.1353664995986,
+        "p95": 1363.0693837009858,
+        "p99": 1482.7885152306765,
+        "p999": 1585.248420124558,
+        "samples": 74
+      },
+      "second": 84,
+      "set_attempted": 39,
+      "set_succeeded": 39,
+      "succeeded": 74,
+      "success_ops_sec": 74
+    },
+    {
+      "attempted": 1571,
+      "attempted_ops_sec": 1571,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 777,
+      "get_succeeded": 777,
+      "latency_ms": {
+        "avg": 25.746395122216413,
+        "max": 567.9598990009254,
+        "min": 0.28414699954737443,
+        "p50": 12.942483999722754,
+        "p95": 103.13579300054698,
+        "p99": 276.7363005998048,
+        "p999": 447.6512170300386,
+        "samples": 1571
+      },
+      "second": 85,
+      "set_attempted": 794,
+      "set_succeeded": 794,
+      "succeeded": 1571,
+      "success_ops_sec": 1571
+    },
+    {
+      "attempted": 4423,
+      "attempted_ops_sec": 4423,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2200,
+      "get_succeeded": 2200,
+      "latency_ms": {
+        "avg": 14.428223395793655,
+        "max": 68.31889699969906,
+        "min": 0.24049099920375738,
+        "p50": 12.189926001155982,
+        "p95": 31.50092240030062,
+        "p99": 40.176783899769276,
+        "p999": 56.1253900898561,
+        "samples": 4419
+      },
+      "second": 86,
+      "set_attempted": 2223,
+      "set_succeeded": 2223,
+      "succeeded": 4423,
+      "success_ops_sec": 4423
+    },
+    {
+      "attempted": 4541,
+      "attempted_ops_sec": 4541,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2255,
+      "get_succeeded": 2255,
+      "latency_ms": {
+        "avg": 14.093825188824775,
+        "max": 67.48542600143992,
+        "min": 0.2086040003632661,
+        "p50": 11.897517999386764,
+        "p95": 30.135184500068128,
+        "p99": 42.90570649875007,
+        "p999": 57.78764200941808,
+        "samples": 4523
+      },
+      "second": 87,
+      "set_attempted": 2286,
+      "set_succeeded": 2286,
+      "succeeded": 4541,
+      "success_ops_sec": 4541
+    },
+    {
+      "attempted": 4466,
+      "attempted_ops_sec": 4466,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2235,
+      "get_succeeded": 2235,
+      "latency_ms": {
+        "avg": 14.334480933118309,
+        "max": 70.84997700076201,
+        "min": 0.23396399956254754,
+        "p50": 11.938376000216522,
+        "p95": 30.77001974952509,
+        "p99": 42.34293379968214,
+        "p999": 55.65171959005983,
+        "samples": 4456
+      },
+      "second": 88,
+      "set_attempted": 2231,
+      "set_succeeded": 2231,
+      "succeeded": 4466,
+      "success_ops_sec": 4466
+    },
+    {
+      "attempted": 4357,
+      "attempted_ops_sec": 4357,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2124,
+      "get_succeeded": 2124,
+      "latency_ms": {
+        "avg": 14.67693232619585,
+        "max": 77.91644600001746,
+        "min": 0.25503399956505746,
+        "p50": 12.327645999903325,
+        "p95": 32.41065299998809,
+        "p99": 46.3012805506333,
+        "p999": 59.41385417970383,
+        "samples": 4350
+      },
+      "second": 89,
+      "set_attempted": 2233,
+      "set_succeeded": 2233,
+      "succeeded": 4357,
+      "success_ops_sec": 4357
+    },
+    {
+      "attempted": 4447,
+      "attempted_ops_sec": 4447,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2224,
+      "get_succeeded": 2224,
+      "latency_ms": {
+        "avg": 14.378201668167327,
+        "max": 82.4786610010051,
+        "min": 0.23253700055647641,
+        "p50": 12.031983000269975,
+        "p95": 30.921531499916433,
+        "p99": 42.545785299880656,
+        "p999": 59.13949731994816,
+        "samples": 4439
+      },
+      "second": 90,
+      "set_attempted": 2223,
+      "set_succeeded": 2223,
+      "succeeded": 4447,
+      "success_ops_sec": 4447
+    },
+    {
+      "attempted": 4448,
+      "attempted_ops_sec": 4448,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2215,
+      "get_succeeded": 2215,
+      "latency_ms": {
+        "avg": 14.37388099775876,
+        "max": 91.27773500040348,
+        "min": 0.2557030002208194,
+        "p50": 12.094351999621722,
+        "p95": 31.285420000131122,
+        "p99": 43.08368030004203,
+        "p999": 63.871838745785205,
+        "samples": 4447
+      },
+      "second": 91,
+      "set_attempted": 2233,
+      "set_succeeded": 2233,
+      "succeeded": 4448,
+      "success_ops_sec": 4448
+    },
+    {
+      "attempted": 3856,
+      "attempted_ops_sec": 3856,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 1958,
+      "get_succeeded": 1958,
+      "latency_ms": {
+        "avg": 16.675184780355554,
+        "max": 137.32680899920524,
+        "min": 0.2384569997957442,
+        "p50": 13.776488999610592,
+        "p95": 40.274238251186034,
+        "p99": 59.645663499486474,
+        "p999": 89.19042187482057,
+        "samples": 3856
+      },
+      "second": 92,
+      "set_attempted": 1898,
+      "set_succeeded": 1898,
+      "succeeded": 3856,
+      "success_ops_sec": 3856
+    },
+    {
+      "attempted": 4288,
+      "attempted_ops_sec": 4288,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2168,
+      "get_succeeded": 2168,
+      "latency_ms": {
+        "avg": 14.82814404315583,
+        "max": 77.50323800064507,
+        "min": 0.28897999982291367,
+        "p50": 12.835637000534916,
+        "p95": 34.04920440043495,
+        "p99": 46.15685468095766,
+        "p999": 61.76457954653078,
+        "samples": 4287
+      },
+      "second": 93,
+      "set_attempted": 2120,
+      "set_succeeded": 2120,
+      "succeeded": 4288,
+      "success_ops_sec": 4288
+    },
+    {
+      "attempted": 4401,
+      "attempted_ops_sec": 4401,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2217,
+      "get_succeeded": 2217,
+      "latency_ms": {
+        "avg": 14.525842197678578,
+        "max": 61.05011900035606,
+        "min": 0.2621789990371326,
+        "p50": 12.195127999802935,
+        "p95": 31.69380649978848,
+        "p99": 42.4036414997318,
+        "p999": 55.903097819283005,
+        "samples": 4391
+      },
+      "second": 94,
+      "set_attempted": 2184,
+      "set_succeeded": 2184,
+      "succeeded": 4401,
+      "success_ops_sec": 4401
+    },
+    {
+      "attempted": 4341,
+      "attempted_ops_sec": 4341,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2199,
+      "get_succeeded": 2199,
+      "latency_ms": {
+        "avg": 14.78184237033124,
+        "max": 72.71992700043484,
+        "min": 0.2645410004333826,
+        "p50": 12.480113000492565,
+        "p95": 32.505729000149586,
+        "p99": 43.85674500044843,
+        "p999": 60.52098087988294,
+        "samples": 4331
+      },
+      "second": 95,
+      "set_attempted": 2142,
+      "set_succeeded": 2142,
+      "succeeded": 4341,
+      "success_ops_sec": 4341
+    },
+    {
+      "attempted": 4456,
+      "attempted_ops_sec": 4456,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2260,
+      "get_succeeded": 2260,
+      "latency_ms": {
+        "avg": 14.30345745677649,
+        "max": 74.06287300000258,
+        "min": 0.2442639997752849,
+        "p50": 12.045933999615954,
+        "p95": 31.36934879985345,
+        "p99": 43.41058308069471,
+        "p999": 55.96015122824775,
+        "samples": 4453
+      },
+      "second": 96,
+      "set_attempted": 2196,
+      "set_succeeded": 2196,
+      "succeeded": 4456,
+      "success_ops_sec": 4456
+    },
+    {
+      "attempted": 4477,
+      "attempted_ops_sec": 4477,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2248,
+      "get_succeeded": 2248,
+      "latency_ms": {
+        "avg": 14.324997796404277,
+        "max": 72.97164900046482,
+        "min": 0.2662919996510027,
+        "p50": 12.330266500612197,
+        "p95": 30.952262949631425,
+        "p99": 40.870978619950776,
+        "p999": 54.09842828522467,
+        "samples": 4470
+      },
+      "second": 97,
+      "set_attempted": 2229,
+      "set_succeeded": 2229,
+      "succeeded": 4477,
+      "success_ops_sec": 4477
+    },
+    {
+      "attempted": 4378,
+      "attempted_ops_sec": 4378,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2209,
+      "get_succeeded": 2209,
+      "latency_ms": {
+        "avg": 14.577930889678548,
+        "max": 72.70802800121601,
+        "min": 0.23041799977363553,
+        "p50": 12.150560501140717,
+        "p95": 31.470402000559258,
+        "p99": 44.907728769685406,
+        "p999": 59.89353134284134,
+        "samples": 4378
+      },
+      "second": 98,
+      "set_attempted": 2169,
+      "set_succeeded": 2169,
+      "succeeded": 4378,
+      "success_ops_sec": 4378
+    },
+    {
+      "attempted": 4274,
+      "attempted_ops_sec": 4274,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2118,
+      "get_succeeded": 2118,
+      "latency_ms": {
+        "avg": 15.013438543510716,
+        "max": 85.60323399979097,
+        "min": 0.24289799875987228,
+        "p50": 12.440449499990791,
+        "p95": 33.5284434492678,
+        "p99": 46.450638209898884,
+        "p999": 67.22408816688439,
+        "samples": 4274
+      },
+      "second": 99,
+      "set_attempted": 2156,
+      "set_succeeded": 2156,
+      "succeeded": 4274,
+      "success_ops_sec": 4274
+    },
+    {
+      "attempted": 4310,
+      "attempted_ops_sec": 4310,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2117,
+      "get_succeeded": 2117,
+      "latency_ms": {
+        "avg": 14.784283661451827,
+        "max": 75.28980499955651,
+        "min": 0.2397719999862602,
+        "p50": 12.512381499618641,
+        "p95": 32.69848694972097,
+        "p99": 43.79472105989408,
+        "p999": 59.2004845002578,
+        "samples": 4304
+      },
+      "second": 100,
+      "set_attempted": 2193,
+      "set_succeeded": 2193,
+      "succeeded": 4310,
+      "success_ops_sec": 4310
+    },
+    {
+      "attempted": 4421,
+      "attempted_ops_sec": 4421,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2143,
+      "get_succeeded": 2143,
+      "latency_ms": {
+        "avg": 14.462095024466091,
+        "max": 73.97084799958975,
+        "min": 0.20659900110331364,
+        "p50": 12.1872745003202,
+        "p95": 31.31869965000078,
+        "p99": 43.206132949962864,
+        "p999": 56.15835155209275,
+        "samples": 4414
+      },
+      "second": 101,
+      "set_attempted": 2278,
+      "set_succeeded": 2278,
+      "succeeded": 4421,
+      "success_ops_sec": 4421
+    },
+    {
+      "attempted": 4407,
+      "attempted_ops_sec": 4407,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2228,
+      "get_succeeded": 2228,
+      "latency_ms": {
+        "avg": 14.51441213847013,
+        "max": 71.79257899952063,
+        "min": 0.2085329997498775,
+        "p50": 12.285489499845426,
+        "p95": 31.316379749569023,
+        "p99": 42.36538209925126,
+        "p999": 61.3962300139351,
+        "samples": 4406
+      },
+      "second": 102,
+      "set_attempted": 2179,
+      "set_succeeded": 2179,
+      "succeeded": 4407,
+      "success_ops_sec": 4407
+    },
+    {
+      "attempted": 4468,
+      "attempted_ops_sec": 4468,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2207,
+      "get_succeeded": 2207,
+      "latency_ms": {
+        "avg": 14.313641589436308,
+        "max": 63.108763000855106,
+        "min": 0.24994799969135784,
+        "p50": 12.20127599845,
+        "p95": 30.814610698871554,
+        "p99": 42.838303639910016,
+        "p999": 58.204515654008006,
+        "samples": 4455
+      },
+      "second": 103,
+      "set_attempted": 2261,
+      "set_succeeded": 2261,
+      "succeeded": 4468,
+      "success_ops_sec": 4468
+    },
+    {
+      "attempted": 4385,
+      "attempted_ops_sec": 4385,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2174,
+      "get_succeeded": 2174,
+      "latency_ms": {
+        "avg": 14.595065134383036,
+        "max": 69.43507799951476,
+        "min": 0.2407930005574599,
+        "p50": 12.227114999404876,
+        "p95": 31.758259099842643,
+        "p99": 43.66114849919555,
+        "p999": 58.33030204193477,
+        "samples": 4383
+      },
+      "second": 104,
+      "set_attempted": 2211,
+      "set_succeeded": 2211,
+      "succeeded": 4385,
+      "success_ops_sec": 4385
+    },
+    {
+      "attempted": 4302,
+      "attempted_ops_sec": 4302,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2171,
+      "get_succeeded": 2171,
+      "latency_ms": {
+        "avg": 14.847606118916502,
+        "max": 72.95523599896114,
+        "min": 0.3045920002477942,
+        "p50": 12.615204001122038,
+        "p95": 32.44120499948622,
+        "p99": 45.62372439970204,
+        "p999": 62.26511976022456,
+        "samples": 4297
+      },
+      "second": 105,
+      "set_attempted": 2131,
+      "set_succeeded": 2131,
+      "succeeded": 4302,
+      "success_ops_sec": 4302
+    },
+    {
+      "attempted": 4445,
+      "attempted_ops_sec": 4445,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2177,
+      "get_succeeded": 2177,
+      "latency_ms": {
+        "avg": 14.38414393022166,
+        "max": 75.47388300008606,
+        "min": 0.2451820000715088,
+        "p50": 12.193947999548982,
+        "p95": 30.740065200188834,
+        "p99": 42.47064215927819,
+        "p999": 58.32709175910624,
+        "samples": 4443
+      },
+      "second": 106,
+      "set_attempted": 2268,
+      "set_succeeded": 2268,
+      "succeeded": 4445,
+      "success_ops_sec": 4445
+    },
+    {
+      "attempted": 4455,
+      "attempted_ops_sec": 4455,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2262,
+      "get_succeeded": 2262,
+      "latency_ms": {
+        "avg": 14.359423728740573,
+        "max": 73.03855800091696,
+        "min": 0.20825899991905317,
+        "p50": 12.291289000131655,
+        "p95": 30.662104600560262,
+        "p99": 41.953650720461056,
+        "p999": 58.27570004003843,
+        "samples": 4453
+      },
+      "second": 107,
+      "set_attempted": 2193,
+      "set_succeeded": 2193,
+      "succeeded": 4455,
+      "success_ops_sec": 4455
+    },
+    {
+      "attempted": 4300,
+      "attempted_ops_sec": 4300,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2124,
+      "get_succeeded": 2124,
+      "latency_ms": {
+        "avg": 14.861781885769984,
+        "max": 71.39563899909263,
+        "min": 0.255642999036354,
+        "p50": 12.485343000662397,
+        "p95": 32.87488529995243,
+        "p99": 43.84542646826935,
+        "p999": 59.07626671337887,
+        "samples": 4298
+      },
+      "second": 108,
+      "set_attempted": 2176,
+      "set_succeeded": 2176,
+      "succeeded": 4300,
+      "success_ops_sec": 4300
+    },
+    {
+      "attempted": 4493,
+      "attempted_ops_sec": 4493,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2254,
+      "get_succeeded": 2254,
+      "latency_ms": {
+        "avg": 14.259349062546345,
+        "max": 71.07102199915971,
+        "min": 0.21818300047016237,
+        "p50": 12.047856500430498,
+        "p95": 30.142663751030327,
+        "p99": 41.72351393081044,
+        "p999": 55.009771931689414,
+        "samples": 4478
+      },
+      "second": 109,
+      "set_attempted": 2239,
+      "set_succeeded": 2239,
+      "succeeded": 4493,
+      "success_ops_sec": 4493
+    },
+    {
+      "attempted": 4382,
+      "attempted_ops_sec": 4382,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2198,
+      "get_succeeded": 2198,
+      "latency_ms": {
+        "avg": 14.588128802814479,
+        "max": 74.62231099998462,
+        "min": 0.23733200032438617,
+        "p50": 12.559524499920371,
+        "p95": 31.44510094944053,
+        "p99": 42.39395934106133,
+        "p999": 55.69385202451676,
+        "samples": 4382
+      },
+      "second": 110,
+      "set_attempted": 2184,
+      "set_succeeded": 2184,
+      "succeeded": 4382,
+      "success_ops_sec": 4382
+    },
+    {
+      "attempted": 4413,
+      "attempted_ops_sec": 4413,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2227,
+      "get_succeeded": 2227,
+      "latency_ms": {
+        "avg": 14.51200503741578,
+        "max": 69.77298899982998,
+        "min": 0.25856700085569173,
+        "p50": 13.145185001121718,
+        "p95": 30.916600400087127,
+        "p99": 42.46153980020609,
+        "p999": 58.16108848710513,
+        "samples": 4409
+      },
+      "second": 111,
+      "set_attempted": 2186,
+      "set_succeeded": 2186,
+      "succeeded": 4413,
+      "success_ops_sec": 4413
+    },
+    {
+      "attempted": 4393,
+      "attempted_ops_sec": 4393,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2253,
+      "get_succeeded": 2253,
+      "latency_ms": {
+        "avg": 14.561449768266723,
+        "max": 58.81675599994196,
+        "min": 0.2673600010894006,
+        "p50": 12.223957999594859,
+        "p95": 31.575127150153993,
+        "p99": 42.333866070584925,
+        "p999": 52.654401675869224,
+        "samples": 4384
+      },
+      "second": 112,
+      "set_attempted": 2140,
+      "set_succeeded": 2140,
+      "succeeded": 4393,
+      "success_ops_sec": 4393
+    },
+    {
+      "attempted": 4546,
+      "attempted_ops_sec": 4546,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2238,
+      "get_succeeded": 2238,
+      "latency_ms": {
+        "avg": 14.057264209343804,
+        "max": 68.67069100007939,
+        "min": 0.28681599906121846,
+        "p50": 11.708269001246663,
+        "p95": 30.286484999305685,
+        "p99": 41.69447596104874,
+        "p999": 58.376032224216914,
+        "samples": 4529
+      },
+      "second": 113,
+      "set_attempted": 2308,
+      "set_succeeded": 2308,
+      "succeeded": 4546,
+      "success_ops_sec": 4546
+    },
+    {
+      "attempted": 4374,
+      "attempted_ops_sec": 4374,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2189,
+      "get_succeeded": 2189,
+      "latency_ms": {
+        "avg": 14.625788559167827,
+        "max": 73.84090100094909,
+        "min": 0.278176999927382,
+        "p50": 12.62689500072156,
+        "p95": 31.62424599977384,
+        "p99": 42.93142976006487,
+        "p999": 57.61903288019048,
+        "samples": 4369
+      },
+      "second": 114,
+      "set_attempted": 2185,
+      "set_succeeded": 2185,
+      "succeeded": 4374,
+      "success_ops_sec": 4374
+    },
+    {
+      "attempted": 4503,
+      "attempted_ops_sec": 4503,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2241,
+      "get_succeeded": 2241,
+      "latency_ms": {
+        "avg": 14.199999248161783,
+        "max": 72.02617700022529,
+        "min": 0.24556800053687766,
+        "p50": 11.942302000534255,
+        "p95": 30.814769999778946,
+        "p99": 42.14504739938998,
+        "p999": 56.27090763977349,
+        "samples": 4481
+      },
+      "second": 115,
+      "set_attempted": 2262,
+      "set_succeeded": 2262,
+      "succeeded": 4503,
+      "success_ops_sec": 4503
+    },
+    {
+      "attempted": 4446,
+      "attempted_ops_sec": 4446,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2213,
+      "get_succeeded": 2213,
+      "latency_ms": {
+        "avg": 14.386684795905241,
+        "max": 65.18731500000285,
+        "min": 0.24904000019887462,
+        "p50": 12.16090100024303,
+        "p95": 30.591174200526435,
+        "p99": 42.27127926002139,
+        "p999": 56.79176558984206,
+        "samples": 4439
+      },
+      "second": 116,
+      "set_attempted": 2233,
+      "set_succeeded": 2233,
+      "succeeded": 4446,
+      "success_ops_sec": 4446
+    },
+    {
+      "attempted": 4354,
+      "attempted_ops_sec": 4354,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2160,
+      "get_succeeded": 2160,
+      "latency_ms": {
+        "avg": 14.672346154189514,
+        "max": 70.71752599949832,
+        "min": 0.23858399981691036,
+        "p50": 12.373399499665538,
+        "p95": 31.67858014958255,
+        "p99": 42.77401579030991,
+        "p999": 60.54111374178755,
+        "samples": 4352
+      },
+      "second": 117,
+      "set_attempted": 2194,
+      "set_succeeded": 2194,
+      "succeeded": 4354,
+      "success_ops_sec": 4354
+    },
+    {
+      "attempted": 4433,
+      "attempted_ops_sec": 4433,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2220,
+      "get_succeeded": 2220,
+      "latency_ms": {
+        "avg": 14.427529310732096,
+        "max": 69.40785799997684,
+        "min": 0.24403200040978845,
+        "p50": 12.032130000079633,
+        "p95": 31.011801550175726,
+        "p99": 43.16408964072237,
+        "p999": 57.29397136817185,
+        "samples": 4428
+      },
+      "second": 118,
+      "set_attempted": 2213,
+      "set_succeeded": 2213,
+      "succeeded": 4433,
+      "success_ops_sec": 4433
+    },
+    {
+      "attempted": 4347,
+      "attempted_ops_sec": 4347,
+      "error_types": {},
+      "failed": 0,
+      "failed_ops_sec": 0,
+      "get_attempted": 2143,
+      "get_succeeded": 2143,
+      "latency_ms": {
+        "avg": 14.666656450756768,
+        "max": 61.032018000332755,
+        "min": 0.24391400074819103,
+        "p50": 12.628980999579653,
+        "p95": 31.677545749971614,
+        "p99": 44.49676319973155,
+        "p999": 55.29369129923036,
+        "samples": 4346
+      },
+      "second": 119,
+      "set_attempted": 2204,
+      "set_succeeded": 2204,
+      "succeeded": 4347,
+      "success_ops_sec": 4347
+    }
+  ],
+  "provider": "valkey",
+  "run": {
+    "duration_s": 120,
+    "finished_epoch_s": 1781096975,
+    "started_epoch_s": 1781096855
+  },
+  "system": "Valkey",
+  "totals": {
+    "attempted": 426536,
+    "attempted_ops_sec": 3554.4666666666667,
+    "error_rate": 0.0005978393382973535,
+    "error_types": {
+      "ConnectionError": 255
+    },
+    "failed": 255,
+    "failed_ops_sec": 2.125,
+    "get_attempted": 213182,
+    "get_succeeded": 213038,
+    "latency_ms": {
+      "avg": 14.744991460170246,
+      "max": 1339.632542999425,
+      "min": 0.19149299987475388,
+      "p50": 12.046095499499643,
+      "p95": 31.541330299614856,
+      "p99": 44.19389209997463,
+      "p999": 88.38868320946655,
+      "samples": 200000
+    },
+    "set_attempted": 213354,
+    "set_succeeded": 213243,
+    "succeeded": 426281,
+    "success_ops_sec": 3552.3416666666667,
+    "success_rate": 0.9994021606617026
+  },
+  "variant": "failover_client"
+}

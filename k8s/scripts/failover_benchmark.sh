@@ -46,7 +46,25 @@ SYSTEM_NAME="${SYSTEM_NAME:-${DEFAULT_SYSTEM_NAME}}"
 SERVICE_NAME="${SERVICE_NAME:-${DEFAULT_SERVICE_NAME}}"
 POD_SELECTOR="${POD_SELECTOR:-${DEFAULT_POD_SELECTOR}}"
 CHAOS_PREFIX="${CHAOS_PREFIX:-${RELEASE}}"
-IMAGE="${MEMTIER_IMAGE:-memtier_k8s:1}"
+CLIENT_ENGINE="${FAILOVER_CLIENT_ENGINE:-memtier}"
+case "${CLIENT_ENGINE}" in
+  memtier)
+    DEFAULT_IMAGE="${MEMTIER_IMAGE:-memtier_k8s:1}"
+    DEFAULT_CLIENTS="25"
+    DEFAULT_PIPELINE="10"
+    ;;
+  python|client|failover-client)
+    CLIENT_ENGINE="python"
+    DEFAULT_IMAGE="${CONSISTENCY_IMAGE:-consistency_checker:2}"
+    DEFAULT_CLIENTS="16"
+    DEFAULT_PIPELINE="1"
+    ;;
+  *)
+    echo "ERROR: FAILOVER_CLIENT_ENGINE must be memtier or python." >&2
+    exit 1
+    ;;
+esac
+IMAGE="${FAILOVER_IMAGE:-${DEFAULT_IMAGE}}"
 LOCAL_OUT="${1:-./results/failover}"
 REMOTE_OUT="/work/results/failover"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -56,8 +74,8 @@ source "${SCRIPT_DIR}/pod_results.sh"
 HOST="${FAILOVER_HOST:-${SERVICE_NAME}.${NS}.svc.cluster.local}"
 PORT="${FAILOVER_PORT:-6379}"
 THREADS="${FAILOVER_THREADS:-4}"
-CLIENTS="${FAILOVER_CLIENTS:-25}"
-PIPELINE="${FAILOVER_PIPELINE:-10}"
+CLIENTS="${FAILOVER_CLIENTS:-${DEFAULT_CLIENTS}}"
+PIPELINE="${FAILOVER_PIPELINE:-${DEFAULT_PIPELINE}}"
 TEST_TIME="${FAILOVER_TEST_TIME:-120}"
 KEYS="${FAILOVER_KEYS:-100000}"
 DATA_SIZE="${FAILOVER_DATA_SIZE:-1024}"
@@ -68,7 +86,8 @@ FAILOVER_MASTERS="${FAILOVER_MASTERS:-1}"
 FAILOVER_ACTION="${FAILOVER_ACTION:-pod-failure}"
 FAILOVER_DURATION="${FAILOVER_DURATION:-60s}"
 FAILOVER_GRACE_PERIOD="${FAILOVER_GRACE_PERIOD:-1}"
-MEMTIER_STARTED_FILE="/tmp/memtier.started"
+WORKLOAD_STARTED_FILE="${FAILOVER_STARTED_FILE:-/tmp/failover.started}"
+MEMTIER_STARTED_FILE="${WORKLOAD_STARTED_FILE}"
 MEMTIER_TLS="${MEMTIER_TLS:-false}"
 MEMTIER_TLS_SKIP_VERIFY="${MEMTIER_TLS_SKIP_VERIFY:-true}"
 MEMTIER_TLS_CACERT="${MEMTIER_TLS_CACERT:-}"
@@ -78,6 +97,14 @@ MEMTIER_TLS_SNI="${MEMTIER_TLS_SNI:-}"
 MEMTIER_RECONNECT_ON_ERROR="${MEMTIER_RECONNECT_ON_ERROR:-false}"
 MEMTIER_MAX_RECONNECT_ATTEMPTS="${MEMTIER_MAX_RECONNECT_ATTEMPTS:-1000}"
 MEMTIER_RECONNECT_BACKOFF_FACTOR="${MEMTIER_RECONNECT_BACKOFF_FACTOR:-2}"
+FAILOVER_SOCKET_TIMEOUT="${FAILOVER_SOCKET_TIMEOUT:-1.0}"
+FAILOVER_CONNECT_TIMEOUT="${FAILOVER_CONNECT_TIMEOUT:-1.0}"
+FAILOVER_RETRY_ON_TIMEOUT="${FAILOVER_RETRY_ON_TIMEOUT:-false}"
+FAILOVER_RECONNECT_BACKOFF_S="${FAILOVER_RECONNECT_BACKOFF_S:-0.01}"
+FAILOVER_LATENCY_SAMPLE_LIMIT_PER_SECOND="${FAILOVER_LATENCY_SAMPLE_LIMIT_PER_SECOND:-5000}"
+FAILOVER_LATENCY_SAMPLE_LIMIT_TOTAL="${FAILOVER_LATENCY_SAMPLE_LIMIT_TOTAL:-200000}"
+FAILOVER_ERROR_SAMPLE_LIMIT="${FAILOVER_ERROR_SAMPLE_LIMIT:-100}"
+FAILOVER_RANDOM_SEED="${FAILOVER_RANDOM_SEED:-1}"
 CLI_TLS="${FAILOVER_CLI_TLS:-${VALKEY_CLI_TLS:-${MEMTIER_TLS}}}"
 CLI_TLS_SKIP_VERIFY="${FAILOVER_CLI_TLS_SKIP_VERIFY:-${VALKEY_CLI_TLS_SKIP_VERIFY:-${MEMTIER_TLS_SKIP_VERIFY}}}"
 CLI_CACERT="${FAILOVER_CLI_CACERT:-${VALKEY_CLI_CACERT:-/tls/ca.crt}}"
@@ -114,6 +141,34 @@ case "${MEMTIER_RECONNECT_ON_ERROR}" in
     MEMTIER_RECONNECT_ARGS+=(--reconnect-on-error)
     MEMTIER_RECONNECT_ARGS+=(--max-reconnect-attempts="${MEMTIER_MAX_RECONNECT_ATTEMPTS}")
     MEMTIER_RECONNECT_ARGS+=(--reconnect-backoff-factor="${MEMTIER_RECONNECT_BACKOFF_FACTOR}")
+    ;;
+esac
+
+PYTHON_CLIENT_TLS_ARGS=()
+case "${MEMTIER_TLS}" in
+  1|true|TRUE|yes|YES|on|ON)
+    PYTHON_CLIENT_TLS_ARGS+=(--tls)
+    case "${MEMTIER_TLS_SKIP_VERIFY}" in
+      1|true|TRUE|yes|YES|on|ON)
+        PYTHON_CLIENT_TLS_ARGS+=(--tls-skip-verify)
+        ;;
+    esac
+    if [[ -n "${MEMTIER_TLS_CACERT}" ]]; then
+      PYTHON_CLIENT_TLS_ARGS+=(--tls-ca-cert="${MEMTIER_TLS_CACERT}")
+    fi
+    if [[ -n "${MEMTIER_TLS_CERT}" ]]; then
+      PYTHON_CLIENT_TLS_ARGS+=(--tls-cert="${MEMTIER_TLS_CERT}")
+    fi
+    if [[ -n "${MEMTIER_TLS_KEY}" ]]; then
+      PYTHON_CLIENT_TLS_ARGS+=(--tls-key="${MEMTIER_TLS_KEY}")
+    fi
+    ;;
+esac
+
+PYTHON_CLIENT_RETRY_ARGS=(--no-retry-on-timeout)
+case "${FAILOVER_RETRY_ON_TIMEOUT}" in
+  1|true|TRUE|yes|YES|on|ON)
+    PYTHON_CLIENT_RETRY_ARGS=(--retry-on-timeout)
     ;;
 esac
 
@@ -160,6 +215,7 @@ print_config() {
 N=${N}
 PROVIDER=${PROVIDER}
 SYSTEM_NAME=${SYSTEM_NAME}
+CLIENT_ENGINE=${CLIENT_ENGINE}
 NS=${NS}
 RELEASE=${RELEASE}
 STS=${STS}
@@ -183,6 +239,10 @@ STEADY_STATE_WAIT=${STEADY_STATE_WAIT}
 MEMTIER_RECONNECT_ON_ERROR=${MEMTIER_RECONNECT_ON_ERROR}
 MEMTIER_MAX_RECONNECT_ATTEMPTS=${MEMTIER_MAX_RECONNECT_ATTEMPTS}
 MEMTIER_RECONNECT_BACKOFF_FACTOR=${MEMTIER_RECONNECT_BACKOFF_FACTOR}
+FAILOVER_SOCKET_TIMEOUT=${FAILOVER_SOCKET_TIMEOUT}
+FAILOVER_CONNECT_TIMEOUT=${FAILOVER_CONNECT_TIMEOUT}
+FAILOVER_RETRY_ON_TIMEOUT=${FAILOVER_RETRY_ON_TIMEOUT}
+FAILOVER_RECONNECT_BACKOFF_S=${FAILOVER_RECONNECT_BACKOFF_S}
 FAILOVER_MODE=${FAILOVER_MODE}
 FAILOVER_MASTERS=${FAILOVER_MASTERS}
 FAILOVER_ACTION=${FAILOVER_ACTION}
@@ -361,7 +421,11 @@ expected_master_chaos_names() {
 print_config
 
 for i in $(seq 1 "${N}"); do
-  POD_NAME="memtier-failover-${i}"
+  if [[ "${CLIENT_ENGINE}" == "memtier" ]]; then
+    POD_NAME="memtier-failover-${i}"
+  else
+    POD_NAME="failover-client-${i}"
+  fi
   OUT_FILE="failover_run_${i}.json"
   LOG_FILE="failover_run_${i}.log"
   TIMING_FILE="failover_timing_${i}.json"
@@ -405,10 +469,11 @@ for i in $(seq 1 "${N}"); do
   kubectl delete -f "${CHAOS_FILE}" -n "${NS}" --ignore-not-found 2>/dev/null || true
   kubectl delete pod "${POD_NAME}" -n "${NS}" --ignore-not-found 2>/dev/null || true
 
-  POD_COMMAND="$(cat <<EOF
+  if [[ "${CLIENT_ENGINE}" == "memtier" ]]; then
+    POD_COMMAND="$(cat <<EOF
 mkdir -p '${REMOTE_OUT}'
 LOG_PIPE='${REMOTE_OUT}/${LOG_FILE}.pipe'
-rm -f '${MEMTIER_STARTED_FILE}'
+rm -f '${WORKLOAD_STARTED_FILE}'
 rm -f "\${LOG_PIPE}"
 mkfifo "\${LOG_PIPE}"
 (
@@ -418,8 +483,8 @@ mkfifo "\${LOG_PIPE}"
     printf '%s\t%s\n' "\${line_ts}" "\${line}"
     case "\${line}" in
       *"[RUN #1"*ops/sec*)
-        if [ ! -f '${MEMTIER_STARTED_FILE}' ]; then
-          echo "\${line_ts}" > '${MEMTIER_STARTED_FILE}'
+        if [ ! -f '${WORKLOAD_STARTED_FILE}' ]; then
+          echo "\${line_ts}" > '${WORKLOAD_STARTED_FILE}'
         fi
         ;;
     esac
@@ -450,8 +515,42 @@ touch '${POD_DONE_FILE}'
 sleep '${POD_HOLD_SECONDS}'
 EOF
 )"
+  else
+    POD_COMMAND="$(cat <<EOF
+mkdir -p '${REMOTE_OUT}'
+rm -f '${WORKLOAD_STARTED_FILE}'
+python -u /work/failover_client.py \
+  --host '${HOST}' --port '${PORT}' \
+  --duration '${TEST_TIME}' \
+  --output '${REMOTE_OUT}/${OUT_FILE}' \
+  --started-file '${WORKLOAD_STARTED_FILE}' \
+  --provider '${PROVIDER}' \
+  --system '${SYSTEM_NAME}' \
+  --threads '${THREADS}' \
+  --clients '${CLIENTS}' \
+  --ratio '${RATIO}' \
+  --keys '${KEYS}' \
+  --data-size '${DATA_SIZE}' \
+  --key-prefix 'failover.${PROVIDER}.${i}.' \
+  --socket-timeout '${FAILOVER_SOCKET_TIMEOUT}' \
+  --connect-timeout '${FAILOVER_CONNECT_TIMEOUT}' \
+  --reconnect-backoff-s '${FAILOVER_RECONNECT_BACKOFF_S}' \
+  --latency-sample-limit-per-second '${FAILOVER_LATENCY_SAMPLE_LIMIT_PER_SECOND}' \
+  --latency-sample-limit-total '${FAILOVER_LATENCY_SAMPLE_LIMIT_TOTAL}' \
+  --error-sample-limit '${FAILOVER_ERROR_SAMPLE_LIMIT}' \
+  --seed '$((FAILOVER_RANDOM_SEED + i))' \
+  ${PYTHON_CLIENT_RETRY_ARGS[*]} \
+  ${PYTHON_CLIENT_TLS_ARGS[*]} \
+  > '${REMOTE_OUT}/${LOG_FILE}' 2>&1
+status=\$?
+echo "\$status" > '${POD_EXIT_CODE_FILE}'
+touch '${POD_DONE_FILE}'
+sleep '${POD_HOLD_SECONDS}'
+EOF
+)"
+  fi
 
-  echo "[${i}] Starting memtier pod (test-time=${TEST_TIME}s)..."
+  echo "[${i}] Starting ${CLIENT_ENGINE} pod (test-time=${TEST_TIME}s)..."
   kubectl run "${POD_NAME}" -n "${NS}" \
     --image="${IMAGE}" \
     --restart=Never \
@@ -462,9 +561,9 @@ EOF
   kubectl wait pod/"${POD_NAME}" -n "${NS}" \
     --for=condition=Ready --timeout=60s 2>/dev/null || true
 
-  echo "[${i}] Waiting for memtier timed run to start..."
-  if ! wait_for_pod_marker "${NS}" "${POD_NAME}" "${MEMTIER_STARTED_FILE}" 120; then
-    echo "[${i}] ERROR: memtier did not start its timed run."
+  echo "[${i}] Waiting for ${CLIENT_ENGINE} timed run to start..."
+  if ! wait_for_pod_marker "${NS}" "${POD_NAME}" "${WORKLOAD_STARTED_FILE}" 120; then
+    echo "[${i}] ERROR: ${CLIENT_ENGINE} did not start its timed run."
     print_pod_debug_info "${NS}" "${POD_NAME}"
     exit 1
   fi
@@ -476,10 +575,12 @@ EOF
   echo "[${i}] Generated PodChaos manifest:"
   sed 's/^/  /' "${CHAOS_FILE}"
   CHAOS_EPOCH_S="$(kubectl exec "${POD_NAME}" -n "${NS}" -- date +%s 2>/dev/null || date +%s)"
-  MEMTIER_STARTED_EPOCH_S="$(kubectl exec "${POD_NAME}" -n "${NS}" -- cat "${MEMTIER_STARTED_FILE}" 2>/dev/null | tr -d '[:space:]')"
+  WORKLOAD_STARTED_EPOCH_S="$(kubectl exec "${POD_NAME}" -n "${NS}" -- cat "${WORKLOAD_STARTED_FILE}" 2>/dev/null | tr -d '[:space:]')"
   cat > "${LOCAL_OUT}/${TIMING_FILE}" <<EOF
 {
-  "memtier_started_epoch_s": ${MEMTIER_STARTED_EPOCH_S:-null},
+  "client_engine": "${CLIENT_ENGINE}",
+  "workload_started_epoch_s": ${WORKLOAD_STARTED_EPOCH_S:-null},
+  "memtier_started_epoch_s": ${WORKLOAD_STARTED_EPOCH_S:-null},
   "chaos_epoch_s": ${CHAOS_EPOCH_S},
   "steady_state_wait_s": ${STEADY_STATE_WAIT},
   "provider": "${PROVIDER}",
@@ -511,16 +612,16 @@ EOF
   done
   kubectl get podchaos -n "${NS}" "${CHAOS_NAMES[@]}"
 
-  echo "[${i}] Waiting for memtier to finish..."
+  echo "[${i}] Waiting for ${CLIENT_ENGINE} to finish..."
   if ! wait_for_pod_marker "${NS}" "${POD_NAME}" "${POD_DONE_FILE}" 300; then
-    echo "[${i}] ERROR: memtier pod did not signal completion."
+    echo "[${i}] ERROR: ${CLIENT_ENGINE} pod did not signal completion."
     print_pod_debug_info "${NS}" "${POD_NAME}"
     exit 1
   fi
 
   exit_code="$(read_pod_exit_code "${NS}" "${POD_NAME}" "${POD_EXIT_CODE_FILE}")"
   if [[ -z "${exit_code}" || "${exit_code}" != "0" ]]; then
-    echo "[${i}] ERROR: memtier exited with code ${exit_code:-unknown}."
+    echo "[${i}] ERROR: ${CLIENT_ENGINE} exited with code ${exit_code:-unknown}."
     print_pod_debug_info "${NS}" "${POD_NAME}"
     exit 1
   fi
@@ -528,7 +629,7 @@ EOF
   echo "[${i}] Copying results..."
   kubectl cp "${NS}/${POD_NAME}:${REMOTE_OUT}/${OUT_FILE}" "${LOCAL_OUT}/${OUT_FILE}"
   kubectl cp "${NS}/${POD_NAME}:${REMOTE_OUT}/${LOG_FILE}" "${LOCAL_OUT}/${LOG_FILE}" || \
-    echo "[${i}] WARN: could not copy memtier log ${LOG_FILE}"
+    echo "[${i}] WARN: could not copy ${CLIENT_ENGINE} log ${LOG_FILE}"
 
   echo "[${i}] Cleaning up..."
   kubectl delete -f "${CHAOS_FILE}" -n "${NS}" --ignore-not-found 2>/dev/null || true
