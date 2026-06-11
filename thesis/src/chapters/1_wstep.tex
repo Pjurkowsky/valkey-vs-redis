@@ -29,7 +29,7 @@ W pracy przyjęto cztery hipotezy badawcze:
 
 \section{Zastosowane technologie}
 
-Środowisko testowe zostało uruchomione na platformie Google Cloud Platform (GCP), z wykorzystaniem usługi Google Kubernetes Engine (GKE) jako klastra orkiestracji kontenerów. Jako usługę zarządzaną w ramach porównania wykorzystano GCP Memorystore.
+Środowisko testowe zostało uruchomione na platformie Google Cloud Platform (GCP), z wykorzystaniem usługi Google Kubernetes Engine (GKE) jako klastra orkiestracji kontenerów. Jako usługę zarządzaną w ramach porównania wykorzystano GCP Memorystore. Testy wydajnościowe przeprowadzono w środowisku lokalnym, wykorzystując klaster Kubernetes uruchomiony za pomocą narzędzia minikube, ze względu na ograniczony dostęp do zasobów GCP. Szczegóły konfiguracji sprzętowej środowiska lokalnego opisano w rozdziale~\ref{ch:organizacja}.
 
 Głównym językiem programowania użytym w pracy był Python w wersji 3.12. Skrypty analityczne, odpowiedzialne za przetwarzanie wyników pomiarów oraz generowanie wykresów, korzystały z bibliotek pandas, NumPy oraz Matplotlib. Do pobierania metryk z systemu monitoringu wykorzystano bibliotekę prometheus\_api\_client. Skrypty pomocnicze służące do automatyzacji uruchamiania testów, zarządzania klastrem oraz orkiestracji scenariuszy testowych zostały napisane w języku Bash.
 
@@ -53,5 +53,5 @@ Zakres pracy obejmuje testy wydajnościowe, testy odpornościowe oraz analizę u
 
 W części dotyczącej niezawodności i utrzymywalności uwzględniono scenariusze failover, presję na zasoby CPU i pamięć, aktualizację klastra podczas obciążenia, skalowanie horyzontalne oraz operacje backupu i odtwarzania. Scenariusze te zostały dobrane tak, aby odzwierciedlały zadania, z którymi administratorzy spotykają się w środowiskach produkcyjnych.
 
-Ograniczeniem badań jest brak pełnej kontroli nad konfiguracją usługi Memorystore, która nie pozwala na dowolne ustawienie parametrów odpowiadających wariantom self-hosted. Z tego powodu warianty self-hosted dobrano tak, aby zasobami odpowiadały konfiguracji Memorystore.
+Ograniczeniem badań jest brak pełnej kontroli nad konfiguracją usługi Memorystore, która nie pozwala na dowolne ustawienie parametrów odpowiadających wariantom self-hosted. Z tego powodu warianty self-hosted dobrano tak, aby zasobami odpowiadały konfiguracji Memorystore. Dodatkowym ograniczeniem był dostęp do infrastruktury Google Cloud Platform, wynikający z limitu kwot (quota) przypisanych do projektu oraz ograniczonej liczby dostępnych tokenów. Z tego powodu testy wydajnościowe przeprowadzono w środowisku lokalnym, natomiast testy operacyjne i odpornościowe, wymagające pełnego środowiska chmurowego, realizowano w ramach dostępnych zasobów GCP.
 

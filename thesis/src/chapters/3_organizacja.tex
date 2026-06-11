@@ -28,30 +28,17 @@ Dla każdego przebiegu zapisywane są surowe wyniki, logi oraz parametry konfigu
 
 \section{Warianty badawcze}
 
-Badania obejmują trzy warianty, które odpowiadają trzem scenariuszom rozważanym przez organizacje korzystające dotychczas z Redis 7.2 na licencji BSD-3: pozostanie przy Redis w wersji self-hosted, migracja na Valkey self-hosted lub przejście na usługę zarządzaną. Tabela~\ref{tab:warianty_badawcze} przedstawia przyjęte warianty.
+Głównym wariantem badawczym jest \textbf{Valkey Cluster w Kubernetes} --- system self-hosted oceniany pod względem wydajności, zachowania podczas operacji administracyjnych, kosztów oraz złożoności utrzymania. Punktem odniesienia wydajnościowego jest \textbf{Redis 7.2 Cluster w Kubernetes} --- klaster Redis 7.2.5 z obrazu Bitnami, wdrożony self-hosted z identyczną topologią i zasobami co Valkey, jako ostatnia wersja Redis na licencji BSD-3. Trzecim wariantem jest \textbf{Google Cloud Memorystore for Redis Cluster}, wykorzystywany jako punkt odniesienia dla kosztów infrastruktury, nakładu pracy operatora oraz operacji udostępnianych przez dostawcę chmurowego.
 
-\begin{table}[H]
-\centering
-\caption{Warianty uwzględnione w badaniu}
-\label{tab:warianty_badawcze}
-\begin{tabularx}{\textwidth}{p{3.6cm}X}
-\toprule
-\textbf{Wariant} & \textbf{Rola w badaniu} \\
-\midrule
-Valkey Cluster w Kubernetes & Główny wariant badawczy. System self-hosted oceniany pod względem zachowania podczas operacji administracyjnych, wpływu tych operacji na klienta, kosztów oraz złożoności utrzymania. \\
-Redis 7.2 Cluster w Kubernetes & Punkt odniesienia wydajnościowy. Klaster Redis 7.2.5 z obrazu Bitnami, wdrożony self-hosted w tym samym środowisku GKE, z identyczną topologią i zasobami co Valkey. Ostatnia wersja Redis na licencji BSD-3, reprezentująca stan wyjściowy przed potencjalną migracją. \\
-Google Cloud Memorystore for Redis & Wariant zarządzany wykorzystywany jako punkt odniesienia dla operacji udostępnianych przez dostawcę chmurowego, kosztów infrastruktury oraz nakładu pracy operatora. \\
-\bottomrule
-\end{tabularx}
-\end{table}
-
-Porównanie trzech wariantów wymaga rozróżnienia poziomu kontroli nad środowiskiem. W przypadku Valkey i Redis 7.2 operator zarządza klastrem Kubernetes, konfiguracją Helm oraz zasobami trwałymi wykorzystywanymi przez system. W przypadku Memorystore użytkownik inicjuje operacje przez API lub narzędzia \texttt{gcloud}, natomiast wewnętrzna realizacja tych operacji pozostaje ukryta. Z tego powodu wariant zarządzany jest traktowany jako porównanie typu black-box. Tam, gdzie jest to możliwe, zachowywane są te same parametry obciążenia i podobny rozmiar danych, jednak nie zakłada się pełnej równoważności infrastruktury.
-
-Nie wszystkie testy mogą objąć wszystkie trzy warianty. Testy wykorzystujące Chaos Mesh --- failover mastera, spójność danych podczas partycji sieciowej oraz resilience przy niedoborze zasobów --- mogą być przeprowadzone wyłącznie dla klastrów self-hosted (Valkey i Redis 7.2), ponieważ Memorystore jest usługą zarządzaną bez bezpośredniego dostępu do podów i infrastruktury Kubernetes. Tabelę~\ref{tab:testy_warianty} w dalszej części rozdziału zestawia zakres testów dla każdego wariantu.
+W przypadku wariantów self-hosted operator zarządza klastrem Kubernetes, konfiguracją Helm oraz zasobami trwałymi. W przypadku Memorystore użytkownik inicjuje operacje przez API lub narzędzia \texttt{gcloud}, natomiast wewnętrzna realizacja pozostaje ukryta --- wariant ten jest więc traktowany jako porównanie typu black-box. Tam, gdzie jest to możliwe, zachowywane są te same parametry obciążenia i podobny rozmiar danych, jednak nie zakłada się pełnej równoważności infrastruktury. Testy wykorzystujące Chaos Mesh (failover, partycja sieciowa, resilience) mogą być przeprowadzone wyłącznie dla wariantów self-hosted. Tabelę~\ref{tab:testy_warianty} w dalszej części rozdziału zestawia zakres testów dla każdego wariantu.
 
 \section{Środowisko testowe}
 
-Badania self-hosted prowadzone są w klastrze Kubernetes utworzonym w Google Kubernetes Engine. Dla każdego scenariusza klaster GKE jest tworzony od początku, aby przebieg testu nie zależał od stanu pozostawionego przez poprzednie eksperymenty. Bazową konfigurację klastra GKE tworzono poleceniem~\ref{lst:gke-cluster-create}.
+Ze względu na ograniczony dostęp do zasobów Google Cloud Platform (limity kwot oraz dostępnych tokenów) badania przeprowadzono w dwóch środowiskach. Testy wydajnościowe wykonano w środowisku lokalnym, natomiast testy operacyjne i odpornościowe --- w środowisku chmurowym GCP.
+
+\subsection{Środowisko chmurowe}
+
+Testy operacyjne i odpornościowe prowadzone są w klastrze Kubernetes utworzonym w Google Kubernetes Engine. Dla każdego scenariusza klaster GKE jest tworzony od początku, aby przebieg testu nie zależał od stanu pozostawionego przez poprzednie eksperymenty. Bazową konfigurację klastra GKE tworzono poleceniem~\ref{lst:gke-cluster-create}.
 
 \begin{lstlisting}[basicstyle=\ttfamily\footnotesize,columns=fullflexible,keepspaces=true,breaklines=true,breakatwhitespace=true,frame=single,framerule=0.2pt,caption={Utworzenie klastra GKE},label={lst:gke-cluster-create}]
 gcloud container clusters create valkey-bench \
@@ -171,6 +158,12 @@ label={lst:normalized-values}
 ]{../../k8s/manifests/values-normalized-ms-small.yaml}
 
 Bazowa konfiguracja \texttt{values.yaml} (listing~\ref{lst:valkey-values}) jest natomiast używana w testach wydajnościowych z różnymi limitami CPU (1, 2, 4~vCPU), gdzie limity zasobów są zmieniane dynamicznie przez skrypt benchmarkowy, oraz w testach operacyjnych niewymagających porównania z Memorystore.
+
+\subsection{Środowisko lokalne}
+
+Testy wydajnościowe przeprowadzono w środowisku lokalnym z wykorzystaniem klastra Kubernetes uruchomionego za pomocą narzędzia minikube. Klaster konfigurowano z trzema węzłami, aby odwzorować topologię używaną w środowisku chmurowym. Wdrożenie klastrów Valkey i Redis 7.2 odbywało się za pomocą tych samych chartów Helm i plików konfiguracyjnych co w środowisku GKE, z dostosowaniem limitów zasobów do możliwości maszyny lokalnej.
+
+% TODO: specyfikacja sprzętowa maszyny lokalnej
 
 \section{Narzędzia badawcze}
 
