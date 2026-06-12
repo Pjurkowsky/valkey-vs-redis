@@ -1,12 +1,12 @@
 \chapter{Wyniki badań}\label{ch:wyniki}
 
-\section{Wydajność bazowa}
+\section{Badania wydajności}
 
 Celem testu było porównanie przepustowości i opóźnień klastra Valkey oraz Redis 7.2 przy różnych rozmiarach payloadu, proporcjach operacji i limitach vCPU. Parametry testów wydajnościowych zostały opisane w tabeli~\ref{tab:parametry_wydajnosci}. Oba warianty testowano z limitem 1 oraz 2~vCPU na pod, rozmiarami payloadu 1~KB, 10~KB i 1000~KB oraz trzema proporcjami operacji: tylko odczyt (\texttt{0:1}), tylko zapis (\texttt{1:0}) i mieszany (\texttt{1:1}). Klaster składał się z trzech shardów z jedną repliką na shard.
 
 Tabela~\ref{tab:perf-ops} zestawia średnią przepustowość dla obu wariantów. Kolumna \textit{stosunek} podaje iloraz przepustowości Valkey do Redis 7.2; wartość powyżej $1{,}00$ oznacza wyższą przepustowość Valkey. Tabela~\ref{tab:perf-latency} zestawia percentyle opóźnień (p50, p95, p99 i p99.9) wraz z odchyleniem standardowym. Rysunek~\ref{fig:perf-ops} przedstawia porównanie graficzne przepustowości, rysunek~\ref{fig:perf-p99} zestawia opóźnienia p99.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \caption{Przepustowość dla Valkey i Redis 7.2.}
 \label{tab:perf-ops}
@@ -43,7 +43,7 @@ Profil & vCPU & Valkey Ops/sec & Redis 7.2 Ops/sec & Stosunek VK/RD \\
 \end{adjustbox}
 \end{table}
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \caption{Percentyle opóźnień dla Valkey i Redis 7.2.}
 \label{tab:perf-latency}
@@ -98,6 +98,8 @@ Profil & vCPU & Wariant & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 \end{adjustbox}
 \end{table}
 
+\FloatBarrier
+
 \begin{figure}[!htbp]
     \centering
     \includegraphics[width=\textwidth]{images/perf_ops_comparison.png}
@@ -118,11 +120,13 @@ Przy payloadzie 1~KB i obciążeniu mieszanym Valkey osiągnął 1\,464\,639 ops
 
 Przy payloadzie 10~KB różnice między wariantami były niewielkie. W profilu read-only Redis 7.2 miał nieznacznie wyższą przepustowość przy 1~vCPU (293\,239 vs 279\,332 ops/sec, stosunek 0{,}95), natomiast przy 2~vCPU wyniki były praktycznie równe. Opóźnienia p99 pozostawały zbliżone dla obu wariantów w zakresie 13{,}6--21{,}5~ms.
 
-Przy payloadzie 1000~KB zachowanie wariantów różniło się znacząco w zależności od profilu. W profilu read-only Redis 7.2 osiągnął 72\,221 ops/sec, natomiast Valkey jedynie 4\,768 ops/sec --- stosunek 0{,}07. Opóźnienie p99 Valkey przy tym payloadzie wyniosło 686{,}49~ms wobec 182{,}68~ms dla Redis 7.2. W profilu write-only sytuacja była odwrotna: Valkey osiągnął 3\,771 ops/sec wobec 1\,644 ops/sec dla Redis 7.2, a p99 wyniósł 1422{,}13~ms wobec 3398{,}04~ms. W profilu mieszanym Valkey utrzymał przewagę (3\,841 vs 3\,471 ops/sec). Duża rozbieżność w profilu read-only przy payloadzie 1000~KB wskazuje na istotną różnicę w wydajności obsługi dużych odczytów między tymi dwoma systemami w badanej konfiguracji.
+Przy payloadzie 1000~KB zachowanie wariantów różniło się znacząco w zależności od profilu. W profilu read-only Redis 7.2 osiągnął 72\,221 ops/sec, natomiast Valkey jedynie 4\,768 ops/sec --- stosunek 0{,}07. Opóźnienie p99 Valkey przy tym payloadzie wyniosło 686{,}49~ms wobec 182{,}68~ms dla Redis 7.2. W profilu write-only sytuacja była odwrotna: Valkey osiągnął 3\,771 ops/sec wobec 1\,644 ops/sec dla Redis 7.2, a p99 wyniósł 1\,422{,}13~ms wobec 3\,398{,}04~ms. W profilu mieszanym Valkey utrzymał przewagę (3\,841 vs 3\,471 ops/sec).
+
+Pozornie dużą przewagę Redis 7.2 w~profilu read-only przy payloadzie 1000~KB (72\,221 wobec 4\,768 ops/sec) należy jednak interpretować jako artefakt pomiarowy, a~nie jako różnicę w~wydajności silnika. Analiza surowych raportów memtier pokazuje, że Redis 7.2 obsługiwał w~tym profilu przeważnie chybienia: przy ok.\ 5\,120~trafieniach na sekundę odnotowano ok.\ 63\,870~chybień na sekundę (ok.\ 93\% operacji GET), podczas gdy Valkey realizował niemal wyłącznie trafienia (ok.\ 4\,796~trafień/s, poniżej 0{,}1\% chybień). Wysoka nominalna przepustowość Redis wynika zatem z~taniej obsługi pustych odpowiedzi (\texttt{nil}), a~nie z~odczytu pełnych wartości o~rozmiarze 1000~KB. Po zestawieniu rzeczywistej przepustowości danych (\texttt{KB/sec}: 5{,}12~GB/s dla Redis wobec 4{,}80~GB/s dla Valkey) oba systemy obsługują duże odczyty praktycznie identycznie. Rozbieżność wynika z~różnego stopnia zapełnienia przestrzeni kluczy w~fazie odczytu: zbiór danych (ok.\ 1\,572~kluczy po 1000~KB, tj.\ ok.\ 1{,}5~GB) przekraczał limit \texttt{maxmemory} ustawiony na 1~GB, a~pod polityką \texttt{allkeys-lru} klaster Redis zachował znacznie mniej kluczy niż Valkey. Potwierdza to tabela~\ref{tab:perf-resources}, w~której Valkey utrzymuje w~tym profilu 4{,}42~GB danych wobec 0{,}81~GB dla Redis. Interpretację tę wzmacnia odwrotny wynik w~profilu write-only przy tym samym payloadzie, gdzie Valkey był 2{,}29$\times$ szybszy --- różnica zależna od architektury obsługi dużych wartości nie zanikałaby przy zmianie kierunku ruchu. Wynik 1000~KB read-only należy więc traktować jako artefakt konfiguracji i~zapełnienia danych, a~nie jako gorszą wydajność odczytu w~Valkey.
 
 Tabela~\ref{tab:perf-resources} zestawia średnie zużycie CPU i pamięci zmierzone przez Prometheus podczas okna testowego. We wszystkich konfiguracjach restarty podów wyniosły zero.
 
-\begin{table}[htbp]
+\begin{table}[!htbp]
 \centering
 \caption{Zużycie zasobów podczas testów wydajnościowych.}
 \label{tab:perf-resources}
@@ -159,17 +163,58 @@ Profil & vCPU & \multicolumn{2}{c}{Valkey} & \multicolumn{2}{c}{Redis 7.2} \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
-\vspace{4pt}
-\footnotesize Kolumny $\Sigma$ CPU i $\Sigma$ Pamięć oznaczają sumaryczne zużycie zasobów przez wszystkie 6~podów klastra (3~mastery + 3~repliki). Kolumna vCPU oznacza limit CPU ustawiony na każdym podzie.
 \end{table}
 
 \FloatBarrier
+
+Kolumny $\Sigma$~CPU i $\Sigma$~Pamięć oznaczają sumaryczne zużycie zasobów przez wszystkie 6~podów klastra (3~mastery + 3~repliki). Kolumna vCPU oznacza limit CPU ustawiony na każdym podzie.
 
 Przy payloadzie 1~KB Valkey zużywał mniej CPU niż Redis 7.2 w profilu read-only (1{,}90 vs 2{,}07~vCPU przy limicie 1~vCPU), ale więcej w profilu write-only (4{,}65 vs 3{,}98~vCPU). Zużycie pamięci było zbliżone dla obu wariantów przy payloadach 1~KB i 10~KB, natomiast przy payloadzie 1000~KB pojawiły się istotne różnice: w profilu read-only Valkey zużywał 4{,}42~GB, podczas gdy Redis 7.2 jedynie 0{,}81~GB, co wskazuje na różnicę w buforowaniu dużych odpowiedzi. W profilu mieszanym 1000~KB Redis 7.2 zużywał 5{,}61~GB wobec 4{,}32~GB dla Valkey.
 
 Zwiększenie limitu vCPU z 1 do 2 nie przyniosło proporcjonalnego wzrostu przepustowości. Przy payloadzie 1~KB przepustowość Valkey w profilu mieszanym spadła z 1\,464\,639 do 1\,444\,051 ops/sec, a Redis 7.2 wzrósł minimalnie z 1\,250\,642 do 1\,251\,901 ops/sec. Przy payloadzie 10~KB wyniki 1~vCPU i 2~vCPU były zbliżone. Wskazuje to, że przy tej konfiguracji klienta i pipeline 10 oba systemy osiągały nasycenie przepustowości już przy 1~vCPU dla payloadów 1--10~KB.
 
 Ponieważ testy wydajnościowe przeprowadzono na lokalnym klastrze minikube, bezwzględne wartości ops/sec nie są bezpośrednio przenoszalne na środowisko produkcyjne. Brak realnej latencji sieciowej (klient i klaster współdzielą interfejs loopback) zawyża mierzoną przepustowość względem konfiguracji z oddzielnymi węzłami. Celem pomiaru jest jednak \textit{porównanie względne} między Valkey a Redis 7.2 w identycznych warunkach --- stosunek przepustowości i różnice opóźnień między wariantami nie powinny zależeć od charakterystyki medium transportowego, ponieważ oba systemy korzystają z tej samej ścieżki sieciowej.
+
+Dla każdej z 18~konfiguracji przeprowadzono dwustronny test Manna-Whitneya~U z~korektą Benjaminiego-Hochberga na wielokrotne porównania. Spośród 18~porównań przepustowości, w~15 różnica okazała się istotna statystycznie po korekcie FDR ($p_{\mathrm{adj}} < 0{,}05$, $|r| \geq 0{,}84$). Trzy nieistotne konfiguracje dotyczyły payloadu 10~KB: write-only przy 1~vCPU ($p_{\mathrm{adj}} = 0{,}33$), read-only przy 2~vCPU ($p_{\mathrm{adj}} = 0{,}25$) oraz write-only przy 2~vCPU ($p_{\mathrm{adj}} = 0{,}69$). W tych konfiguracjach oba systemy osiągały nasycenie przepustowości ograniczone przepływnością pamięci lub sieci, a nie mocą obliczeniową silnika. Analogiczna analiza percentyla p99 opóźnień wykazała istotną różnicę w 14~z~18~konfiguracji. Pełne wyniki testów statystycznych zamieszczono w tabeli~\ref{tab:mann-whitney-ops}.
+
+\FloatBarrier
+
+\begin{table}[!htbp]
+\centering
+\caption{Wyniki testu Manna-Whitneya U dla przepustowości (ops/sec). Kolumna $p_{\mathrm{adj}}$ oznacza p-wartość po korekcie Benjaminiego-Hochberga.}
+\label{tab:mann-whitney-ops}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{llrrrrl}
+\toprule
+Profil & vCPU & $U$ & $p$ & $p_{\mathrm{adj}}$ & $r$ & Istotny? \\
+\midrule
+\multicolumn{7}{l}{\textit{Tylko odczyt}} \\
+\quad 1 KB & 1 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\quad 1 KB & 2 & 0{,}0 & 0{,}0079 & 0{,}0102 & $1{,}000$ & Tak \\
+\quad 10 KB & 1 & 0{,}0 & 0{,}0079 & 0{,}0102 & $1{,}000$ & Tak \\
+\quad 10 KB & 2 & 19{,}0 & 0{,}2222 & 0{,}2500 & $-0{,}520$ & Nie \\
+\quad 1000 KB & 1 & 0{,}0 & 0{,}0079 & 0{,}0102 & $1{,}000$ & Tak \\
+\quad 1000 KB & 2 & 0{,}0 & 0{,}0079 & 0{,}0102 & $1{,}000$ & Tak \\
+\midrule
+\multicolumn{7}{l}{\textit{Tylko zapis}} \\
+\quad 1 KB & 1 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\quad 1 KB & 2 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\quad 10 KB & 1 & 7{,}0 & 0{,}3095 & 0{,}3277 & $0{,}440$ & Nie \\
+\quad 10 KB & 2 & 15{,}0 & 0{,}6905 & 0{,}6905 & $-0{,}200$ & Nie \\
+\quad 1000 KB & 1 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\quad 1000 KB & 2 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\midrule
+\multicolumn{7}{l}{\textit{Mieszany 50/50}} \\
+\quad 1 KB & 1 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\quad 1 KB & 2 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\quad 10 KB & 1 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\quad 10 KB & 2 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\quad 1000 KB & 1 & 23{,}0 & 0{,}0317 & 0{,}0381 & $-0{,}840$ & Tak \\
+\quad 1000 KB & 2 & 25{,}0 & 0{,}0079 & 0{,}0102 & $-1{,}000$ & Tak \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
 
 \section{Porównanie reshardingu klastra}
 
@@ -259,6 +304,8 @@ Faza & Wariant & Ops/sec & p50 [ms] & p95 [ms] & p99 [ms] & p99.9 [ms] \\
 
 Wśród wariantów self-hosted Valkey atomic utrzymał najwyższą przepustowość i najniższe p99 podczas obu faz reshardingu. Redis 7.2 po uruchomieniu na tym samym profilu 2~vCPU/7~GiB osiągnął przepustowość i opóźnienia zbliżone do Valkey legacy, a jednocześnie zachował krótszy czas klasycznej migracji slotów. Valkey legacy miał nieco niższą przepustowość i wyższe p99 niż Redis 7.2, ale różnica była niewielka. Memorystore miał stabilne opóźnienia i bardzo krótki czas skalowania w dół, lecz nie osiągnął najwyższej przepustowości. Z punktu widzenia testu self-hosted najważniejszy wniosek jest taki, że atomowa migracja slotów znacząco skraca okno reshardingu względem klasycznej migracji Valkey, a jednocześnie utrzymuje najkorzystniejsze opóźnienia klienta.
 
+Test Kruskala-Wallisa dla czasu operacji (\texttt{operation\_duration\_s}) potwierdził istotne różnice między czterema wariantami zarówno przy skalowaniu w~górę ($H = 18{,}0$, $p = 0{,}0004$), jak i w~dół ($H = 14{,}2$, $p = 0{,}003$). W~porównaniach parami z~korektą FDR Valkey atomic był istotnie szybszy od wszystkich pozostałych wariantów przy skalowaniu w~górę ($p_{\mathrm{adj}} \leq 0{,}011$, $r = 1{,}0$). Przy skalowaniu w~dół Valkey atomic był istotnie szybszy od Valkey legacy ($p_{\mathrm{adj}} = 0{,}022$) i od Redis 7.2 ($p_{\mathrm{adj}} = 0{,}035$), natomiast różnica względem Memorystore nie osiągnęła istotności ($p_{\mathrm{adj}} = 0{,}14$).
+
 \section{Failover mastera}
 
 Celem testu było zmierzenie wpływu awarii pojedynczego mastera na przepustowość klastra oraz porównanie zachowania Valkey i Redis 7.2 podczas promocji repliki. Procedura testu, klient obciążeniowy oraz mierzone metryki zostały opisane w podrozdziale~\ref{subsec:failover}. Każde powtórzenie trwało 120~s: pierwsze 30~s stanowiło fazę stabilną, po której zasób \texttt{PodChaos} w trybie \texttt{pod-failure} z parametrem \texttt{gracePeriod: 1} usuwał jeden pod pełniący rolę mastera na czas 60~s. Test był ograniczony do wariantów self-hosted, ponieważ wymaga wstrzyknięcia nagłej awarii za pomocą Chaos Mesh, co nie jest możliwe w usłudze zarządzanej --- Memorystore for Redis Cluster nie udostępnia bezpośredniego dostępu do węzłów ani mechanizmu ręcznego failoveru pojedynczego sharda~\cite{gcpMemorystoreHA}. Część hipotezy H3 dotycząca porównywalności z Memorystore pozostaje zatem niezweryfikowana.
@@ -305,6 +352,8 @@ W obu wariantach klient zarejestrował średnio 243--244 błędów połączenia 
 
 Analiza ujawniła różnicę w opóźnieniu terminacji poda: w wariancie Redis 7.2 pierwszy błąd klienta pojawiał się 1~s po wstrzyknięciu \texttt{PodChaos}, natomiast w wariancie Valkey --- po 31~s. Różnica ta wynika z konfiguracji Kubernetes (parametr \texttt{terminationGracePeriodSeconds} w specyfikacji poda Valkey), a nie z zachowania samego systemu bazodanowego. Po faktycznej terminacji poda oba warianty wykazywały zbliżony czas okna błędów ($\approx$18~s), co potwierdza, że mechanizm promocji repliki działa równoważnie w obu systemach.
 
+Test Manna-Whitneya~U nie wykazał istotnych statystycznie różnic między Valkey a Redis 7.2 dla żadnej z~analizowanych metryk failoveru: czas okna błędów ($U = 18{,}5$, $p = 0{,}23$), spadek przepustowości w~oknie chaos ($U = 20{,}0$, $p = 0{,}15$) ani czas trwania failoveru ($U = 15{,}5$, $p = 0{,}58$). Wynik ten potwierdza, że oba systemy zachowują się równoważnie pod względem czasu promocji repliki i wpływu awarii na klienta.
+
 \section{Spójność danych podczas partycji sieciowej}
 
 Celem testu split-brain było sprawdzenie, czy w czasie partycji sieciowej klient może otrzymać potwierdzenie zapisu, który po odtworzeniu spójności klastra nie będzie już widoczny. Procedura testu została opisana w podrozdziale~\ref{subsec:split_brain}. Każde powtórzenie trwało 120~s, z czego pierwsze 30~s stanowiło fazę stabilną, a kolejne 90~s obejmowało partycję sieciową między jednym masterem mniejszościowym a pozostałymi węzłami klastra. Klient testowy używał 50 równoległych workerów i zapisywał klucze rozłożone po całej przestrzeni 16384 slotów.
@@ -336,6 +385,8 @@ Nie zaobserwowano utraty potwierdzonych zapisów po stronie większościowej. Oz
 Różnica między wariantami była niewielka pod względem utraty potwierdzonych danych. Redis 7.2 zarejestrował średnio $10{,}0 \pm 22{,}4$ zapisów odrzuconych jawnie błędem \texttt{ClusterDownError} na powtórzenie (odrzucenia wystąpiły w jednym z pięciu powtórzeń), wszystkie dla slotów mniejszościowych. Z punktu widzenia klienta są to operacje jednoznacznie niezaakceptowane przez klaster, a więc powinny zostać obsłużone przez retry lub logikę degradacji aplikacji. W Valkey w tym zestawie powtórzeń nie wystąpiły jawnie odrzucone zapisy, natomiast pojawiło się 103 żądań dotkniętych awarią przez przekroczenie progu opóźnienia. W Redis 7.2 takich żądań było łącznie 270, wliczając 50 błędów \texttt{CLUSTERDOWN}.
 
 Najważniejszy wniosek z testu jest taki, że oba warianty zachowują się jakościowo podobnie: partycja mniejszościowa może prowadzić do utraty zapisów, które klient uznał za zakończone sukcesem, ale utrata ogranicza się do shardu odciętego od większości. Sam fakt, że część operacji zwraca błąd \texttt{CLUSTERDOWN}, nie jest utratą danych, lecz sygnałem utraty dostępności. Z perspektywy aplikacji bardziej krytyczne są operacje potwierdzone i później utracone, ponieważ klient nie ma bezpośredniego sygnału, że wymagają ponownego zapisu.
+
+Test Manna-Whitneya~U nie wykazał istotnej różnicy między Valkey a Redis 7.2 ani dla liczby utraconych kluczy ($U = 11{,}0$, $p = 0{,}84$), ani dla wskaźnika minority loss rate ($U = 9{,}0$, $p = 0{,}55$). Brak istotności statystycznej jest spójny z obserwacją jakościową: oba systemy korzystają z~identycznego modelu asynchronicznej replikacji i reagują na partycję sieciową w~ten sam sposób.
 
 \section{Resilience przy niedoborze zasobów}
 
@@ -378,9 +429,11 @@ Przy jednym obciążonym masterze spadek przepustowości był zbliżony dla obu 
 
 Szczytowe opóźnienie p99 w oknie obciążenia rosło wraz z liczbą obciążonych masterów. Dla Valkey wyniosło ono $11{,}29 \pm 0{,}45$~ms, $19{,}02 \pm 0{,}80$~ms i $18{,}24 \pm 3{,}61$~ms odpowiednio dla jednego, dwóch i trzech masterów, przy bazowym p99 w zakresie $6{,}3$--$6{,}6$~ms. Dla Redis 7.2 wyniosło ono $40{,}96 \pm 1{,}12$~ms, $49{,}41 \pm 2{,}13$~ms i $89{,}91 \pm 7{,}16$~ms, przy bazowym p99 w zakresie $9{,}7$--$10{,}2$~ms. We wszystkich konfiguracjach i powtórzeniach klient odzyskiwał poziom bazowy po zakończeniu obciążenia (powrót 5/5), a w żadnym powtórzeniu nie wykryto restartu poda.
 
+Test Manna-Whitneya~U dla łącznej przepustowości pod obciążeniem wykazał istotną różnicę między Valkey a Redis 7.2 we wszystkich trzech konfiguracjach ($p < 0{,}016$). Przy jednym obciążonym masterze Valkey osiągał wyższą przepustowość ($r = -0{,}92$), przy dwóch masterach Redis 7.2 był lepszy ($r = 0{,}92$), a~przy trzech masterach Redis 7.2 spadał silniej ($r = -1{,}0$). Odmienny wzorzec degradacji sugeruje różnicę w~sposobie zarządzania wątkami I/O pod presją CPU.
+
 \subsection{Presja pamięci}
 
-W scenariuszu presji pamięci klaster konfigurowano z polityką eksmisji \texttt{allkeys-lru} oraz limitem \texttt{maxmemory} odpowiadającym 3072~MB na shard, a następnie wypełniano go 3\,145\,728 kluczami o rozmiarze 1~KB, czyli ilością danych przekraczającą limit pamięci. Po wypełnieniu uruchamiano 30~sekundowe okno obciążenia mieszanego (memtier) i rejestrowano liczbę eksmitowanych kluczy, wykorzystaną pamięć, liczbę błędów OOM oraz błędów zapisu. Tabela~\ref{tab:resilience-maxmemory} zestawia wyniki, a rysunek~\ref{fig:resilience-maxmemory} porównuje eksmisje, przepustowość oraz p99.
+W scenariuszu presji pamięci klaster konfigurowano z polityką eksmisji \texttt{allkeys-lru} oraz limitem \texttt{maxmemory} 1024~MB na shard (3072~MB łącznie dla klastra), a następnie wypełniano go 3\,145\,728 kluczami o rozmiarze 1~KB, czyli ilością danych przekraczającą ten limit. Po wypełnieniu uruchamiano 30~sekundowe okno obciążenia mieszanego (memtier) i rejestrowano liczbę eksmitowanych kluczy, wykorzystaną pamięć, liczbę błędów OOM oraz błędów zapisu. Tabela~\ref{tab:resilience-maxmemory} zestawia wyniki, a rysunek~\ref{fig:resilience-maxmemory} porównuje eksmisje, przepustowość oraz p99.
 
 \begin{table}[htbp]
 \centering
@@ -396,9 +449,9 @@ Eksmisje (wypełnianie) & $808\,279 \pm 107$ & $843\,035 \pm 35$ \\
 Eksmisje (obserwacja) & $23\,713 \pm 235$ & $25\,176 \pm 331$ \\
 Eksmisje łącznie & $831\,992 \pm 271$ & $868\,211 \pm 316$ \\
 Klucze po teście (dbsize) & $2\,337\,637 \pm 84$ & $2\,300\,057 \pm 9$ \\
-Wykorzystana pamięć [MB] & $3071{,}72$ & $3067{,}94$ \\
+Wykorzystana pamięć [MB] & $3\,071{,}72$ & $3\,067{,}94$ \\
 Osiągnięcie maxmemory [\%] & $100{,}0$ & $100{,}0$ \\
-Ops/sec (obserwacja) & $114\,114{,}57 \pm 863{,}27$ & $104\,728{,}53 \pm 3\,185{,}31$ \\
+Ops/sec (obserwacja) & $114\,115 \pm 863$ & $104\,729 \pm 3\,185$ \\
 p99 (obserwacja) [ms] & $8{,}33 \pm 0{,}21$ & $15{,}62 \pm 1{,}07$ \\
 Błędy OOM & 0 & 0 \\
 Błędy zapisu & 0 & 0 \\
@@ -417,7 +470,9 @@ Czas seedowania [s] & $91{,}89 \pm 0{,}44$ & $90{,}06 \pm 0{,}54$ \\
 
 \FloatBarrier
 
-W obu wariantach wykorzystanie pamięci osiągnęło 100\% limitu \texttt{maxmemory} i nie zarejestrowano błędów OOM ani błędów zapisu. Valkey eksmitował łącznie 831\,992 klucze (808\,279 w fazie wypełniania i 23\,713 w oknie obserwacji), a Redis 7.2 eksmitował łącznie 868\,211 kluczy (843\,035 w fazie wypełniania i 25\,176 w oknie obserwacji). Po teście Valkey utrzymywał 2\,337\,637 kluczy, a Redis 7.2 2\,300\,057 kluczy. W oknie obserwacji Valkey osiągnął średnio 114\,114{,}57 ops/sec przy p99 równym 8{,}33~ms, a Redis 7.2 osiągnął średnio 104\,728{,}53 ops/sec przy p99 równym 15{,}62~ms.
+W obu wariantach wykorzystanie pamięci osiągnęło 100\% limitu \texttt{maxmemory} i nie zarejestrowano błędów OOM ani błędów zapisu. Valkey eksmitował łącznie 831\,992 klucze (808\,279 w fazie wypełniania i 23\,713 w oknie obserwacji), a Redis 7.2 eksmitował łącznie 868\,211 kluczy (843\,035 w fazie wypełniania i 25\,176 w oknie obserwacji). Po teście Valkey utrzymywał 2\,337\,637 kluczy, a Redis 7.2 2\,300\,057 kluczy. W oknie obserwacji Valkey osiągnął średnio 114\,115 ops/sec przy p99 równym 8{,}33~ms, a Redis 7.2 osiągnął średnio 104\,729 ops/sec przy p99 równym 15{,}62~ms.
+
+Test Manna-Whitneya~U wykazał istotną różnicę w~przepustowości pod presją pamięci ($U = 25{,}0$, $p = 0{,}008$, $r = -1{,}0$) oraz w~opóźnieniu p99 ($U = 0{,}0$, $p = 0{,}012$, $r = 1{,}0$) --- Valkey utrzymywał wyższą przepustowość i niższe opóźnienia. Liczba eksmitowanych kluczy nie różniła się istotnie ($U = 12{,}5$, $p = 1{,}0$), co potwierdza, że oba systemy stosowały politykę \texttt{allkeys-lru} z~porównywalną intensywnością.
 
 \section{Rolling upgrade klastra Valkey}
 
@@ -432,13 +487,13 @@ Celem testu rolling upgrade było sprawdzenie, jak klaster Valkey zachowuje się
 \toprule
 Przebieg & Czas [s] & Próby & Błędy & Timeouty & Error rate [\%] & p99 [ms] \\
 \midrule
-1 & 281 & 1153 & 16 & 11 & 1{,}39 & 111{,}44 \\
-2 & 290 & 1202 & 15 & 10 & 1{,}25 & 39{,}99 \\
-3 & 268 & 1136 & 15 & 6 & 1{,}32 & 40{,}95 \\
-4 & 282 & 1205 & 13 & 6 & 1{,}08 & 35{,}96 \\
-5 & 269 & 1136 & 16 & 7 & 1{,}41 & 34{,}65 \\
+1 & 281 & 1\,153 & 16 & 11 & 1{,}39 & 111{,}44 \\
+2 & 290 & 1\,202 & 15 & 10 & 1{,}25 & 39{,}99 \\
+3 & 268 & 1\,136 & 15 & 6 & 1{,}32 & 40{,}95 \\
+4 & 282 & 1\,205 & 13 & 6 & 1{,}08 & 35{,}96 \\
+5 & 269 & 1\,136 & 16 & 7 & 1{,}41 & 34{,}65 \\
 \midrule
-Śr. $\pm$ odch. std. & $278{,}0 \pm 9{,}35$ & $1166{,}4 \pm 34{,}6$ & $15{,}0 \pm 1{,}22$ & $8{,}0 \pm 2{,}35$ & $1{,}29 \pm 0{,}13$ & $52{,}60 \pm 33{,}00$ \\
+Śr. $\pm$ odch. std. & $278{,}0 \pm 9{,}35$ & $1\,166{,}4 \pm 34{,}6$ & $15{,}0 \pm 1{,}22$ & $8{,}0 \pm 2{,}35$ & $1{,}29 \pm 0{,}13$ & $52{,}60 \pm 33{,}00$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -477,9 +532,11 @@ Faza & Valkey [s] & Redis 7.2 [s] \\
 \midrule
 \multicolumn{3}{l}{\textit{Restore}} \\
 \quad Utworzenie świeżego klastra & $72{,}0 \pm 4{,}6$ & $79{,}0 \pm 3{,}5$ \\
+\quad Skalowanie klastra do zera & $33{,}0 \pm 0{,}0$ & $31{,}6 \pm 0{,}9$ \\
 \quad Dyski ze snapshotów & $33{,}4 \pm 5{,}6$ & $38{,}6 \pm 7{,}3$ \\
 \quad Kopiowanie RDB w Kubernetes & $69{,}2 \pm 0{,}8$ & $70{,}0 \pm 1{,}6$ \\
 \quad Czyszczenie PVC replik & $43{,}8 \pm 1{,}6$ & $42{,}8 \pm 1{,}6$ \\
+\quad Czyszczenie tymczasowych dysków & $5{,}2 \pm 0{,}4$ & $5{,}2 \pm 0{,}4$ \\
 \quad Uruchomienie podów & $24{,}6 \pm 2{,}1$ & $52{,}2 \pm 3{,}3$ \\
 \quad Odzyskanie stanu klastra & $13{,}8 \pm 5{,}8$ & $1{,}2 \pm 0{,}4$ \\
 \quad \textbf{Łączny czas restore} & $\mathbf{295{,}8 \pm 8{,}9}$ & $\mathbf{322{,}8 \pm 6{,}2}$ \\
@@ -557,6 +614,8 @@ Zgodna liczba kluczy & $5/5$ & $5/5$ & $5/5$ \\
 
 Najkrótszy backup uzyskał Memorystore, ale przewaga nad procedurą online dla Valkey była niewielka. Najkrótszy restore uzyskał Valkey self-hosted, a Redis 7.2 był od niego wolniejszy o około 9\%. Memorystore miał najdłuższy czas odtworzenia, około 1{,}68$\times$ dłuższy niż Valkey i 1{,}54$\times$ dłuższy niż Redis 7.2. Interpretując te wyniki należy uwzględnić różnicę operacyjną: wariant self-hosted wymaga własnej orkiestracji snapshotów, tymczasowych PVC i uruchamiania klastra docelowego, natomiast Memorystore ukrywa te kroki za API usługi zarządzanej.
 
+Test Kruskala-Wallisa dla czasu odtworzenia (\texttt{restore\_duration\_s}) potwierdził istotne różnice między trzema wariantami ($H = 12{,}5$, $p = 0{,}002$). W~porównaniach parami Valkey był istotnie szybszy od Redis 7.2 zarówno w~czasie backupu ($U = 2{,}5$, $p = 0{,}047$, $r = 0{,}80$), jak i~w~czasie odtworzenia ($U = 0{,}0$, $p = 0{,}008$, $r = 1{,}0$). Czas odtworzenia Memorystore był istotnie dłuższy od obu wariantów self-hosted ($p < 0{,}012$).
+
 \section{Metryki proceduralne i kosztowe}
 
 Oprócz metryk technicznych policzono metryki proceduralne wymagane do oceny nakładu pracy operatora. Przez \textit{krok} rozumiana jest logiczna faza procedury opisanej w rozdziale~\ref{ch:organizacja}, na przykład przygotowanie danych, wykonanie operacji administracyjnej lub oczekiwanie na gotowość klastra. Przez \textit{komendę} rozumiane jest widoczne dla operatora miejsce wywołania polecenia w procedurze, na przykład \texttt{helm upgrade}, \texttt{gcloud redis clusters update} lub \texttt{kubectl wait}. Nie liczono każdej iteracji pętli oczekiwania, ponowień retry ani powtórzeń wynikających z parametru $N=5$.
@@ -588,7 +647,33 @@ Backup i restore & Memorystore & 6 & 5 \\
 
 \FloatBarrier
 
-Koszt miesięczny policzono dla konfiguracji używanej w testach porównywanych z Memorystore: region \texttt{europe-central2}, dwa węzły GKE \texttt{n2-standard-8}, dyski boot \texttt{pd-balanced} 50~GiB na węzeł, sześć PVC \texttt{pd-ssd} po 8~GiB oraz Memorystore \texttt{redis-standard-small} z trzema shardami i jedną repliką na shard. Przyjęto 730~h miesięcznie, bez rabatów, darmowego limitu (ang.~\textit{free tier}), kosztów sieci, AOF i składowania backupów. Ceny GKE, dysków i Memorystore odczytano z cenników Google Cloud~\cite{gcpGkePricing,gcpComputeDiskPricing,gcpMemorystorePricing}. Cena \texttt{n2-standard-8} jest pozostawiona w tabeli jako parametr $p$, ponieważ powinna być każdorazowo potwierdzona w aktualnym katalogu Cloud SKUs~\cite{gcpCloudSkus}.
+Koszt miesięczny policzono dla konfiguracji używanej w~testach: region \texttt{europe-central2} (Warszawa), ceny on-demand bez rabatów i darmowego limitu (ang.~\textit{free tier}). Wariant self-hosted obejmuje dwa węzły GKE \texttt{n2-standard-8} z~dyskami boot \texttt{pd-balanced} 50~GiB na węzeł. Ponieważ Valkey i Redis 7.2 działają na tej samej infrastrukturze, koszt obu wariantów jest identyczny i~w~dalszej analizie traktowany jest łącznie jako \textit{self-hosted}. Wariant zarządzany obejmuje klaster Memorystore \texttt{redis-standard-small} z~trzema shardami i~jedną repliką na shard, co daje sześć węzłów. Tabela~\ref{tab:cost-resources} zestawia zasoby obu konfiguracji.
+
+\begin{table}[htbp]
+\centering
+\caption{Porównanie zasobów infrastruktury.}
+\label{tab:cost-resources}
+\begin{adjustbox}{max width=\textwidth}
+\begin{tabular}{lrrrrr}
+\toprule
+Wariant & Węzły & vCPU/węzeł & RAM/węzeł [GB] & $\Sigma$ vCPU & $\Sigma$ RAM [GB] \\
+\midrule
+Self-hosted (\texttt{n2-standard-8}) & 2 & 8 & 32 & 16 & 64 \\
+Memorystore (\texttt{redis-standard-small}) & 6 & 2 & 6{,}5 & 12 & 39 \\
+\bottomrule
+\end{tabular}
+\end{adjustbox}
+\end{table}
+
+\FloatBarrier
+
+Do przeliczenia stawek godzinowych na koszty miesięczne przyjęto standardowy przelicznik stosowany w~cennikach Google Cloud:
+
+\[
+\frac{365 \times 24}{12} = \frac{8760}{12} = 730 \;\text{h/mies.}
+\]
+
+Ceny odczytano z~Google Cloud Pricing Calculator dla regionu \texttt{europe-central2} (stan na 12~czerwca 2026)~\cite{gcpCalcSelfHosted,gcpCalcMemorystore}. Tabela~\ref{tab:cost-monthly} zestawia koszt miesięczny obu wariantów.
 
 \begin{table}[htbp]
 \centering
@@ -599,9 +684,8 @@ Koszt miesięczny policzono dla konfiguracji używanej w testach porównywanych 
 \toprule
 Wariant & Składniki & Koszt miesięczny [USD] \\
 \midrule
-Valkey self-hosted & GKE fee, 2 węzły, boot disks, PVC & $89{,}16 + 1460p$ \\
-Redis 7.2 self-hosted & GKE fee, 2 węzły, boot disks, PVC & $89{,}16 + 1460p$ \\
-Memorystore & 6 węzłów \texttt{redis-standard-small} & $624{,}15$ \\
+Self-hosted & 2 $\times$ \texttt{n2-standard-8}, dyski boot & $699{,}29$ \\
+Memorystore & 6 $\times$ \texttt{redis-standard-small} & $804{,}17$ \\
 \bottomrule
 \end{tabular}
 \end{adjustbox}
@@ -609,24 +693,38 @@ Memorystore & 6 węzłów \texttt{redis-standard-small} & $624{,}15$ \\
 
 \FloatBarrier
 
-Stała część kosztu self-hosted wynosi 89{,}16~USD miesięcznie: 73{,}00~USD za opłatę klastra GKE, 10{,}00~USD za dyski boot \texttt{pd-balanced} (2 węzły $\times$ 50~GiB) oraz 8{,}16~USD za PVC \texttt{pd-ssd}. Zmienna $p$ oznacza aktualną cenę jednej maszyny \texttt{n2-standard-8} za godzinę w regionie \texttt{europe-central2}. Dla Memorystore koszt wynosi $6 \times 0{,}1425 \times 730 = 624{,}15$~USD miesięcznie.
+Compute Engine rozlicza maszyny \texttt{n2-standard-8} komponentowo: osobno za vCPU i~osobno za pamięć. Dla dwóch węzłów w~regionie \texttt{europe-central2}:
 
-Punkt, w którym koszt infrastruktury self-hosted zrówna się z Memorystore, wynosi:
+\begin{itemize}
+\item vCPU: $8 \times 2 \times 730 = 11\,680$ core-godzin $\rightarrow$ 446{,}76~USD,
+\item pamięć: $32 \times 2 \times 730 = 46\,720$ GB-godzin $\rightarrow$ 239{,}53~USD,
+\item dyski boot \texttt{pd-balanced}: $2 \times 50$ GiB $\rightarrow$ 13{,}00~USD.
+\end{itemize}
+
+Efektywna stawka za jeden węzeł \texttt{n2-standard-8} wynosi $(446{,}76 + 239{,}53) / (2 \times 730) = 0{,}4700$~USD/h. Łączny koszt self-hosted: $446{,}76 + 239{,}53 + 13{,}00 = 699{,}29$~USD/mies.
+
+Koszt Memorystore wynosi $6 \times 0{,}1836\;\text{USD/h} \times 730 = 804{,}17$~USD/mies.~\cite{gcpMemorystorePricing}. Stawka 0{,}1836~USD/h za węzeł dotyczy regionu \texttt{europe\-central2}; w~tańszych regionach (np.~\texttt{us\-central1}) wynosi~0{,}1425~USD/h.
+
+Infrastruktura self-hosted (699{,}29~USD/mies.) jest o~13\% tańsza od Memorystore\linebreak (804{,}17~USD/mies.) przy cenach on-demand w~regionie \texttt{europe-central2}. Jednocześnie wariant self-hosted dysponuje większymi zasobami obliczeniowymi (16~vCPU, 64~GB~RAM) niż klaster Memorystore (12~vCPU, 39~GB).
+
+Koszt na 100~tys.\ ops/sec policzono według wzoru:
 
 \[
-p = \frac{624{,}15 - 89{,}16}{1460} = 0{,}3664 \text{ USD/h}.
+\frac{\text{koszt miesięczny}}{\text{ops/sec} / 100\,000}.
 \]
 
-Koszt na 100~tys. ops/sec policzono według wzoru:
+Ze względu na ograniczenia w~przeprowadzeniu dedykowanych testów wydajnościowych (w~szczególności wobec usługi Memorystore) przepustowość do tej kalkulacji wyznaczono z~testu reshardingu --- z~30-sekundowego okna stanu ustalonego rejestrowanego pod obciążeniem \emph{przed} rozpoczęciem operacji zmiany liczby shardów (profil operacyjny: 1~KB, mixed 50/50, \texttt{pipeline}=1, 2~vCPU na shard). Uśrednione wartości baseline (po~5 przebiegach w~każdym kierunku 3$\to$4 i~4$\to$3) wynoszą: Valkey (legacy) $\approx$203\,313~ops/sec, Redis 7.2 $\approx$203\,382~ops/sec, Memorystore $\approx$141\,719~ops/sec.
 
 \[
-\frac{\text{koszt miesięczny}}{\text{ops/sec}/100000}.
+\text{Valkey: } \frac{699{,}29}{203\,313 / 100\,000} = 343{,}95\;\text{USD},
+\quad
+\text{Redis 7.2: } \frac{699{,}29}{203\,382 / 100\,000} = 343{,}83\;\text{USD},
 \]
-
-Dla bazowego testu wydajnościowego 1~KB, mixed 50/50, 2~vCPU:
-
 \[
-\text{Valkey: } \frac{89{,}16 + 1460p}{14{,}44051},
-\qquad
-\text{Redis 7.2: } \frac{89{,}16 + 1460p}{12{,}51901}.
+\text{Memorystore: } \frac{804{,}17}{141\,719 / 100\,000} = 567{,}44\;\text{USD}.
 \]
+
+W~badanym profilu Valkey i~Redis 7.2 osiągają praktycznie identyczną przepustowość, więc ich koszt jednostkowy na 100~tys.\ ops/sec jest zbliżony ($\approx$344~USD) i~istotnie niższy niż dla Memorystore ($\approx$567~USD). Przewaga self-hosted wynika zarówno z~tańszej infrastruktury, jak i~z~wyższej przepustowości w~tym profilu; należy jednak zaznaczyć, że klient łączył się z~Memorystore przez dodatkowy skok sieciowy w~ramach sieci wirtualnej (VPC, \textit{Virtual Private Cloud} --- prywatna, programowo definiowana sieć w~chmurze GCP, w~której uruchomione są węzły GKE i~instancja Memorystore), co częściowo wyjaśnia różnicę przepustowości.
+
+\paragraph{Ograniczenia analizy kosztowej.}
+Powyższa kalkulacja opiera się na uproszczonym modelu: (1)~stała liczba godzin w~miesiącu ($365 \times 24 / 12 = 730$~h); (2)~cena on-demand bez rabatów CUD (\textit{Committed Use Discounts}), SUD (\textit{Sustained Use Discounts}) ani maszyn spot; (3)~pominięcie kosztów ruchu sieciowego (\textit{egress}); (4)~brak kosztów trwałości danych --- konfiguracja nie obejmuje AOF ani składowania backupów; (5)~pominięcie opłaty za zarządzanie klastrem GKE (\textit{cluster management fee} --- 73~USD/mies.\ dla GKE Standard), kosztów monitoringu i~logowania. Ograniczenia te sprawiają, że wyliczone wartości ilustrują proporcje kosztów, ale nie stanowią pełnej kalkulacji TCO. Uwzględnienie opłaty GKE (73~USD) powiększa koszt self-hosted do 772{,}29~USD/mies., co nadal pozostaje poniżej kosztu Memorystore.

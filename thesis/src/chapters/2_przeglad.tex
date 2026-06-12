@@ -44,7 +44,7 @@ Redis wykorzystuje jednowątkowy model obsługi żądań oparty na pętli zdarze
 Redis oferuje dwa mechanizmy utrwalania danych na dysku~\cite{redisPersistence}:
 
 \begin{itemize}
-    \item \textbf{RDB} (Redis Database) -- tworzenie migawki (snapshot) całego zbioru danych w określonym momencie. Operacja \texttt{BGSAVE} uruchamia proces potomny, który serializuje dane do pliku \texttt{dump.rdb}. Mechanizm ten zapewnia kompaktowy format kopii zapasowej, ale dane zapisane po ostatnim snapshoty są tracone w przypadku awarii.
+    \item \textbf{RDB} (Redis Database) -- tworzenie migawki (snapshot) całego zbioru danych w określonym momencie. Operacja \texttt{BGSAVE} uruchamia proces potomny, który serializuje dane do pliku \texttt{dump.rdb}. Mechanizm ten zapewnia kompaktowy format kopii zapasowej, ale dane zapisane po ostatnim snapshocie są tracone w przypadku awarii.
     \item \textbf{AOF} (Append Only File) -- rejestrowanie każdej operacji zapisu w pliku dziennika. Umożliwia odtworzenie stanu przez ponowne odtworzenie sekwencji poleceń. Oferuje lepszą trwałość (konfigurowalną do poziomu fsync po każdej operacji), ale kosztem większego rozmiaru pliku i wyższego obciążenia I/O.
 \end{itemize}
 
@@ -216,7 +216,7 @@ Decyzja między modelem zarządzanym a self-hosted zależy od wielu czynników o
 
 Problematyka wydajności i niezawodności systemów in-memory jest przedmiotem wielu badań, jednak prace porównujące bezpośrednio Valkey z Redis w kontekście operacyjnym są nieliczne ze względu na stosunkowo krótką historię projektu Valkey.
 
-Kaptosv analizuje wykorzystanie Redis jako warstwy cache w aplikacjach o dużym ruchu, wskazując na znaczenie odpowiedniego doboru strategii cache'owania, polityk wygasania oraz monitorowania metryk hit/miss ratio dla osiągnięcia optymalnej wydajności~\cite{kaptosv2025}. Praca ta koncentruje się jednak na pojedynczej instancji Redis i nie uwzględnia aspektów klastrowych ani operacyjnych.
+Kaptsov analizuje wykorzystanie Redis jako warstwy cache w aplikacjach o dużym ruchu, wskazując na znaczenie odpowiedniego doboru strategii cache'owania, polityk wygasania oraz monitorowania metryk hit/miss ratio dla osiągnięcia optymalnej wydajności~\cite{kaptosv2025}. Praca ta koncentruje się jednak na pojedynczej instancji Redis i nie uwzględnia aspektów klastrowych ani operacyjnych.
 
 Han i współautorzy przeprowadzają eksploracyjne studium konsekwencji zmiany licencji Redis, analizując reakcję społeczności open-source, dostawców chmurowych oraz użytkowników końcowych. Ich praca identyfikuje napięcie między modelem biznesowym firm utrzymujących projekty open-source a oczekiwaniami ekosystemu dotyczącymi swobody wykorzystania kodu~\cite{han2026}. Kontekst ten stanowi motywację organizacyjną do poszukiwania alternatyw dla Redis.
 

@@ -1,7 +1,15 @@
 \section*{Streszczenie}
 
-Dodaj streszczenie pracy w języku polskim. Staraj się uwzględnić wymienione na stronie tytułowej słowa kluczowe. Uwaga przedstawiony rekomendowany szablon dotyczy pracy dyplomowej pisanej w języku angielskim. W przeciwnym wypadku, student powinien samodzielnie zmienić nazwy ,,Chapter'' na ,,Rodział'' itp stosując odpowiednie pakiety systemu \LaTeX oraz ustawienia w pliku \textit{latex-settings.tex}.
+Zmiana modelu licencjonowania Redis po wersji~7.2 postawiła organizacje korzystające z~tego systemu cache'ującego przed decyzją o~dalszej ścieżce rozwoju infrastruktury. Niniejsza praca przedstawia kompleksową analizę porównawczą trzech rozwiązań: samodzielnie zarządzanego klastra Valkey w~Kubernetes, klastra Redis~7.2 oraz usługi zarządzanej Google Cloud Memorystore for Redis. Celem było ustalenie, czy Valkey stanowi praktyczną, wydajną i~ekonomicznie uzasadnioną alternatywę dla Redis~7.2 i~rozwiązania zarządzanego.
+
+Przeprowadzono siedem kategorii testów --- badania wydajności, resharding, failover mastera, spójność danych podczas partycji sieciowej, odporność na niedobór zasobów CPU i~pamięci, rolling upgrade oraz backup i~restore --- każdy powtarzany pięciokrotnie. Wyniki poddano analizie statystycznej z~wykorzystaniem testu Manna-Whitneya~U oraz korekty Benjaminiego-Hochberga przy porównaniach wielokrotnych.
+
+Wykazano, że Valkey osiąga istotnie wyższą przepustowość niż Redis~7.2 w~większości profili obciążenia przy nieodróżnialnym statystycznie zachowaniu podczas failoveru i~partycji sieciowej. Infrastruktura self-hosted okazała się tańsza od usługi zarządzanej, kosztem wyższego nakładu pracy operacyjnej. Wyniki potwierdzają, że Valkey jest dojrzałym zamiennikiem Redis~7.2 w~środowiskach chmurowych.
 
 \section*{Abstract}
 
-Streszczenie  w języku angielskim.
+The change in the Redis licensing model after version~7.2 confronted organizations relying on this caching system with a~decision about the future direction of their infrastructure. This thesis presents a~comprehensive comparative analysis of three solutions: a~self-managed Valkey cluster on Kubernetes, a~Redis~7.2 cluster, and the managed Google Cloud Memorystore for Redis service. The goal was to determine whether Valkey constitutes a~practical, performant, and economically justified alternative to Redis~7.2 and to the managed offering.
+
+Seven categories of tests were conducted --- baseline performance, resharding, master failover, data consistency during a~network partition, resilience to CPU and memory pressure, rolling upgrade, and backup and restore --- each repeated five times. The results were analysed statistically using the Mann-Whitney~U test with the Benjamini-Hochberg correction for multiple comparisons.
+
+The study shows that Valkey achieves significantly higher throughput than Redis~7.2 across most workload profiles, while behaving in a~statistically indistinguishable manner during failover and network partitions. The self-hosted infrastructure proved cheaper than the managed service, at the cost of higher operational effort. The results confirm that Valkey is a~mature drop-in replacement for Redis~7.2 in cloud environments.

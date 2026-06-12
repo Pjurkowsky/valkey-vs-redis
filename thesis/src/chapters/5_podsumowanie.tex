@@ -1,14 +1,44 @@
 \chapter{Podsumowanie i wnioski z badań}\label{ch:podsumowanie}
-\dots
 
 \section{Podsumowanie badań}
-\dots
+
+W ramach pracy przeprowadzono siedem kategorii testów porównawczych obejmujących badania wydajności, resharding, failover mastera, spójność danych podczas partycji sieciowej, odporność na niedobór zasobów (CPU i pamięć), rolling upgrade oraz backup i restore. Każdy test był powtarzany pięciokrotnie ($N = 5$). Wyniki poddano analizie statystycznej z~wykorzystaniem dwustronnego testu Manna-Whitneya~U na poziomie istotności $\alpha = 0{,}05$. W~scenariuszach z~wieloma porównaniami zastosowano korektę Benjaminiego-Hochberga (FDR). Łącznie przeprowadzono 66~testów statystycznych, z~których 49~wykazało istotną różnicę.
 
 \section{Weryfikacja hipotez badawczych}
-\dots
+
+\textbf{H1} (wydajność): W~15~z~18~konfiguracji wydajnościowych różnica w~przepustowości między Valkey a Redis 7.2 była istotna statystycznie po korekcie FDR ($p_{\mathrm{adj}} < 0{,}05$, $|r| \geq 0{,}84$). Valkey osiągał wyższą przepustowość niż Redis 7.2 przy payloadach 1~KB (wszystkie proporcje operacji, oba limity vCPU) oraz przy payloadzie 1000~KB w~trybie write-only i mieszanym. Trzy konfiguracje z~payloadem 10~KB nie wykazały istotnej różnicy, co wskazuje na nasycenie przepustowości ograniczone przepływnością pamięci lub sieci. Jedyny przypadek, w~którym Redis 7.2 wykazał wyższe nominalne ops/sec (1000~KB read-only, stosunek $0{,}07$), okazał się artefaktem pomiarowym: w~tym profilu Redis obsługiwał ok.\ 93\% chybień (tanie odpowiedzi \texttt{nil}), więc liczba ta nie odzwierciedlała odczytu dużych wartości --- po uwzględnieniu rzeczywistej przepustowości danych (\texttt{KB/sec}) oba systemy obsługiwały duże odczyty praktycznie identycznie (zob.\ rozdz.~\ref{ch:wyniki}). Analogiczna analiza percentyla p99 opóźnień wykazała istotną różnicę w~14~z~18~konfiguracji.
+
+Hipotezę H1 uznaje się za \textit{częściowo potwierdzoną}: Valkey osiąga istotnie wyższą przepustowość w~większości konfiguracji (szczególnie przy payloadach 1~KB i 1000~KB write/mixed), natomiast przy payloadach 10~KB różnice są statystycznie nieistotne (nasycenie przepustowości). Nie zaobserwowano przy tym konfiguracji, w~której Redis 7.2 byłby rzeczywiście szybszy --- jedyny taki przypadek (1000~KB read-only) wynikał z~różnicy w~trafieniach, a~nie z~wydajności silnika.
+
+\textbf{H2} (koszty): Infrastruktura self-hosted kosztuje 699{,}29~USD/mies.\ wobec 804{,}17~USD/mies.\ dla Memorystore w~regionie \texttt{europe-central2} przy cenach on-demand --- self-hosted jest o~13\% tańszy. Nawet po doliczeniu opłaty za zarządzanie klastrem GKE (73~USD/mies.) koszt self-hosted (772{,}29~USD) pozostaje poniżej Memorystore. Jednocześnie warianty self-hosted wymagają 7--11~kroków proceduralnych i 5--12~komend operatora w~scenariuszach upgrade, resharding i backup/restore, wobec 1--6~kroków i 1--5~komend dla Memorystore. Wobec ograniczeń uniemożliwiających przeprowadzenie dedykowanego testu wydajnościowego Memorystore, koszt jednostkowy na 100~tys.\ ops/sec wyznaczono z~przepustowości baseline testu reshardingu (30-sekundowe okno stanu ustalonego przed operacją): wynosi on $\approx$344~USD zarówno dla Valkey, jak i~dla Redis 7.2 (zbliżona przepustowość $\approx$203~tys.\ ops/sec) oraz $\approx$567~USD dla Memorystore ($\approx$142~tys.\ ops/sec). Hipotezę H2 uznaje się za \textit{potwierdzoną}: infrastruktura self-hosted jest tańsza od Memorystore w~badanej konfiguracji, a~w~jedynym zmierzonym profilu osiąga przy tym wyższą przepustowość; wiąże się to jednak z~wyższym nakładem pracy operacyjnej.
+
+\textbf{H3} (failover): Test Manna-Whitneya~U nie wykazał istotnej różnicy w~czasie failoveru między Valkey a Redis 7.2 ($p = 0{,}23$). Oba systemy wykazały zbliżony czas okna błędów ($\approx$18~s), spadek przepustowości ($\approx$35\%) i liczbę błędów połączenia ($\approx$244). Hipotezę H3 uznaje się za \textit{niepotwierdzoną} w~części dotyczącej krótszego czasu failoveru Valkey. Oba warianty zachowują się równoważnie pod względem promocji repliki. Część hipotezy dotycząca porównywalności z~Memorystore nie mogła zostać zweryfikowana eksperymentalnie.
+
+\textbf{H4} (utrzymywalność): Valkey self-hosted wymaga 7~kroków i 5~komend przy rolling upgrade, 7--8~kroków i 5--6~komend przy reshardingu oraz 11~kroków i 12~komend przy backup/restore. Memorystore wymaga odpowiednio 4~kroków/2~komendy (resharding) i 6~kroków/5~komend (backup/restore). Testy wykazały jednocześnie, że atomowa migracja slotów w~Valkey jest istotnie szybsza od wszystkich pozostałych wariantów przy skalowaniu w~górę ($p_{\mathrm{adj}} \leq 0{,}011$), a~czas odtworzenia Valkey jest istotnie krótszy od Redis 7.2 ($p = 0{,}008$) i Memorystore ($p = 0{,}012$). Hipotezę H4 uznaje się za \textit{potwierdzoną}: wariant self-hosted wymaga więcej kroków proceduralnych, ale oferuje krótsze czasy operacji.
 
 \section{Wnioski}
-\dots
+
+\begin{enumerate}
+    \item Valkey stanowi funkcjonalną i wydajnościową alternatywę dla Redis 7.2 w~środowisku Kubernetes. W~większości testowanych konfiguracji oferuje istotnie wyższą przepustowość przy zachowaniu porównywalnej lub niższej latencji.
+    \item Oba systemy są nieodróżnialne statystycznie pod względem failoveru i spójności danych podczas partycji sieciowej (brak istotnych różnic przy $N = 5$), co jest spójne ze~wspólnym modelem asynchronicznej replikacji Redis Cluster.
+    \item Atomowa migracja slotów (dostępna od Valkey 9.0) istotnie skraca czas reshardingu i~zmniejsza wpływ operacji na opóźnienia klienta.
+    \item Valkey lepiej radzi sobie z~presją pamięci (wyższe ops/sec, niższe p99 pod polityką \texttt{allkeys-lru}), natomiast wzorzec degradacji pod stresem CPU jest bardziej złożony i~zależy od liczby dotkniętych masterów.
+    \item Memorystore oferuje niższy nakład pracy operacyjnej, ale w~regionie \texttt{europe-central2} jest o~13\% droższy od infrastruktury self-hosted (804~USD vs 699~USD/mies.) przy cenach on-demand. Memorystore ma jednocześnie dłuższe czasy odtworzenia i~reshardingu w~górę. W~jedynym profilu, w~którym udało się zmierzyć przepustowość Memorystore (baseline testu reshardingu), osiągała ona $\approx$142~tys.\ ops/sec wobec $\approx$203~tys.\ ops/sec dla self-hosted, co przekłada się na niższy koszt jednostkowy self-hosted ($\approx$344 wobec $\approx$567~USD na 100~tys.\ ops/sec); różnicę przepustowości częściowo tłumaczy dodatkowy skok sieciowy klienta do usługi zarządzanej.
+\end{enumerate}
+
+\section{Rekomendacje praktyczne dla przemysłu}
+
+Na podstawie uzyskanych wyników można sformułować następujące rekomendacje dla zespołów projektujących i~utrzymujących klastry Redis-kompatybilne w~środowiskach produkcyjnych:
+
+\begin{enumerate}
+    \item \textbf{Valkey jako zamiennik Redis 7.2.} Dla większości typowych obciążeń (payloady rzędu pojedynczych kilobajtów, proporcje read/write zbliżone do mieszanych) Valkey stanowi bezpieczny zamiennik Redis 7.2 --- oferuje istotnie wyższą przepustowość przy tym samym modelu replikacji oraz nieodróżnialnym statystycznie zachowaniu podczas failoveru i~partycji sieciowej. Migracja nie wymaga zmian po stronie aplikacji klienckiej dzięki zachowaniu zgodności protokołu.
+    \item \textbf{Weryfikacja pod kątem konkretnego profilu obciążenia.} Przewaga wydajnościowa nie jest uniwersalna --- przy payloadach 10~KB różnice między systemami okazały się statystycznie nieistotne. Dodatkowo wynik 1000~KB read-only pokazuje, jak łatwo o~błędną interpretację: nominalne ops/sec mogą być zawyżone przez chybienia (\texttt{nil}) przy zbiorze danych większym niż \texttt{maxmemory}. Przed migracją zaleca się przeprowadzenie testu na reprezentatywnym profilu, z~kontrolą współczynnika trafień i~rzeczywistej przepustowości danych (\texttt{KB/sec}), zamiast polegania na samej nominalnej liczbie operacji.
+    \item \textbf{Wybór self-hosted vs.\ usługa zarządzana.} Samodzielnie zarządzany klaster w~Kubernetes jest tańszy (o~$\approx$13\% w~koszcie infrastruktury i~$\approx$344 wobec $\approx$567~USD w~koszcie jednostkowym na 100~tys.\ ops/sec w~badanym profilu), ale wymaga wyższego nakładu pracy operacyjnej (7--11~kroków proceduralnych w~scenariuszach utrzymaniowych). Rozwiązanie self-hosted rekomenduje się zespołom dysponującym kompetencjami w~zakresie Kubernetes, dla których koszt i~kontrola nad konfiguracją są priorytetem; Memorystore --- zespołom optymalizującym czas i~nakład operacyjny kosztem wyższej ceny.
+    \item \textbf{Atomowa migracja slotów przy reshardingu.} W~klastrach Valkey (od~wersji~9.0) zaleca się włączenie atomowej migracji slotów --- skraca ona czas reshardingu i~istotnie ogranicza wpływ operacji skalowania na opóźnienia po stronie klienta w~porównaniu z~klasycznym mechanizmem.
+    \item \textbf{Obciążenia z~intensywną eksmisją.} Dla cache'y działających pod presją pamięci z~polityką \texttt{allkeys-lru} Valkey osiągał wyższą przepustowość i~niższe p99 niż Redis 7.2, co czyni go preferowanym wyborem dla scenariuszy z~częstą eksmisją kluczy.
+    \item \textbf{Współlokowanie klienta z~klastrem.} Niższa przepustowość obserwowana wobec Memorystore wynikała częściowo z~dodatkowego skoku sieciowego klienta do usługi zarządzanej. W~projektach wrażliwych na opóźnienia zaleca się umieszczanie aplikacji klienckich możliwie blisko węzłów klastra (ta sama strefa/sieć), niezależnie od wybranego wariantu wdrożenia.
+\end{enumerate}
 
 \section{Weryfikacja osiągnięcia celu pracy}
-\dots
+
+Celem pracy była analiza porównawcza klastra Valkey w~Kubernetes z~rozwiązaniami opartymi o~Redis. Cel został osiągnięty: przeprowadzono pomiary wydajności, niezawodności i utrzymywalności w~siedmiu scenariuszach testowych, potwierdzono lub odrzucono cztery hipotezy badawcze z~wykorzystaniem testów statystycznych, a~wyniki przedstawiono w~formie ilościowej z~podaniem p-wartości i~wielkości efektu.

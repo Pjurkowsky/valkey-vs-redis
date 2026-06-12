@@ -77,7 +77,7 @@ gcloud redis clusters create redis-ms \
 
 \subsubsection{Normalizacja zasobów do Memorystore}\label{subsec:normalizacja}
 
-W testach porównujących klastry self-hosted z Memorystore konieczne jest dopasowanie zasobów przydzielonych podom Valkey i Redis 7.2 do parametrów usługi zarządzanej. Typ węzła \texttt{redis-standard-small} zgodnie z dokumentacją~\cite{gcpMemorystoreNodeTypes} oferuje 2~vCPU i około 7~GiB pamięci całkowitej na shard, z czego około 5{,}2~GiB jest dostępne jako pamięć użytkowa po odjęciu narzutu systemowego.
+W testach porównujących klastry self-hosted z Memorystore konieczne jest dopasowanie zasobów przydzielonych podom Valkey i Redis 7.2 do parametrów usługi zarządzanej. Typ węzła \texttt{redis-standard-small} zgodnie z dokumentacją~\cite{gcpMemorystoreNodeTypes} oferuje 2~vCPU i 6{,}5~GB pojemności całkowitej na węzeł, z czego około 5{,}2~GB stanowi domyślną pojemność użytkową (keyspace) po odjęciu zarezerwowanego narzutu systemowego.
 
 Aby zapewnić porównywalność, klastry self-hosted w testach z udziałem Memorystore były uruchamiane z limitami i requestami zasobów na 2~vCPU i 7~GiB pamięci RAM na pod oraz z parametrem \texttt{maxmemory} ustawionym na 5200~MB. Zestawienie kluczowych parametrów dla wszystkich trzech wariantów przedstawiono w tabeli~\ref{tab:normalizacja_zasobow}.
 
@@ -92,8 +92,8 @@ Aby zapewnić porównywalność, klastry self-hosted w testach z udziałem Memor
 Obraz / typ węzła & Valkey 9.1.0 & Redis 7.2.5 (Bitnami) & redis-standard-small \\
 Shardy $\times$ repliki & 3 $\times$ 1 & 3 $\times$ 1 & 3 $\times$ 1 \\
 vCPU na shard & 2 & 2 & 2 \\
-Pamięć na shard & 7 GiB & 7 GiB & $\approx$7 GiB \\
-\texttt{maxmemory} & 5200 MB & 5200 MB & $\approx$5{,}2 GiB \\
+Pamięć na shard & 7 GiB & 7 GiB & 6{,}5 GB \\
+\texttt{maxmemory} & 5200 MB & 5200 MB & $\approx$5{,}2 GB \\
 Polityka eksmisji & allkeys-lru & allkeys-lru & allkeys-lru \\
 \bottomrule
 \end{tabularx}
@@ -301,14 +301,14 @@ Scenariusz presji pamięci bada zachowanie klastra po wypełnieniu pamięci do l
 \begin{enumerate}
     \item konfiguracja polityki eksmisji na wszystkich węzłach klastra poleceniem \texttt{CONFIG SET maxmemory-policy allkeys-lru};
     \item zapisanie stanu klastra przed wypełnieniem (zużycie pamięci, liczba kluczy, liczba eksmisji);
-    \item wypełnienie klastra za pomocą dedykowanego skryptu seedującego liczbą kluczy wystarczającą do osiągnięcia 100\% limitu \texttt{maxmemory} (3\,145\,728 kluczy o rozmiarze 1~KB przy limicie 3072~MB na shard);
+    \item wypełnienie klastra za pomocą dedykowanego skryptu seedującego liczbą kluczy wystarczającą do osiągnięcia 100\% limitu \texttt{maxmemory} (3\,145\,728 kluczy o rozmiarze 1~KB przy łącznym limicie 3072~MB dla całego klastra, czyli po 1024~MB na shard);
     \item zapisanie stanu klastra po wypełnieniu (zużycie pamięci, liczba kluczy, liczba eksmisji, błędy OOM);
     \item uruchomienie poda z \texttt{memtier\_benchmark} na 30~s z obciążeniem mieszanym zgodnym z profilem z tabeli~\ref{tab:profil_operacyjny};
     \item zapisanie stanu klastra po zakończeniu obserwacji;
     \item zapis raportu JSON zawierającego wszystkie pomiary, raport seedowania oraz wyniki \texttt{memtier\_benchmark}.
 \end{enumerate}
 
-Między kolejnymi powtórzeniami klaster jest czyszczony poleceniem \texttt{FLUSHALL}, aby zapewnić powtarzalny punkt startowy. Limit \texttt{maxmemory} wynosi 3072~MB na shard, co odpowiada konfiguracji używanej w pozostałych testach self-hosted.
+Między kolejnymi powtórzeniami klaster jest czyszczony poleceniem \texttt{FLUSHALL}, aby zapewnić powtarzalny punkt startowy. Limit \texttt{maxmemory} wynosi 1024~MB na shard, czyli 3072~MB łącznie dla klastra trzech shardów. Wszystkie raportowane wielkości (liczba kluczy, eksmisje, wykorzystana pamięć) podawane są sumarycznie dla całego klastra.
 
 Mierzone metryki obejmują: liczbę eksmitowanych kluczy z podziałem na fazę wypełniania i fazę obserwacji, liczbę kluczy pozostających po teście (\texttt{dbsize}), wykorzystaną pamięć po teście, przepustowość i opóźnienie p99 w oknie obserwacji, liczbę błędów OOM, liczbę błędów zapisu, czas seedowania oraz informację, czy osiągnięto 100\% limitu \texttt{maxmemory}.
 
@@ -371,7 +371,11 @@ Koszty & Koszt miesięczny infrastruktury, koszt na 100 tys. ops/sec, próg opł
 \end{tabularx}
 \end{table}
 
-Dla każdej konfiguracji liczbowej wykonywanych jest co najmniej pięć powtórzeń. Następnie obliczana jest średnia arytmetyczna oraz odchylenie standardowe. W scenariuszach porównujących warianty obliczana jest również różnica procentowa między nimi --- w zależności od testu dotyczy to porównania Valkey z Redis 7.2, Valkey z Memorystore lub wszystkich trzech wariantów jednocześnie. Jeżeli rozkład wyników i liczba obserwacji na to pozwolą, można zastosować test statystyczny dla dwóch prób, na przykład test t-Studenta albo test Manna-Whitneya. Ze względu na ograniczoną liczbę powtórzeń wyniki należy jednak interpretować ostrożnie i traktować je jako eksperymentalne porównanie w określonym środowisku, a nie jako uniwersalną charakterystykę wszystkich możliwych wdrożeń.
+Dla każdej konfiguracji liczbowej wykonywanych jest co najmniej pięć powtórzeń. Następnie obliczana jest średnia arytmetyczna oraz odchylenie standardowe. W scenariuszach porównujących warianty obliczana jest również różnica procentowa między nimi --- w zależności od testu dotyczy to porównania Valkey z Redis 7.2, Valkey z Memorystore lub wszystkich trzech wariantów jednocześnie.
+
+Aby ocenić, czy zaobserwowane różnice nie wynikają wyłącznie z losowej zmienności między powtórzeniami, w scenariuszach porównawczych przeprowadzany jest dwustronny test Manna-Whitneya~U na poziomie istotności $\alpha = 0{,}05$. Test ten nie wymaga założenia o normalności rozkładu, co jest istotne przy małej próbie ($N = 5$), dla której test Shapiro-Wilka ma bardzo niską moc~\cite{shapiro1965}. Jako uzupełnienie podawany jest test Welcha (parametryczny odpowiednik t-Studenta bez założenia równych wariancji). Jako miarę wielkości efektu raportowana jest korelacja rang-biserialna $r$ (naturalna miara efektu dla testu Manna-Whitneya; $|r| < 0{,}3$ oznacza mały efekt, $0{,}3 \leq |r| < 0{,}5$ --- średni, $|r| \geq 0{,}5$ --- duży). W scenariuszach z wieloma jednoczesnymi porównaniami (np.~18~konfiguracji wydajnościowych) stosowana jest korekta Benjaminiego-Hochberga (FDR), aby kontrolować odsetek fałszywych odkryć. Przy porównaniu trzech lub więcej grup (np.~backup Valkey vs Redis vs Memorystore) jako test omnibusowy stosowany jest test Kruskala-Wallisa, a następnie porównania parami z korektą na wielokrotne testowanie.
+
+Ze względu na ograniczoną liczbę powtórzeń wyniki należy interpretować ostrożnie i traktować je jako eksperymentalne porównanie w określonym środowisku, a nie jako uniwersalną charakterystykę wszystkich możliwych wdrożeń. Wynik $p \geq 0{,}05$ nie oznacza, że różnica nie istnieje --- oznacza jedynie brak wystarczających dowodów na jej powtarzalność przy danej liczbie obserwacji.
 
 Wyniki prezentowane są w formie tabel i wykresów. Dla testów wydajnościowych stosowane są wykresy słupkowe ops/sec, wykresy percentyli opóźnień oraz heatmapy zależności przepustowości (ang.~\textit{throughput}) od CPU i rozmiaru payloadu. Dla testów failover, resilience, upgrade i resharding stosowane są wykresy czasowe, na których oznaczone jest okno wprowadzenia zakłócenia lub operacji administracyjnej.
 
